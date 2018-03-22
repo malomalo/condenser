@@ -8,8 +8,8 @@ class Condenser
       def find_relative(name, base, options)
         if options[:condenser] && m = name.match(GLOB)
           path = name.sub(m[0], "")
-          base = File.expand_path(path, File.dirname(base))
-          glob_imports(path, m[2], options)
+          base = File.expand_path(path, File.dirname(base)).delete_prefix(File.expand_path('.') + '/')
+          glob_imports(base, m[2], options)
         else
           super
         end
