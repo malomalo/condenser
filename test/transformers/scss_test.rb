@@ -21,4 +21,19 @@ class CondenserSCSSTest < ActiveSupport::TestCase
     CSS
   end
   
+  test 'scss import globing' do
+    file "dir/a.scss", "body { color: blue; }"
+    file "dir/b.scss", "body { color: green; }"
+    
+    file 'test.scss', '@import "dir/*"'
+    
+    assert_file 'test.css', 'text/css', <<~CSS
+    body {
+      color: blue; }
+    
+    body {
+      color: green; }
+    CSS
+  end
+  
 end

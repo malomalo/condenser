@@ -40,15 +40,18 @@ class ResolveTest < ActiveSupport::TestCase
     assert_file('file.js', 'application/javascript')
     assert_file('test/file.css', 'text/css')
     
-    assert_equal %w(file.js test/file.scss test/file.css test/z/file.js), @env.resolve('**/*').map(&:filename)
+    assert_equal %w(file.js test/file.scss test/z/file.js), @env.resolve('**/*').map(&:filename)
+    assert_equal %w(file.js test/file.css test/z/file.js), @env.resolve('**/*', accept: ['text/css', 'application/javascript']).map(&:filename)
     assert_equal %w(file.js), @env.resolve('*', accept: ['application/javascript']).map(&:filename)
     assert_equal %w(file.js test/z/file.js), @env.resolve('**/*', accept: ['application/javascript']).map(&:filename)
     assert_equal %w(file.js), @env.resolve('*.js').map(&:filename)
     assert_equal %w(file.js test/z/file.js), @env.resolve('**/*.js').map(&:filename)
 
     
-    assert_equal %w(test/file.scss test/file.css), @env.resolve('test/*').map(&:filename)
-    assert_equal %w(test/file.scss test/file.css test/z/file.js), @env.resolve('test/**/*').map(&:filename)
+    assert_equal %w(test/file.scss), @env.resolve('test/*').map(&:filename)
+    assert_equal %w(test/file.css), @env.resolve('test/*', accept: ['text/css', 'application/javascript']).map(&:filename)
+    assert_equal %w(test/file.scss test/z/file.js), @env.resolve('test/**/*').map(&:filename)
+    assert_equal %w(test/file.css test/z/file.js), @env.resolve('test/**/*', accept: ['text/css', 'application/javascript']).map(&:filename)
     assert_equal %w(test/z/file.js), @env.resolve('test/z/*', accept: ['application/javascript']).map(&:filename)
     assert_equal %w(test/z/file.js), @env.resolve('test/**/*', accept: ['application/javascript']).map(&:filename)
     assert_equal %w(test/z/file.js), @env.resolve('test/z/*.js').map(&:filename)

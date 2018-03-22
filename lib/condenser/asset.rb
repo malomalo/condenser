@@ -29,6 +29,10 @@ class Condenser
       @exported       = false
     end
     
+    def new_context_class
+      @environment.context_class.new(self)
+    end
+    
     def path
       filename.sub(/\.(\w+)$/) { |ext| "-#{etag}#{ext}" }
     end
@@ -70,7 +74,6 @@ class Condenser
       
       if @environment.transformers.has_key?(mime_types.last)
         @environment.transformers[mime_types.pop].each do |to_mime_type, processor|
-          puts processor.inspect
           processor.call(self)
           mime_types << to_mime_type
         end

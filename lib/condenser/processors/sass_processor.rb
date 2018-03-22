@@ -1,4 +1,5 @@
 require 'sass'
+require 'condenser/processors/sass_importer'
 
 class Condenser
   # Processor engine class for the SASS/SCSS compiler. Depends on the `sass` gem.
@@ -43,7 +44,8 @@ class Condenser
     def initialize(options = {}, &block)
       @cache_version = options[:cache_version]
       # @cache_key = "#{self.class.name}:#{VERSION}:#{Autoload::Sass::VERSION}:#{@cache_version}".freeze
-      @importer_class = options[:importer] || Sass::Importers::Filesystem
+      @importer_class = options[:importer] || Condenser::SassImporter || Sass::Importers::Filesystem
+      
       @sass_config = options[:sass_config] || {}
       @functions = Module.new do
         include Functions
@@ -59,13 +61,13 @@ class Condenser
         filename:     asset.filename,
         syntax:       self.class.syntax,
         cache_store:  nil,#build_cache_store(input, @cache_version),
-        load_paths:   asset.environment.path#.environment.paths.map { |p| @importer_class.new(p.to_s) },
-#        importer:     @importer_class.new(Pathname.new(context.filename).to_s),
-        # condenser: {
-        #   context: context,
-        #   environment: input[:environment],
-        #   dependencies: context.metadata[:dependencies]
-        # }
+        load_paths:   asset.environment.path,#.environment.paths.map { |p| @importer_class.new(p.to_s) },
+       importer:     @importer_class.new(Pathname.new(asset.filename).to_s),
+        condenser: {
+          asset: asset,
+          context: asset.new_context_class,
+          environment: asset.environment
+        }
       })
 
       engine = Sass::Engine.new(asset.source, engine_options)

@@ -22,9 +22,8 @@ class Condenser
           next if !File.file?(f) || ignore.include?(f)
           
           f_dirname, f_basename, f_extensions, f_mime_types = decompose_path(f)
-
           if (basename == '*' || basename == f_basename)
-            if accept == ['*/*'] || match_mime_types?(f_mime_types, accept)
+            if accept == ['*/*'] || mime_type_match_accept?(f_mime_types, accept)
               asset_dir = f_dirname.delete_prefix(path).delete_prefix('/')
               asset_basename = f_basename + f_extensions.join('')
               asset_filename = asset_dir.empty? ? asset_basename : File.join(asset_dir, asset_basename)
@@ -36,7 +35,7 @@ class Condenser
             end
             
             reverse_mapping[f_mime_types]&.each do |derivative_mime_types|
-              if accept == ['*/*'] || match_mime_types?(derivative_mime_types, accept)
+              if accept == ['*/*'] || mime_type_match_accept?(derivative_mime_types, accept)
                 asset_dir = f_dirname.delete_prefix(path).delete_prefix('/')
                 asset_basename = f_basename + derivative_mime_types.map { |t| @mime_types[t][:extensions].first }.join('')
                 asset_filename = asset_dir.empty? ? asset_basename : File.join(asset_dir, asset_basename)
@@ -50,7 +49,11 @@ class Condenser
           end
         end
       end
-      
+
+      results.sort_by! do |a|
+        accept.find_index { |m| match_mime_types?(a.content_types, m) }
+      end
+      results = results.map { |a| a.filename.sub(/\.(\w+)$/, '') }.uniq.map {|fn| results.find {|r| r.filename.sub(/\.(\w+)$/, '') == fn}}
       results
     end
 
@@ -76,7 +79,6 @@ class Condenser
     end
     
     def find_export(filename, **kargs)
-      puts filename
       asset = resolve(filename, **kargs).first
       asset&.export
       asset
@@ -141,6 +143,12 @@ class Condenser
     
     def match_mime_types?(value, matcher)
       value.length == matcher.length && value.zip(matcher).all? { |v, m| match_mime_type?(v, m) }
+    end
+    
+    def mime_type_match_accept?(value, accept)
+      accept.any? do |a|
+        match_mime_types?(value, Array(a))
+      end
     end
         
     # Public: Test mime type against mime range.

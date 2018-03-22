@@ -1,4 +1,5 @@
 require 'digest/sha2'
+require 'condenser/context'
 
 class Condenser
   module Environment
@@ -8,6 +9,7 @@ class Condenser
     def initialize(root)
       @path = []
       self.root = root
+      @context_class = Class.new(Condenser::Context)
       super
     end
 
@@ -28,5 +30,13 @@ class Condenser
       @path.clear
     end
     
+    # This class maybe mutated and mixed in with custom helpers.
+    #
+    #     environment.context_class.instance_eval do
+    #       include MyHelpers
+    #       def asset_url; end
+    #     end
+    #
+    attr_reader :context_class
   end
 end
