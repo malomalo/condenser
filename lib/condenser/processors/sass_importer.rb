@@ -1,65 +1,84 @@
 require 'sass/importers'
 
 class Condenser
-  class SassImporter < Sass::Importers::Filesystem
-    module Globbing
-      GLOB = /(\A|\/)(\*|\*\*\/\*)\z/
+  class SassImporter < Sass::Importers::Base
 
-      def find_relative(name, base, options)
-        if options[:condenser] && m = name.match(GLOB)
-          path = name.sub(m[0], "")
-          base = File.expand_path(path, File.dirname(base)).delete_prefix(File.expand_path('.') + '/')
-          glob_imports(base, m[2], options)
+    GLOB = /(\A|\/)(\*|\*\*\/\*)\z/
+
+    def initialize(env)
+      @environment = env
+    end
+      
+    def key(name, options)
+      [self.class.name + ':' + File.dirname(expand_path(name)), File.basename(name)]
+    end
+      
+    def public_url(name, sourcemap_directory)
+      Sass::Util.file_uri_from_path(name)
+    end
+      
+    def find_relative(name, base, options)
+      name = expand_path(name, base)
+      puts "find_relative(#{[name, base].map(&:inspect).join(', ')}, options)"
+      env = options[:condenser][:environment]
+      accept = extensions.keys.map { |x| options[:condenser][:environment].extensions[x] }
+      
+
+      if name.match(GLOB)
+        contents = ""
+        env.resolve(name, accept: accept).sort_by(&:filename).each do |asset|
+          next if asset.filename == options[:filename]
+          contents << "@import \"#{asset.filename}\";\n"
+        end
+        
+        return nil if contents == ""
+        Sass::Engine.new(contents, options.merge(
+          filename: name,
+          importer: self,
+          syntax: :scss
+        ))
+      else
+        asset = options[:condenser][:environment].find(name, accept: accept)
+
+        if asset
+          asset.process
+          Sass::Engine.new(asset.source, options.merge(
+            filename: asset.filename,
+            importer: self,
+            syntax: extensions[asset.ext]
+          ))
         else
-          super
+          nil
         end
       end
+    end
 
-      def find(name, options)
+    def find(name, options)
+      puts "find(#{name.inspect}, options)"
+      if options[:condenser]
+        puts name, '-'*80
         # globs must be relative
         return if name =~ GLOB
         super
+      else
+        super
       end
-
-      private
-        def glob_imports(base, glob, options)
-          contents = ""
-          each_globbed_file(base, glob, options) do |asset|
-            next if asset.filename == options[:filename]
-            contents << "@import #{asset.filename.inspect};\n"
-          end
-          return nil if contents == ""
-          Sass::Engine.new(contents, options.merge(
-            filename: base,
-            importer: self,
-            syntax: :scss
-          ))
-        end
-
-        def each_globbed_file(base, glob, options)
-          raise ArgumentError unless glob == "*" || glob == "**/*"
-
-          exts = extensions.keys.map { |ext| Regexp.escape(".#{ext}") }.join("|")
-          sass_re = Regexp.compile("(#{exts})$")
-
-          # context.depend_on(base) Here we need to watch all dirs
-          # if File.directory?(path)
-            # context.depend_on(path)
-            
-          env = options[:condenser][:environment]
-          env.resolve("#{base}/#{glob}", accept: [['text/sass'], ['text/scss'], ['text/css']]).sort_by(&:filename).each do |asset|
-            if sass_re =~ asset.filename
-              yield asset
-            end
-          end
-        end
     end
-
-    include Globbing
 
     # Allow .css files to be @import'd
     def extensions
-      { 'css' => :scss }.merge(super)
+      { '.sass' => :sass, '.scss' => :scss, '.css' => :scss }
     end
+    
+    private
+
+      def expand_path(path, base=nil)
+        if path.start_with?('.')
+          File.expand_path(path, File.dirname(base)).delete_prefix(File.expand_path('.') + '/')
+        else
+          File.expand_path(path).delete_prefix(File.expand_path('.') + '/')
+        end
+      end
+        
   end
 end

@@ -55,7 +55,7 @@ class Condenser
       
       outputs = []
       args.each do |arg|
-        @environment.resolve(arg).each do |asset|
+        @environment.resolve!(arg).each do |asset|
           outputs += add_asset(asset)
         end
       end
@@ -73,7 +73,7 @@ class Condenser
     
     def compile(*args)
       reset
-      outputs = add(*args)
+      outputs = add(*args.flatten)
       save
       outputs
     end

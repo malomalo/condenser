@@ -72,7 +72,7 @@ class Condenser
         end
       end
       
-      if @environment.transformers.has_key?(mime_types.last)
+      if mime_types.last != @content_types.last && @environment.transformers.has_key?(mime_types.last)
         @environment.transformers[mime_types.pop].each do |to_mime_type, processor|
           processor.call(self)
           mime_types << to_mime_type
@@ -141,16 +141,20 @@ class Condenser
       end
       files.flatten.compact
     end
+    
+    def ext
+      File.extname(filename)
+    end
       
     # Public: Compare assets.
     #
     # Assets are equal if they share the same path and digest.
     #
     # Returns true or false.
-    # def eql?(other)
-    #   self.class == other.class && self.filename == other.filename && self.content_types == other.content_types
-    # end
-    # alias_method :==, :eql?
+    def eql?(other)
+      self.class == other.class && self.filename == other.filename && self.content_types == other.content_types
+    end
+    alias_method :==, :eql?
     
   end
 end

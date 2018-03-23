@@ -142,6 +142,8 @@ class Condenser
     end
     
     def match_mime_types?(value, matcher)
+      matcher = Array(matcher)
+      value = Array(value)
       value.length == matcher.length && value.zip(matcher).all? { |v, m| match_mime_type?(v, m) }
     end
     

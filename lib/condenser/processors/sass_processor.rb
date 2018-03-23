@@ -62,7 +62,7 @@ class Condenser
         syntax:       self.class.syntax,
         cache_store:  nil,#build_cache_store(input, @cache_version),
         load_paths:   asset.environment.path,#.environment.paths.map { |p| @importer_class.new(p.to_s) },
-       importer:     @importer_class.new(Pathname.new(asset.filename).to_s),
+       importer:     @importer_class.new(asset.environment),
         condenser: {
           asset: asset,
           context: asset.new_context_class,

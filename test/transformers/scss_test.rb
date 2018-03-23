@@ -25,9 +25,19 @@ class CondenserSCSSTest < ActiveSupport::TestCase
     file "c/dir/a.scss", "body { color: blue; }"
     file "c/dir/b.scss", "body { color: green; }"
     
-    file 'c/test.scss', '@import "dir/*"'
+    file 'c/test.scss', '@import "./dir/*"'
     
     assert_file 'c/test.css', 'text/css', <<~CSS
+    body {
+      color: blue; }
+    
+    body {
+      color: green; }
+    CSS
+    
+    file 'c/test2.scss', '@import "c/dir/*"'
+    
+    assert_file 'c/test2.css', 'text/css', <<~CSS
     body {
       color: blue; }
     
