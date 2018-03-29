@@ -37,9 +37,10 @@ class Condenser
 
     attr_reader :environment, :filename
 
-    def initialize(asset)
-      @asset = asset
-      @environment  = asset.environment
+    def initialize(environment)
+      # @asset = asset
+      @environment  = environment
+      # puts @environment.inspect, '---'
     end
 
     def metadata

@@ -27,8 +27,7 @@ class Condenser
       @asset = asset
       Dir.mktmpdir do |output_dir|
         input_options = {
-          input: asset.source_file,
-          
+          input: asset.filename,
         }
         output_options = {
           file: File.join(output_dir, 'result.js'),
@@ -51,9 +50,11 @@ class Condenser
               var message = JSON.parse(buffer);
               stdin.emit('message', message);
               buffer = '';
-            } catch(error) {
-              console.log(JSON.stringify({'error': error}));
-              process.exit(1);
+            } catch(e) {
+              if (e.name !== "SyntaxError") {
+              console.log(JSON.stringify({method: 'error', args: [e.name, e.message]}));
+                process.exit(1);
+              }
             }
           });
 
@@ -93,8 +94,8 @@ class Condenser
               const bundle = await rollup.rollup(inputOptions);
               await bundle.write(outputOptions);
               process.exit(0);
-            } catch(error) {
-              console.log(JSON.stringify({'error': error}));
+            } catch(e) {
+              console.log(JSON.stringify({method: 'error', args: [e.name, e.message]}));
               process.exit(1);
             }
           }
@@ -119,17 +120,17 @@ class Condenser
             case message['method']
             when 'resolve'
               importee, importer = message['args']
-              if importer && (importee.start_with?('./') || importee.start_with?('../'))
-                importee = File.expand_path(importee, File.dirname(importer))
-              end
-              asset = @asset.environment.find(importee.delete_prefix(@asset.environment.root).delete_prefix('/'))
-              io.write(JSON.generate({return: asset ? importee : nil}))
+
+              asset = @asset.environment.find!(importee, importer ? File.dirname(importer) : nil)
+              io.write(JSON.generate({return: asset ? asset.source_file : nil}))
             when 'load'
-              asset = @asset.environment.find!(message['args'].first.delete_prefix(@asset.environment.root).delete_prefix('/'))
+              asset = @asset.environment.find!(message['args'].first)
               asset.process
               io.write(JSON.generate({return: {
                 code: asset.source, map: asset.sourcemap
               }}))
+            when 'error'
+              raise exec_runtime_error(message['args'][0] + ': ' + message['args'][1])
             end
             output = ''
           end

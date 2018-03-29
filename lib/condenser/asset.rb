@@ -8,29 +8,30 @@ class Condenser
     
     include EncodingUtils
     
-    attr_reader :environment, :filename, :content_types, :source_file
+    attr_reader :environment, :filename, :content_types, :source_file, :source_path
     attr_reader :linked_assets, :dependencies
     
-    attr_accessor :source, :sourcemap, :exports, :imports
+    attr_accessor :source, :sourcemap, :imports
     
     def initialize(env, attributes={})
       @environment    = env
+      
       @filename       = attributes[:filename]
       @content_types  = Array(attributes[:content_types] || attributes[:content_type])
-      
+
       @source_file    = attributes[:source_file]
+      @source_path    = attributes[:source_path]
+      @source_digest = Digest::SHA1.file(@source_file).base64digest
       
       @linked_assets  = Set.new
-
       @dependencies   = Set.new
-      @exports        = false
       
       @processed      = false
       @exported       = false
     end
     
     def new_context_class
-      @environment.context_class.new(self)
+      @environment.context_class.new(@environment)
     end
     
     def path
@@ -45,47 +46,56 @@ class Condenser
       process! if @processed == false
     end
     
+    def basepath
+      dirname, basename, extensions, mime_types = @environment.decompose_path(filename)
+      [dirname, basename].compact.join('/')
+    end
+    
     def process!
-      @source = File.binread(@source_file)
-      dirname, basename, extensions, mime_types = @environment.decompose_path(source_file)
+      @environment.fetch("#{@source_digest}-#{Digest::SHA1.base64digest(@content_types.join(':'))}") do
+        @source = File.binread(@source_file)
+        dirname, basename, extensions, mime_types = @environment.decompose_path(source_file)
       
-      while @environment.templates.has_key?(mime_types.last)
-        templator = @environment.templates[mime_types.pop]
-        templator.call(self)
-        @filename = @filename.gsub(/\.#{extensions.last}$/, '')
-      end
-      
-      case @environment.mime_types[mime_types.last][:charset]
-      when :unicode
-        detect_unicode(@source)
-      when :css
-        detect_css(@source)
-      when :html
-        detect_html(@source)
-      else
-        detect(@source) if mime_types.last.start_with?('text/')
-      end
-      
-      if @environment.preprocessors.has_key?(content_type)
-        @environment.preprocessors[content_type].each do |processor|
-          processor.call(self)
+        while @environment.templates.has_key?(mime_types.last)
+          templator = @environment.templates[mime_types.pop]
+          templator.call(self)
+          @filename = @filename.gsub(/\.#{extensions.last}$/, '')
         end
-      end
       
-      if mime_types.last != @content_types.last && @environment.transformers.has_key?(mime_types.last)
-        @environment.transformers[mime_types.pop].each do |to_mime_type, processor|
-          processor.call(self)
-          mime_types << to_mime_type
+        case @environment.mime_types[mime_types.last][:charset]
+        when :unicode
+          detect_unicode(@source)
+        when :css
+          detect_css(@source)
+        when :html
+          detect_html(@source)
+        else
+          detect(@source) if mime_types.last.start_with?('text/')
         end
+      
+        if @environment.preprocessors.has_key?(content_type)
+          @environment.preprocessors[content_type].each do |processor|
+            processor.call(self)
+          end
+        end
+      
+        if mime_types.last != @content_types.last && @environment.transformers.has_key?(mime_types.last)
+          @environment.transformers[mime_types.pop].each do |to_mime_type, processor|
+            processor.call(self)
+            mime_types << to_mime_type
+          end
+        end
+      
+        if mime_types != @content_types
+          raise ContentTypeMismatch, "mime type(s) \"#{@content_types.join(', ')}\" does not match requested mime type(s) \"#{mime_types.join(', ')}\""
+        end
+      
+        @digest = @environment.digestor.digest(@source)
+        @digest_name = @environment.digestor.name.sub(/^.*::/, '').downcase
+        @processed = true
       end
       
-      if mime_types != @content_types
-        raise ContentTypeMismatch, "mime type(s) \"#{@content_types.join(', ')}\" does not match requested mime type(s) \"#{mime_types.join(', ')}\""
-      end
       
-      @digest = @environment.digestor.digest(@source)
-      @digest_name = @environment.digestor.name.sub(/^.*::/, '').downcase
-      @processed = true
     end
     
     def export
