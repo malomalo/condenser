@@ -12,6 +12,7 @@ require 'fileutils'
 
 require 'condenser'
 require 'condenser/server'
+require 'condenser/cache/memory_store'
 
 require "active_support"
 require "active_support/testing/autorun"

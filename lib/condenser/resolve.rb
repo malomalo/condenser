@@ -96,14 +96,13 @@ class Condenser
       resolve!(filename, base, **kargs).first
     end
     
-    def [](*args)
-      find!(*args)
+    def [](filename)
+      find!(filename).export
     end
     
     def find_export(filename, base=nil, **kargs)
       asset = resolve(filename, base, **kargs).first
       asset&.export
-      asset
     end
 
     

@@ -8,8 +8,8 @@ class Condenser
     ROLLUP_VERSION = '0.56.1'
     ROLLUP_SOURCE = File.expand_path('../rollup', __FILE__)
     
-    def self.call(input)
-      new.call(input)
+    def self.call(environment, input)
+      new.call(environment, input)
     end
     
     def initialize(options = {})
@@ -23,11 +23,14 @@ class Condenser
       # ].freeze
     end
 
-    def call(asset)
-      @asset = asset
+    def call(environment, input)
+      @environment = environment
+      @input = input
+      
       Dir.mktmpdir do |output_dir|
+        @entry = File.join(output_dir, 'entry.js')
         input_options = {
-          input: asset.filename,
+          input: @entry,
         }
         output_options = {
           file: File.join(output_dir, 'result.js'),
@@ -103,8 +106,8 @@ class Condenser
           build();
         JS
         
-        asset.source = File.read(File.join(output_dir, 'result.js'))
-        asset.source.sub!(/result.js.map\Z/, "#{asset.filename}.map")
+        input[:source] = File.read(File.join(output_dir, 'result.js'))
+        input[:source].delete_suffix!('//# sourceMappingURL=result.js.map')
         # asset.map = File.read(File.join(output_dir, 'result.js.map'))
       end
     end
@@ -121,14 +124,24 @@ class Condenser
             when 'resolve'
               importee, importer = message['args']
 
-              asset = @asset.environment.find!(importee, importer ? File.dirname(importer) : nil)
-              io.write(JSON.generate({return: asset ? asset.source_file : nil}))
+              asset = if importer.nil? && importee == @entry
+                @entry
+              else
+                @environment.find!(importee, importer ? File.dirname(importer) : nil)
+              end
+              
+              io.write(JSON.generate({return: asset}))
             when 'load'
-              asset = @asset.environment.find!(message['args'].first)
-              asset.process
-              io.write(JSON.generate({return: {
-                code: asset.source, map: asset.sourcemap
-              }}))
+              if message['args'].first == @entry
+                io.write(JSON.generate({return: {
+                  code: @input[:source], map: @input[:map]
+                }}))
+              else
+                asset = @environment.find!(message['args'].first)
+                io.write(JSON.generate({return: {
+                  code: asset.source, map: asset.sourcemap
+                }}))
+              end
             when 'error'
               raise exec_runtime_error(message['args'][0] + ': ' + message['args'][1])
             end

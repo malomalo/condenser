@@ -2,6 +2,7 @@ require 'set'
 require 'digest/md5'
 require 'digest/sha1'
 require 'digest/sha2'
+require 'condenser/export'
 
 class Condenser
   class Asset
@@ -21,17 +22,12 @@ class Condenser
 
       @source_file    = attributes[:source_file]
       @source_path    = attributes[:source_path]
-      @source_digest = Digest::SHA1.file(@source_file).base64digest
       
       @linked_assets  = Set.new
       @dependencies   = Set.new
       
       @processed      = false
       @exported       = false
-    end
-    
-    def new_context_class
-      @environment.context_class.new(@environment)
     end
     
     def path
@@ -51,78 +47,122 @@ class Condenser
       [dirname, basename].compact.join('/')
     end
     
-    def process!
-      @environment.fetch("#{@source_digest}-#{Digest::SHA1.base64digest(@content_types.join(':'))}") do
-        @source = File.binread(@source_file)
-        dirname, basename, extensions, mime_types = @environment.decompose_path(source_file)
-      
-        while @environment.templates.has_key?(mime_types.last)
-          templator = @environment.templates[mime_types.pop]
-          templator.call(self)
-          @filename = @filename.gsub(/\.#{extensions.last}$/, '')
+    def cache_key(data)
+    end
+    
+    def process!(source=nil, source_digest=nil, content_digest=nil)
+      source ||= File.binread(@source_file)
+      source_digest ||= Digest::SHA1.base64digest(source)
+      content_digest ||= Digest::SHA1.base64digest(@content_types.join(':'))
+
+      result = @environment.cache.fetch("process/#{source_digest}/#{content_digest}") do
+        dirname, basename, extensions, mime_types = @environment.decompose_path(@source_file)
+        data = {
+          source: source,
+          source_file: @source_file,
+          source_digest: source_digest,
+        
+          filename: @filename.dup,
+          content_type: mime_types,
+
+          map: nil,
+          linked_assets: [],
+          dependencies: []
+        }
+        
+        while @environment.templates.has_key?(data[:content_type].last)
+          templator = @environment.templates[data[:content_type].pop]
+          templator.call(@environment, data)
+          data[:filename] = data[:filename].gsub(/\.#{extensions.last}$/, '')
         end
       
-        case @environment.mime_types[mime_types.last][:charset]
+        case @environment.mime_types[data[:content_type].last][:charset]
         when :unicode
-          detect_unicode(@source)
+          detect_unicode(data[:source])
         when :css
-          detect_css(@source)
+          detect_css(data[:source])
         when :html
-          detect_html(@source)
+          detect_html(data[:source])
         else
-          detect(@source) if mime_types.last.start_with?('text/')
+          detect(data[:source]) if mime_types.last.start_with?('text/')
         end
-      
-        if @environment.preprocessors.has_key?(content_type)
-          @environment.preprocessors[content_type].each do |processor|
-            processor.call(self)
+        
+        if @environment.preprocessors.has_key?(data[:content_type].last)
+          @environment.preprocessors[data[:content_type].last].each do |processor|
+            processor.call(@environment, data)
           end
         end
       
-        if mime_types.last != @content_types.last && @environment.transformers.has_key?(mime_types.last)
-          @environment.transformers[mime_types.pop].each do |to_mime_type, processor|
-            processor.call(self)
-            mime_types << to_mime_type
+        if data[:content_type].last != @content_types.last && @environment.transformers.has_key?(data[:content_type].last)
+          @environment.transformers[data[:content_type].pop].each do |to_mime_type, processor|
+            processor.call(@environment, data)
+            data[:content_type] << to_mime_type
           end
         end
       
         if mime_types != @content_types
-          raise ContentTypeMismatch, "mime type(s) \"#{@content_types.join(', ')}\" does not match requested mime type(s) \"#{mime_types.join(', ')}\""
+          raise ContentTypeMismatch, "mime type(s) \"#{@content_types.join(', ')}\" does not match requested mime type(s) \"#{data[:mime_types].join(', ')}\""
         end
       
-        @digest = @environment.digestor.digest(@source)
-        @digest_name = @environment.digestor.name.sub(/^.*::/, '').downcase
-        @processed = true
+        data[:digest] = @environment.digestor.digest(data[:source])
+        data[:digest_name] = @environment.digestor.name.sub(/^.*::/, '').downcase
+        data
       end
-      
-      
+      @processed = true
+
+      @source = result[:source]
+      @map = result[:map]
+      @filename = result[:filename]
+      @content_types = result[:content_type]
+      @linked_assets = result[:linked_assets]
+      @digest = result[:digest]
+      @digest_name = result[:digest_name]
+      @dependencies = result[:dependencies]
     end
     
     def export
-      export! if @exported == false
-    end
-    
-    def export!
-      process
+      source ||= File.binread(@source_file)
+      source_digest ||= Digest::SHA1.base64digest(source)
+      content_digest ||= Digest::SHA1.base64digest(@content_types.join(':'))
       
-      @environment.exporters[content_type]&.call(self)
+      process!(source, source_digest, content_digest) if !@processed
       
-      @exported = true
+      result = @environment.cache.fetch("export/#{source_digest}/#{content_digest}") do
+        dirname, basename, extensions, mime_types = @environment.decompose_path(@filename)
+        data = {
+          source: @source,
+          source_file: @source_file,
+          source_digest: source_digest,
+        
+          filename: @filename.dup,
+          content_type: @content_types,
+
+          map: nil,
+          linked_assets: [],
+          dependencies: []
+        }
+        @environment.exporters[content_type]&.call(@environment, data)
+        data[:digest] = @environment.digestor.digest(data[:source])
+        data[:digest_name] = @environment.digestor.name.sub(/^.*::/, '').downcase
+        data
+      end
+      
+      Export.new(@environment, result)
     end
     
     def to_s
-      process
+      # process
       @source
     end
     
     def length
-      process
+      # process
       @source.bytesize
     end
     alias size length
     
     def digest
-      process
+      # process
       @digest
     end
     
@@ -132,7 +172,7 @@ class Condenser
 
     # Public: Returns String hexdigest of source.
     def hexdigest
-      process
+      # process
       @digest.unpack('H*'.freeze).first
     end
     alias_method :etag, :hexdigest

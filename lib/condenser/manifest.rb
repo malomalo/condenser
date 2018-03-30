@@ -62,11 +62,11 @@ class Condenser
     end
     
     def add_asset(asset)
-      asset.export
+      export = asset.export
       
-      @data[asset.filename] = asset.to_json
+      @data[asset.filename] = export.to_json
       
-      outputs = asset.write(@directory)
+      outputs = export.write(@directory)
       asset.linked_assets.each { |a| outputs += add_asset(a) }
       outputs
     end

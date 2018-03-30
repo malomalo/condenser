@@ -9,8 +9,8 @@ class Condenser
     BABEL_VERSION = '6.26.0'
     BABEL_SOURCE = File.expand_path('../babel.min.js', __FILE__)
     
-    def self.call(input)
-      new.call(input)
+    def self.call(environment, input)
+      new.call(environment, input)
     end
     
     def initialize(options = {})
@@ -29,22 +29,20 @@ class Condenser
       # ].freeze
     end
 
-    def call(asset)
-      # result = input[:cache].fetch(@cache_key + [data]) do
-      
+    def call(environment, input)
       opts = {
         # 'moduleRoot' => nil,
-        'filename' => asset.filename,
-        'moduleId' => asset.filename.sub(/(\..+)+/, ''),
-        'filenameRelative' => asset.filename,#split_subpath(input[:load_path], input[:filename]),
-        'sourceFileName' => asset.filename,
-        'sourceMapTarget' => asset.filename
+        'filename' => input[:filename],
+        'moduleId' => input[:filename].sub(/(\..+)+/, ''),
+        'filenameRelative' => input[:filename],#split_subpath(input[:load_path], input[:filename]),
+        'sourceFileName' => input[:filename],
+        'sourceMapTarget' => input[:filename]
         # 'inputSourceMap'
       }.merge(@options)
 
       result = exec_runtime(<<-JS)
         const babel = require('#{BABEL_SOURCE}');
-        const source = #{JSON.generate(asset.source)};
+        const source = #{JSON.generate(input[:source])};
         const options = #{JSON.generate(opts)};
 
         try {
@@ -59,12 +57,12 @@ class Condenser
       if result['error']
         raise Error, result['error']
       else
-        asset.source = result['code']
+        input[:source] = result['code']
           # result['metadata']["modules"]["imports"].each do |import|
           #   asset.prepend(asset.environment.find!(import['source'], accept: asset.content_type))
           # end
           # asset.exports = !result['metadata']["modules"]["exports"]['exported'].empty?
-        asset.sourcemap = result['map']
+        input[:map] = result['map']
       end
     end
     

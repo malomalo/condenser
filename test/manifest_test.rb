@@ -21,23 +21,23 @@ class ManifestTest < ActiveSupport::TestCase
     assert_equal directory, manifest.directory
     assert_equal filename,  manifest.filename
   end
-  
+
   test "specify manifest directory yields manifest.json" do
     manifest = Condenser::Manifest.new(@env, @dir)
 
     assert_equal @dir, manifest.directory
     assert_match('manifest.json', File.basename(manifest.filename))
   end
-  
+
   test "must specify manifest directory or filename" do
     assert_raises ArgumentError do
       Condenser::Manifest.new(@env)
     end
   end
-  
+
   test "must specify env to compile assets" do
     manifest = Condenser::Manifest.new(@dir)
-    
+
     assert_raises Condenser::Error do
       manifest.compile('application.js')
     end
@@ -50,7 +50,6 @@ class ManifestTest < ActiveSupport::TestCase
     manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
 
     asset = @env['application.js']
-
     assert !File.exist?("#{@dir}/#{asset.path}")
 
     manifest.compile('application.js')
@@ -99,7 +98,7 @@ class ManifestTest < ActiveSupport::TestCase
     file 'application.js', <<-JS
       console.log(1);
     JS
-    
+
     root  = File.join(Dir::tmpdir, 'public')
     dir   = File.join(root, 'assets')
     path  = File.join(root, 'manifests', 'manifest-123.json')
@@ -144,8 +143,8 @@ class ManifestTest < ActiveSupport::TestCase
     
     manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
 
-    app_digest_path = @env['application.js'].path
-    gallery_digest_path = @env['gallery.css'].path
+    app_digest_path = @env.find_export('application.js').path
+    gallery_digest_path = @env.find_export('gallery.css').path
 
     assert !File.exist?("#{@dir}/#{app_digest_path}")
     assert !File.exist?("#{@dir}/#{gallery_digest_path}")
@@ -153,6 +152,8 @@ class ManifestTest < ActiveSupport::TestCase
     manifest.compile('application.js', 'gallery.css')
 
     assert File.exist?("#{@dir}/manifest.json")
+    puts app_digest_path
+    puts Dir.glob(File.join(@dir, '**/*'))
     assert File.exist?("#{@dir}/#{app_digest_path}")
     assert File.exist?("#{@dir}/#{gallery_digest_path}")
 
@@ -247,7 +248,7 @@ class ManifestTest < ActiveSupport::TestCase
 
   test "recompile asset" do
     file 'application.js', "console.log(1);"
-    
+
     manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
 
     digest_path = @env['application.js'].path
@@ -268,7 +269,7 @@ class ManifestTest < ActiveSupport::TestCase
     # File.utime(mtime, mtime, filename)
     new_digest_path = @env['application.js'].path
     assert_not_equal new_digest_path, digest_path
-    
+
     manifest.compile('application.js')
 
     assert File.exist?("#{@dir}/manifest.json")
@@ -282,7 +283,7 @@ class ManifestTest < ActiveSupport::TestCase
 
   test "test manifest does not exist" do
     file 'application.js', "console.log(1);"
-    
+
     assert !File.exist?("#{@dir}/manifest.json")
 
     manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
@@ -295,7 +296,7 @@ class ManifestTest < ActiveSupport::TestCase
 
   test "test blank manifest" do
     file 'application.js', "console.log(1);"
-    
+
     assert !File.exist?("#{@dir}/manifest.json")
 
     FileUtils.mkdir_p(@dir)
@@ -312,7 +313,7 @@ class ManifestTest < ActiveSupport::TestCase
 
   test "test skip invalid manifest" do
     file 'application.js', "console.log(1);"
-    
+
     assert !File.exist?("#{@dir}/manifest.json")
 
     FileUtils.mkdir_p(@dir)
@@ -381,7 +382,7 @@ class ManifestTest < ActiveSupport::TestCase
     file 'application.js', 'x'
     file 'logo.svg', 'x'
     file 'favicon.ico', 'x'
-    
+
     manifest = Condenser::Manifest.new(@env, @dir)
     %W{ gallery.css application.js logo.svg favicon.ico }.each do |file_name|
       original_path = @env[file_name].path
@@ -422,7 +423,7 @@ class ManifestTest < ActiveSupport::TestCase
 
   test "do not compress binary assets" do
     file 'blank.gif', Random.new.bytes(128)
-    
+
     manifest = Condenser::Manifest.new(@env, @path)
     %W{ blank.gif }.each do |file_name|
       original_path = @env[file_name].path
