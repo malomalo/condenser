@@ -25,8 +25,8 @@ class Condenser
       @instance ||= new
     end
 
-    def self.call(input)
-      instance.call(input)
+    def self.call(environment, input)
+      instance.call(environment, input)
     end
 
     def self.cache_key
@@ -54,23 +54,22 @@ class Condenser
       end
     end
 
-    def call(asset)
+    def call(environment, input)
       # context = input[:environment].context_class.new(input)
 
       engine_options = merge_options({
-        filename:     asset.filename,
+        filename:     input[:filename],
         syntax:       self.class.syntax,
         cache_store:  nil,#build_cache_store(input, @cache_version),
-        load_paths:   asset.environment.path,#.environment.paths.map { |p| @importer_class.new(p.to_s) },
-       importer:     @importer_class.new(asset.environment),
+        load_paths:   environment.path,#.environment.paths.map { |p| @importer_class.new(p.to_s) },
+       importer:     @importer_class.new(environment),
         condenser: {
-          asset: asset,
-          context: asset.new_context_class,
-          environment: asset.environment
+          context: environment.new_context_class,
+          environment: environment
         }
       })
 
-      engine = Sass::Engine.new(asset.source, engine_options)
+      engine = Sass::Engine.new(input[:source], engine_options)
 
       css, map = engine.render_with_sourcemap('')
       # Utils.module_include(Sass::Script::Functions, @functions) do
@@ -80,8 +79,8 @@ class Condenser
       css = css.delete_suffix!("\n/*# sourceMappingURL= */\n")
 
 
-      asset.source = css
-      asset.sourcemap = map
+      input[:source] = css
+      # input[:map] = map.to_json({})
     end
 
     private

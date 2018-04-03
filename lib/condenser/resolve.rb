@@ -5,14 +5,26 @@ class Condenser
       @reverse_mapping = nil
     end
     
-    def resolve(filename, accept: nil, ignore: [])
-      dirname, basename, extensions, mime_types = decompose_path(filename)
+    def resolve(filename, base=nil, accept: nil, ignore: [])
+      dirname, basename, extensions, mime_types = decompose_path(filename, base)
       results = []
-      
+
       accept ||= mime_types.empty? ? ['*/*'] : mime_types
       accept = Array(accept)
+      
+      paths = if dirname&.start_with?('/')
+        if pat = path.find { |pa| dirname.start_with?(pa) }
+          dirname.delete_prefix!(pat)
+          dirname.delete_prefix!('/')
+          [pat]
+        else
+          []
+        end
+      else
+        path
+      end
 
-      path.each do |path|
+      paths.each do |path|
         glob = path
         glob = File.join(glob, dirname) if dirname
         glob = File.join(glob, basename)
@@ -30,7 +42,8 @@ class Condenser
               results << Asset.new(self, {
                 filename: asset_filename,
                 content_types: f_mime_types,
-                source_file: f
+                source_file: f,
+                source_path: path
               })
             end
             
@@ -42,7 +55,8 @@ class Condenser
                 results << Asset.new(self, {
                   filename: asset_filename,
                   content_types: derivative_mime_types,
-                  source_file: f
+                  source_file: f,
+                  source_path: path
                 })
               end
             end
@@ -50,15 +64,21 @@ class Condenser
         end
       end
 
-      results.sort_by! do |a|
+      results = results.group_by do |a|
         accept.find_index { |m| match_mime_types?(a.content_types, m) }
       end
-      results = results.map { |a| a.filename.sub(/\.(\w+)$/, '') }.uniq.map {|fn| results.find {|r| r.filename.sub(/\.(\w+)$/, '') == fn}}
-      results
+      
+      results = results.keys.sort.reduce([]) do |c, key|
+        c += results[key].sort_by(&:filename)
+      end
+
+      results = results.map { |a| a.basepath }.uniq.map {|fn| results.find {|r| r.filename.sub(/\.(\w+)$/, '') == fn}}
+
+      results.sort_by(&:filename)
     end
 
-    def resolve!(filename, **kargs)
-      assets = resolve(filename, **kargs)
+    def resolve!(filename, base=nil, **kargs)
+      assets = resolve(filename, base, **kargs)
       if assets.empty?
         raise FileNotFound, "couldn't find file '#{filename}'"
       else
@@ -66,29 +86,31 @@ class Condenser
       end
     end
 
-    def find(filename, **kargs)
-      resolve(filename, **kargs).first
+    def find(filename, base=nil, **kargs)
+      resolve(filename, base, **kargs).first
     end
     
-    def find!(filename, **kargs)
-      resolve!(filename, **kargs).first
+    def find!(filename, base=nil, **kargs)
+      resolve!(filename, base, **kargs).first
     end
     
-    def [](*args)
-      find!(*args)
+    def [](filename)
+      find!(filename).export
     end
     
-    def find_export(filename, **kargs)
-      asset = resolve(filename, **kargs).first
+    def find_export(filename, base=nil, **kargs)
+      asset = resolve(filename, base, **kargs).first
       asset&.export
-      asset
     end
 
     
-    def decompose_path(path)
+    def decompose_path(path, base=nil)
       dirname = path.index('/') ? File.dirname(path) : nil
+      if base
+        dirname = File.expand_path(dirname, base)
+      end
       _, basename, extensions = path.match(/([^\.\/]+)(\.[^\/]*)?$/).to_a
-      
+
       if extensions.nil? && basename == '*'
         extensions = nil
         mime_types = []
@@ -99,7 +121,9 @@ class Condenser
         while !extensions.empty?
           matching_extensions = @extensions.keys.select { |e| extensions.end_with?(e) }
           if matching_extensions.empty?
-            raise 'unkown mime'
+            basename << extensions
+            break
+            # raise 'unkown mime'
           else
             matching_extensions.sort_by! { |e| -e.length }
             exts.unshift(matching_extensions.first)
@@ -111,7 +135,7 @@ class Condenser
       end
       
       
-      [ dirname == '.' ? nil : dirname, basename, extensions, mime_types ]
+      [ dirname, basename, extensions, mime_types ]
     end
     
     def reverse_mapping
@@ -144,7 +168,12 @@ class Condenser
     def match_mime_types?(value, matcher)
       matcher = Array(matcher)
       value = Array(value)
-      value.length == matcher.length && value.zip(matcher).all? { |v, m| match_mime_type?(v, m) }
+      
+      if matcher.length == 1 && matcher.last == '*/*'
+        true
+      else
+        value.length == matcher.length && value.zip(matcher).all? { |v, m| match_mime_type?(v, m) }
+      end
     end
     
     def mime_type_match_accept?(value, accept)

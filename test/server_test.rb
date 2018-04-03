@@ -8,7 +8,7 @@ class ServerTest < ActiveSupport::TestCase
   def setup
     super
     server = Condenser::Server.new(@env)
-    
+    @app = nil
     @condenser_server = Rack::Builder.new do
       map "/assets" do
         run server
@@ -27,7 +27,7 @@ class ServerTest < ActiveSupport::TestCase
   test "serve single source file" do
     get "/assets/foo.js"
     assert_equal 200, last_response.status
-    assert_equal "85", last_response.headers['Content-Length']
+    assert_equal "53", last_response.headers['Content-Length']
     assert_equal "Accept-Encoding", last_response.headers['Vary']
     assert_equal <<~JS, last_response.body
       (function () {
@@ -36,7 +36,6 @@ class ServerTest < ActiveSupport::TestCase
       console.log(1);
 
       }());
-      //# sourceMappingURL=foo.js.map
     JS
   end
 
@@ -70,7 +69,6 @@ class ServerTest < ActiveSupport::TestCase
       console.log(cube(5)); // 125
 
       }());
-      //# sourceMappingURL=main.js.map
     JS
   end
 
@@ -89,7 +87,7 @@ class ServerTest < ActiveSupport::TestCase
   test "serve source with etag headers" do
     get "/assets/foo.js"
 
-    digest = '35c146f76e129477c64061bc84511e1090f3d4d8059713e6663dd4b35b1f7642'
+    digest = '85b4185243c9cf4935e686f910a410762c2632a044118ac7ef030094be635c18'
     assert_equal "\"#{digest}\"", last_response.headers['ETag']
   end
 
@@ -123,8 +121,8 @@ class ServerTest < ActiveSupport::TestCase
       'HTTP_IF_NONE_MATCH' => "nope"
 
     assert_equal 200, last_response.status
-    assert_equal '"35c146f76e129477c64061bc84511e1090f3d4d8059713e6663dd4b35b1f7642"', last_response.headers['ETag']
-    assert_equal '85', last_response.headers['Content-Length']
+    assert_equal '"85b4185243c9cf4935e686f910a410762c2632a044118ac7ef030094be635c18"', last_response.headers['ETag']
+    assert_equal '53', last_response.headers['Content-Length']
   end
 
   test "not modified partial response with fingerprint and if-none-match etags match" do
@@ -183,8 +181,8 @@ class ServerTest < ActiveSupport::TestCase
       'HTTP_IF_MATCH' => etag
 
     assert_equal 200, last_response.status
-    assert_equal '"35c146f76e129477c64061bc84511e1090f3d4d8059713e6663dd4b35b1f7642"', last_response.headers['ETag']
-    assert_equal '85', last_response.headers['Content-Length']
+    assert_equal '"85b4185243c9cf4935e686f910a410762c2632a044118ac7ef030094be635c18"', last_response.headers['ETag']
+    assert_equal '53', last_response.headers['Content-Length']
   end
 
   test "precondition failed with if-match is a mismatch" do
@@ -242,7 +240,7 @@ class ServerTest < ActiveSupport::TestCase
 
   test "re-throw JS exceptions in the browser" do
     file 'error.js', "var error = {;"
-    
+
     get "/assets/error.js"
     assert_equal 200, last_response.status
     assert_match(/SyntaxError: error\.js: Unexpected token/, last_response.body)
@@ -250,7 +248,7 @@ class ServerTest < ActiveSupport::TestCase
 
   test "display CSS exceptions in the browser" do
     file 'error.scss', "* { color: $test; }"
-    
+
     get "/assets/error.css"
     assert_equal 200, last_response.status
     assert_match %r{content: ".*?Sass::SyntaxError}, last_response.body
@@ -259,20 +257,19 @@ class ServerTest < ActiveSupport::TestCase
   test "serve encoded utf-8 filename" do
     file '日本語.js', <<~JS
       var japanese = "日本語";
-      
+
       console.log(japanese);
     JS
     get "/assets/%E6%97%A5%E6%9C%AC%E8%AA%9E.js"
     assert_equal <<~JS, last_response.body
     (function () {
     'use strict';
-    
+
     var japanese = "日本語";
-    
+
     console.log(japanese);
-    
+
     }());
-    //# sourceMappingURL=日本語.js.map
     JS
   end
 

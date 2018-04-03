@@ -275,6 +275,10 @@ class Condenser
         # Set content length header
         headers["Content-Length"] = length.to_s
 
+        if asset&.sourcemap
+          headers['SourceMap'] = env['SCRIPT_NAME'] + env['PATH_INFO'] + '.map'
+        end
+        
         # Set content type header
         if type = asset.content_type
           # Set charset param for text/* mime types

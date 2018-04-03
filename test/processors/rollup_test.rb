@@ -39,7 +39,6 @@ class RollupTest < ActiveSupport::TestCase
       console.log( cube( 5 ) ); // 125
 
       }());
-      //# sourceMappingURL=main.js.map
     FILE
   end
   
@@ -66,7 +65,6 @@ class RollupTest < ActiveSupport::TestCase
       console.log( cube( 5 ) ); // 125
 
       }());
-      //# sourceMappingURL=main.js.map
     FILE
   end
   

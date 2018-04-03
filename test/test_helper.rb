@@ -12,6 +12,7 @@ require 'fileutils'
 
 require 'condenser'
 require 'condenser/server'
+require 'condenser/cache/memory_store'
 
 require "active_support"
 require "active_support/testing/autorun"
@@ -58,7 +59,7 @@ class ActiveSupport::TestCase
   def assert_exported_file(path, mime_types, source=nil)
     asset = @env.find(path)
     assert asset, "Couldn't find asset \"#{path}\""
-    asset.export
+    asset = asset.export
     assert_equal path,                        asset.filename
     assert_equal Array(mime_types),           asset.content_types
     assert_equal(source.rstrip, asset.source.rstrip) if !source.nil?

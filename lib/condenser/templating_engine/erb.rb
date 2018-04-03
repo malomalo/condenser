@@ -3,12 +3,18 @@ require "erubi"
 class Condenser
   class Erubi
     
-    def self.call(asset)
-      source = ::Erubi::Engine.new(asset.source).src
-      # source = eval(source, input[:context], input[:filename] || "(erubi)")
-      source = eval(source, nil, asset.filename || "(erubi)")
+    def self.call(environment, data)
+      source = ::Erubi::Engine.new(data[:source], {
+        preamble:   "@output_buffer = String.new;",
+        bufvar:     "@output_buffer",
+        postamble:  "@output_buffer.to_s"
+      }).src
+      
+      source = eval("proc { #{source} }", nil, data[:filename] || "(erubi)")
+      source = environment.new_context_class.instance_eval(&source)
 
-      asset.source = source
+      
+      data[:source] = source
     end
     
   end

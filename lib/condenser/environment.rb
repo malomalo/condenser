@@ -1,15 +1,19 @@
 require 'digest/sha2'
 require 'condenser/context'
+require 'condenser/cache/null_store'
+require 'condenser/cache/memory_store'
 
 class Condenser
   module Environment
     
     attr_reader :root, :path
+    attr_accessor :cache
     
     def initialize(root)
       @path = []
       self.root = root
       @context_class = Class.new(Condenser::Context)
+      @cache = Cache::NullStore.new
       super
     end
 
@@ -28,6 +32,10 @@ class Condenser
   
     def clear_path
       @path.clear
+    end
+    
+    def new_context_class
+      context_class.new(self)
     end
     
     # This class maybe mutated and mixed in with custom helpers.

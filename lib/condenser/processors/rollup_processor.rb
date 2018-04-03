@@ -8,8 +8,8 @@ class Condenser
     ROLLUP_VERSION = '0.56.1'
     ROLLUP_SOURCE = File.expand_path('../rollup', __FILE__)
     
-    def self.call(input)
-      new.call(input)
+    def self.call(environment, input)
+      new.call(environment, input)
     end
     
     def initialize(options = {})
@@ -23,12 +23,14 @@ class Condenser
       # ].freeze
     end
 
-    def call(asset)
-      @asset = asset
+    def call(environment, input)
+      @environment = environment
+      @input = input
+      
       Dir.mktmpdir do |output_dir|
+        @entry = File.join(output_dir, 'entry.js')
         input_options = {
-          input: asset.source_file,
-          
+          input: @entry,
         }
         output_options = {
           file: File.join(output_dir, 'result.js'),
@@ -51,9 +53,11 @@ class Condenser
               var message = JSON.parse(buffer);
               stdin.emit('message', message);
               buffer = '';
-            } catch(error) {
-              console.log(JSON.stringify({'error': error}));
-              process.exit(1);
+            } catch(e) {
+              if (e.name !== "SyntaxError") {
+                console.log(JSON.stringify({method: 'error', args: [e.name, e.message]}));
+                process.exit(1);
+              }
             }
           });
 
@@ -93,8 +97,8 @@ class Condenser
               const bundle = await rollup.rollup(inputOptions);
               await bundle.write(outputOptions);
               process.exit(0);
-            } catch(error) {
-              console.log(JSON.stringify({'error': error}));
+            } catch(e) {
+              console.log(JSON.stringify({method: 'error', args: [e.name, e.message]}));
               process.exit(1);
             }
           }
@@ -102,8 +106,8 @@ class Condenser
           build();
         JS
         
-        asset.source = File.read(File.join(output_dir, 'result.js'))
-        asset.source.sub!(/result.js.map\Z/, "#{asset.filename}.map")
+        input[:source] = File.read(File.join(output_dir, 'result.js'))
+        input[:source].delete_suffix!("//# sourceMappingURL=result.js.map\n")
         # asset.map = File.read(File.join(output_dir, 'result.js.map'))
       end
     end
@@ -119,17 +123,27 @@ class Condenser
             case message['method']
             when 'resolve'
               importee, importer = message['args']
-              if importer && (importee.start_with?('./') || importee.start_with?('../'))
-                importee = File.expand_path(importee, File.dirname(importer))
+
+              asset = if importer.nil? && importee == @entry
+                @entry
+              else
+                @environment.find!(importee, importer ? File.dirname(@entry == importer ? @input[:source_file] : importer) : nil)&.source_file
               end
-              asset = @asset.environment.find(importee.delete_prefix(@asset.environment.root).delete_prefix('/'))
-              io.write(JSON.generate({return: asset ? importee : nil}))
+
+              io.write(JSON.generate({return: asset}))
             when 'load'
-              asset = @asset.environment.find!(message['args'].first.delete_prefix(@asset.environment.root).delete_prefix('/'))
-              asset.process
-              io.write(JSON.generate({return: {
-                code: asset.source, map: asset.sourcemap
-              }}))
+              if message['args'].first == @entry
+                io.write(JSON.generate({return: {
+                  code: @input[:source], map: @input[:map]
+                }}))
+              else
+                asset = @environment.find!(message['args'].first)
+                io.write(JSON.generate({return: {
+                  code: asset.source, map: asset.sourcemap
+                }}))
+              end
+            when 'error'
+              raise exec_runtime_error(message['args'][0] + ': ' + message['args'][1])
             end
             output = ''
           end

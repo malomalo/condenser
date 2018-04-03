@@ -19,7 +19,6 @@ class Condenser
       
     def find_relative(name, base, options)
       name = expand_path(name, base)
-      puts "find_relative(#{[name, base].map(&:inspect).join(', ')}, options)"
       env = options[:condenser][:environment]
       accept = extensions.keys.map { |x| options[:condenser][:environment].extensions[x] }
       
@@ -54,9 +53,7 @@ class Condenser
     end
 
     def find(name, options)
-      puts "find(#{name.inspect}, options)"
       if options[:condenser]
-        puts name, '-'*80
         # globs must be relative
         return if name =~ GLOB
         super
