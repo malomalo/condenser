@@ -152,7 +152,7 @@ class Condenser
     end
     
     def to_s
-      # process
+      process
       @source
     end
     
@@ -167,13 +167,13 @@ class Condenser
     end
     
     def length
-      # process
+      process
       @source.bytesize
     end
     alias size length
     
     def digest
-      # process
+      process
       @digest
     end
     
@@ -183,7 +183,7 @@ class Condenser
 
     # Public: Returns String hexdigest of source.
     def hexdigest
-      # process
+      process
       @digest.unpack('H*'.freeze).first
     end
     alias_method :etag, :hexdigest
