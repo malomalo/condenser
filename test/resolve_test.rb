@@ -93,7 +93,6 @@ class ResolveTest < ActiveSupport::TestCase
       console.log( cube( 5 ) ); // 125
 
       }());
-      //# sourceMappingURL=main.js.map
     JS
   end
   

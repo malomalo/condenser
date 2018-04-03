@@ -11,8 +11,9 @@ class Condenser
     
     attr_reader :environment, :filename, :content_types, :source_file, :source_path
     attr_reader :linked_assets, :dependencies
-    
-    attr_accessor :source, :sourcemap, :imports
+    attr_writer :source, :sourcemap
+
+    attr_accessor :imports
     
     def initialize(env, attributes={})
       @environment    = env
@@ -111,7 +112,7 @@ class Condenser
       @processed = true
 
       @source = result[:source]
-      @map = result[:map]
+      @sourcemap = result[:map]
       @filename = result[:filename]
       @content_types = result[:content_type]
       @linked_assets = result[:linked_assets]
@@ -135,9 +136,9 @@ class Condenser
           source_digest: source_digest,
         
           filename: @filename.dup,
-          content_type: @content_types,
+          content_types: @content_types,
 
-          map: nil,
+          sourcemap: nil,
           linked_assets: [],
           dependencies: []
         }
@@ -153,6 +154,16 @@ class Condenser
     def to_s
       # process
       @source
+    end
+    
+    def source
+      process
+      @source
+    end
+    
+    def sourcemap
+      process
+      @sourcemap
     end
     
     def length

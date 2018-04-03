@@ -1,15 +1,15 @@
 class Condenser
   class Export
 
-    attr_reader :filename, :source, :map, :content_type, :digest, :digest_name
+    attr_reader :filename, :source, :sourcemap, :content_types, :digest, :digest_name
 
     def initialize(env, input={})
       @environment = env
       
       @source = input[:source]
-      @map = input[:map]
+      @sourcemap = input[:map]
       @filename = input[:filename]
-      @content_types = input[:content_type]
+      @content_types = input[:content_types]
       @digest = input[:digest]
       @digest_name = input[:digest_name]
     end

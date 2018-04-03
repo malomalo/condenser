@@ -55,7 +55,7 @@ class Condenser
               buffer = '';
             } catch(e) {
               if (e.name !== "SyntaxError") {
-              console.log(JSON.stringify({method: 'error', args: [e.name, e.message]}));
+                console.log(JSON.stringify({method: 'error', args: [e.name, e.message]}));
                 process.exit(1);
               }
             }
@@ -107,7 +107,7 @@ class Condenser
         JS
         
         input[:source] = File.read(File.join(output_dir, 'result.js'))
-        input[:source].delete_suffix!('//# sourceMappingURL=result.js.map')
+        input[:source].delete_suffix!("//# sourceMappingURL=result.js.map\n")
         # asset.map = File.read(File.join(output_dir, 'result.js.map'))
       end
     end
@@ -127,9 +127,9 @@ class Condenser
               asset = if importer.nil? && importee == @entry
                 @entry
               else
-                @environment.find!(importee, importer ? File.dirname(importer) : nil)
+                @environment.find!(importee, importer ? File.dirname(@entry == importer ? @input[:source_file] : importer) : nil)&.source_file
               end
-              
+
               io.write(JSON.generate({return: asset}))
             when 'load'
               if message['args'].first == @entry
