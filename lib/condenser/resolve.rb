@@ -106,7 +106,7 @@ class Condenser
     
     def decompose_path(path, base=nil)
       dirname = path.index('/') ? File.dirname(path) : nil
-      if base
+      if base && path&.start_with?('.')
         dirname = File.expand_path(dirname, base)
       end
       _, basename, extensions = path.match(/([^\.\/]+)(\.[^\/]*)?$/).to_a

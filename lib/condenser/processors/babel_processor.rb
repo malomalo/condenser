@@ -17,7 +17,13 @@ class Condenser
       @options = options.merge({
         ast: false,
         compact: false,
-        presets: [ ["latest", { "es2015": { "modules": false } }] ],
+        plugins: ["transform-runtime"],
+        # presets: ["env", { "es2015": { "modules": false }, "targets": { "browsers": "> 1%" } } ],
+        # presets: ["latest", {
+        #   "targets": {
+        #     "browsers": ["last 2 versions", "safari >= 7"]
+        #   }
+        # }],
         sourceMap: true
       }).freeze
 
@@ -36,7 +42,7 @@ class Condenser
         'moduleId' => input[:filename].sub(/(\..+)+/, ''),
         'filenameRelative' => input[:filename],#split_subpath(input[:load_path], input[:filename]),
         'sourceFileName' => input[:filename],
-        'sourceMapTarget' => input[:filename]
+        # 'sourceMapTarget' => input[:filename]
         # 'inputSourceMap'
       }.merge(@options)
 

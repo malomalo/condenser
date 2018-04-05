@@ -85,6 +85,9 @@ class Condenser
               });
             },
             load: function(id) {
+              if (id.startsWith("#{File.dirname(ROLLUP_SOURCE)}")) {
+                return null;
+              }
               return request('load', [id]).then(function(value) {
                 return value;
               });
@@ -126,8 +129,10 @@ class Condenser
 
               asset = if importer.nil? && importee == @entry
                 @entry
+              # elsif ['babel-runtime/', 'core-js/', 'regenerator-runtime/'].any? { |s| importee.start_with?(s) }
+              #   File.join(File.dirname(ROLLUP_SOURCE), importee) + '.js'
               else
-                @environment.find!(importee, importer ? File.dirname(@entry == importer ? @input[:source_file] : importer) : nil)&.source_file
+                @environment.find!(importee, importer ? File.dirname(@entry == importer ? @input[:source_file] : importer) : nil, accept: @input[:content_types].last)&.source_file
               end
 
               io.write(JSON.generate({return: asset}))
@@ -137,7 +142,7 @@ class Condenser
                   code: @input[:source], map: @input[:map]
                 }}))
               else
-                asset = @environment.find!(message['args'].first)
+                asset = @environment.find!(message['args'].first, accept: @input[:content_types].last)
                 io.write(JSON.generate({return: {
                   code: asset.source, map: asset.sourcemap
                 }}))

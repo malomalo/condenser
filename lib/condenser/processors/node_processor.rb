@@ -1,15 +1,21 @@
+require 'tempfile'
+
 class Condenser
   class NodeProcessor
     
     def exec_runtime(script)
-      io = IO.popen([binary, '-e', script], err: [:child, :out])
-      output = io.read
-      io.close
+      Tempfile.open(['script', 'js']) do |scriptfile|
+        scriptfile.write(script)
+        scriptfile.flush
+        io = IO.popen([binary, scriptfile.path], err: [:child, :out])
+        output = io.read
+        io.close
 
-      if $?.success?
-        JSON.parse(output)
-      else
-        raise exec_runtime_error(output)
+        if $?.success?
+          JSON.parse(output)
+        else
+          raise exec_runtime_error(output)
+        end
       end
     end
     

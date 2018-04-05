@@ -67,5 +67,39 @@ class RollupTest < ActiveSupport::TestCase
       }());
     FILE
   end
+
+  test 'import a file with the same name as another css file' do
+    file 'a/main.js', <<~JS
+      import { cube } from 'math';
+
+      console.log( cube( 5 ) ); // 125
+    JS
+    file 'a/math.css', <<~CSS
+      * {
+        background: green;
+      }
+    CSS
+    file 'b/math.js', <<~JS
+      export function cube ( x ) {
+        return x * x * x;
+      }
+    JS
+
+    @env.append_path File.join(@path, 'b')
+    @env.append_path File.join(@path, 'a')
+
+    assert_exported_file 'main.js', 'application/javascript', <<~FILE
+      (function () {
+      'use strict';
+
+      function cube ( x ) {
+        return x * x * x;
+      }
+
+      console.log( cube( 5 ) ); // 125
+
+      }());
+    FILE
+  end
   
 end
