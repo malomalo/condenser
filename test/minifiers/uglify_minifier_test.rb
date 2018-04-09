@@ -1,6 +1,6 @@
 require 'test_helper'
 
-class UglifyTest < ActiveSupport::TestCase
+class UglifyMinifierTest < ActiveSupport::TestCase
 
   def setup
     super

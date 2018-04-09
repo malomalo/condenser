@@ -378,7 +378,7 @@ class ManifestTest < ActiveSupport::TestCase
   # end
 
   test "compress non-binary assets" do
-    file 'gallery.css', 'x'
+    file 'gallery.css', '* { background: green; }'
     file 'application.js', 'x'
     file 'logo.svg', 'x'
     file 'favicon.ico', 'x'

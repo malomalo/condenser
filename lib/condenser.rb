@@ -83,8 +83,10 @@ Condenser.configure do
   register_template  'application/erb', Condenser::Erubi
   
   # CSS
+  require 'condenser/minifiers/sass_minifier'
   register_mime_type 'text/css', extension: '.css', charset: :css
-
+  register_minifier  'text/css', Condenser::SassMinifier
+  
   # SASS
   require 'condenser/transformers/sass_transformer'
   register_mime_type    'text/sass', extensions: %w(.sass .css.sass)
