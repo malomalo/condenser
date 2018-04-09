@@ -6,28 +6,28 @@ require 'condenser/cache/memory_store'
 class Condenser
   module Environment
     
-    attr_reader :root, :path
+    attr_reader :path
     attr_accessor :cache
     
-    def initialize(root)
-      @path = []
-      self.root = root
+    def initialize
       @context_class = Class.new(Condenser::Context)
-      @cache = Cache::NullStore.new
       super
     end
 
-    def root=(path)
-      @root = File.expand_path(path)
-      append_path(@root)
-    end
-
-    def prepend_path(path)
-      @path.unshift(File.expand_path(path, @root))
+    def prepend_path(*paths)
+      paths.flatten.each do |path|
+        path = File.expand_path(path)
+        raise ArgumentError, "Path \"#{path}\" does not exists" if !File.directory?(path)
+        @path.unshift(path)
+      end
     end
   
-    def append_path(path)
-      @path.push(File.expand_path(path, @root))
+    def append_path(*paths)
+      paths.flatten.each do |path|
+        path = File.expand_path(path)
+        raise ArgumentError, "Path \"#{path}\" does not exists" if !File.directory?(path)
+        @path.push(path)
+      end
     end
   
     def clear_path

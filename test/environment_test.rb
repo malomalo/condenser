@@ -7,10 +7,6 @@ class EnvironmentTest < ActiveSupport::TestCase
     @env.clear_path
   end
   
-  test "working directory is the default root" do
-    assert_equal Dir.pwd, Condenser.new.root
-  end
-
   test "default logger level is set to warn" do
     assert_equal Logger::WARN, @env.logger.level
   end
@@ -20,21 +16,29 @@ class EnvironmentTest < ActiveSupport::TestCase
   end
   
   test "prepend_path" do
+    Dir.mkdir(File.join(@path, 'a'))
+    Dir.mkdir(File.join(@path, 'b'))
+    
     assert_equal [], @env.path
-    @env.prepend_path 'a'
-    @env.prepend_path 'b'
+    @env.prepend_path File.join(@path, 'a')
+    @env.prepend_path File.join(@path, 'b')
     assert_equal ['b', 'a'].map { |d| File.expand_path(d, @path) }, @env.path
   end
   
   test "append_path" do
+    Dir.mkdir(File.join(@path, 'a'))
+    Dir.mkdir(File.join(@path, 'b'))
+    
     assert_equal [], @env.path
-    @env.append_path 'a'
-    @env.append_path 'b'
+    @env.append_path File.join(@path, 'a')
+    @env.append_path File.join(@path, 'b')
     assert_equal ['a', 'b'].map { |d| File.expand_path(d, @path) }, @env.path
   end
   
   test "clear_path" do
-    @env.append_path 'a'
+    Dir.mkdir(File.join(@path, 'a'))
+    
+    @env.prepend_path File.join(@path, 'a')
     assert_not_empty @env.path
     @env.clear_path
     assert_empty @env.path

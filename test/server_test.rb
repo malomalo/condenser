@@ -27,15 +27,10 @@ class ServerTest < ActiveSupport::TestCase
   test "serve single source file" do
     get "/assets/foo.js"
     assert_equal 200, last_response.status
-    assert_equal "53", last_response.headers['Content-Length']
+    assert_equal "43", last_response.headers['Content-Length']
     assert_equal "Accept-Encoding", last_response.headers['Vary']
-    assert_equal <<~JS, last_response.body
-      (function () {
-      'use strict';
-
-      console.log(1);
-
-      }());
+    assert_equal <<~JS.strip, last_response.body
+      !function(){"use strict";console.log(1)}();
     JS
   end
 
@@ -58,17 +53,8 @@ class ServerTest < ActiveSupport::TestCase
     JS
 
     get "/assets/main.js"
-    assert_equal <<~JS, last_response.body
-      (function () {
-      'use strict';
-
-      function cube(x) {
-        return x * x * x;
-      }
-
-      console.log(cube(5)); // 125
-
-      }());
+    assert_equal <<~JS.strip, last_response.body
+      !function(){"use strict";var o;console.log((o=5)*o*o)}();
     JS
   end
 
@@ -87,7 +73,7 @@ class ServerTest < ActiveSupport::TestCase
   test "serve source with etag headers" do
     get "/assets/foo.js"
 
-    digest = '85b4185243c9cf4935e686f910a410762c2632a044118ac7ef030094be635c18'
+    digest = '9001f422e9c91516f6e130be56dd77aa313c52bb7dd18e4bb085067162c9fa70'
     assert_equal "\"#{digest}\"", last_response.headers['ETag']
   end
 
@@ -121,8 +107,8 @@ class ServerTest < ActiveSupport::TestCase
       'HTTP_IF_NONE_MATCH' => "nope"
 
     assert_equal 200, last_response.status
-    assert_equal '"85b4185243c9cf4935e686f910a410762c2632a044118ac7ef030094be635c18"', last_response.headers['ETag']
-    assert_equal '53', last_response.headers['Content-Length']
+    assert_equal '"9001f422e9c91516f6e130be56dd77aa313c52bb7dd18e4bb085067162c9fa70"', last_response.headers['ETag']
+    assert_equal '43', last_response.headers['Content-Length']
   end
 
   test "not modified partial response with fingerprint and if-none-match etags match" do
@@ -181,8 +167,8 @@ class ServerTest < ActiveSupport::TestCase
       'HTTP_IF_MATCH' => etag
 
     assert_equal 200, last_response.status
-    assert_equal '"85b4185243c9cf4935e686f910a410762c2632a044118ac7ef030094be635c18"', last_response.headers['ETag']
-    assert_equal '53', last_response.headers['Content-Length']
+    assert_equal '"9001f422e9c91516f6e130be56dd77aa313c52bb7dd18e4bb085067162c9fa70"', last_response.headers['ETag']
+    assert_equal '43', last_response.headers['Content-Length']
   end
 
   test "precondition failed with if-match is a mismatch" do
@@ -261,15 +247,8 @@ class ServerTest < ActiveSupport::TestCase
       console.log(japanese);
     JS
     get "/assets/%E6%97%A5%E6%9C%AC%E8%AA%9E.js"
-    assert_equal <<~JS, last_response.body
-    (function () {
-    'use strict';
-
-    var japanese = "日本語";
-
-    console.log(japanese);
-
-    }());
+    assert_equal <<~JS.strip, last_response.body
+      !function(){"use strict";console.log("日本語")}();
     JS
   end
 

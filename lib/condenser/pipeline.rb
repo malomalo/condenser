@@ -12,7 +12,7 @@ class Condenser
       end
     end
     
-    def initialize(root)
+    def initialize
       CONFIG_VARS.each do |var_name|
         original_var = self.class.instance_variable_get("@#{var_name}")
         new_var = original_var.dup
@@ -62,9 +62,17 @@ class Condenser
       @exporters[mime_type] = engine
     end
     
+    def unregister_exporter(mime_type, engine)
+      @exporters[mime_type] = nil
+    end
+    
     def register_minifier(mime_type, engine)
       @minifiers[mime_type] ||= []
       @minifiers[mime_type] = engine
+    end
+    
+    def unregister_minifier(mime_type, engine)
+      @minifiers[mime_type] = nil
     end
     
     def register_writer(mime_types, engine, added_mime_types=nil)

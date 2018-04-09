@@ -1,13 +1,9 @@
 require 'sass/importers'
 
-class Condenser
-  class SassImporter < Sass::Importers::Base
+class Condenser::SassTransformer
+  class Importer < Sass::Importers::Base
 
     GLOB = /(\A|\/)(\*|\*\*\/\*)\z/
-
-    def initialize(env)
-      @environment = env
-    end
       
     def key(name, options)
       [self.class.name + ':' + File.dirname(expand_path(name)), File.basename(name)]

@@ -22,10 +22,14 @@ class Condenser
   attr_reader :logger
   attr_accessor :digestor
   
-  def initialize(root='.', digestor: nil)
+  def initialize(*path, digestor: nil)
+    super()
     @logger = Logger.new($stderr, level: :warn)
+    @path = []
+    append_path(path)
+    @cache = Cache::MemoryStore.new
     self.digestor = digestor || Digest::SHA256
-    super(root)
+
   end
 end
 
@@ -82,21 +86,22 @@ Condenser.configure do
   register_mime_type 'text/css', extension: '.css', charset: :css
 
   # SASS
-  require 'condenser/processors/sass_processor'
+  require 'condenser/transformers/sass_transformer'
   register_mime_type    'text/sass', extensions: %w(.sass .css.sass)
   # register_transformer  'text/sass', 'text/css', SassProcessor
   
   # SCSS
   register_mime_type    'text/scss', extensions: %w(.scss .css.scss)
-  register_transformer  'text/scss', 'text/css', Condenser::ScssProcessor
+  register_transformer  'text/scss', 'text/css', Condenser::ScssTransformer
   
   # Javascript
   require 'condenser/processors/rollup_processor'
   require 'condenser/processors/babel_processor'
+  require 'condenser/minifiers/uglify_minifier'
   register_mime_type    'application/javascript', extension: '.js', charset: :unicode
   register_preprocessor 'application/javascript', Condenser::BabelProcessor
   register_exporter     'application/javascript', Condenser::RollupProcessor
-  # register_minifier     'application/javascript', Uglifier
+  register_minifier     'application/javascript', Condenser::UglifyMinifier
 
   # Writers
   require 'condenser/writers/file_writer'

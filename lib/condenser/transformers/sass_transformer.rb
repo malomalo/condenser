@@ -1,16 +1,17 @@
 require 'sass'
-require 'condenser/processors/sass_importer'
 
 class Condenser
-  # Processor engine class for the SASS/SCSS compiler. Depends on the `sass` gem.
+  # Transformer engine class for the SASS/SCSS compiler. Depends on the `sass`
+  # gem.
   #
   # For more infomation see:
   #
   #   https://github.com/sass/sass
   #   https://github.com/rails/sass-rails
   #
-  class SassProcessor
-    # autoload :CacheStore, 'sprockets/sass_cache_store'
+  class SassTransformer
+    autoload :Cache,    'condenser/transformers/sass_transformer/cache'
+    autoload :Importer, 'condenser/transformers/sass_transformer/importer'
 
     # Internal: Defines default sass syntax to use. Exposed so the ScssProcessor
     # may override it.
@@ -44,7 +45,7 @@ class Condenser
     def initialize(options = {}, &block)
       @cache_version = options[:cache_version]
       # @cache_key = "#{self.class.name}:#{VERSION}:#{Autoload::Sass::VERSION}:#{@cache_version}".freeze
-      @importer_class = options[:importer] || Condenser::SassImporter || Sass::Importers::Filesystem
+      @importer_class = options[:importer] || Condenser::SassTransformer::Importer
       
       @sass_config = options[:sass_config] || {}
       @functions = Module.new do
@@ -56,13 +57,13 @@ class Condenser
 
     def call(environment, input)
       # context = input[:environment].context_class.new(input)
-
+      
       engine_options = merge_options({
         filename:     input[:filename],
         syntax:       self.class.syntax,
-        cache_store:  nil,#build_cache_store(input, @cache_version),
+        cache_store:  Cache.new(environment.cache),
         load_paths:   environment.path,#.environment.paths.map { |p| @importer_class.new(p.to_s) },
-       importer:     @importer_class.new(environment),
+       importer:     @importer_class.new,
         condenser: {
           context: environment.new_context_class,
           environment: environment
@@ -292,7 +293,7 @@ class Condenser
     end
   end
 
-  class ScssProcessor < SassProcessor
+  class ScssTransformer < SassTransformer
     def self.syntax
       :scss
     end

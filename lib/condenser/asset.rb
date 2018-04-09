@@ -143,6 +143,7 @@ class Condenser
           dependencies: []
         }
         @environment.exporters[content_type]&.call(@environment, data)
+        @environment.minifiers[content_type]&.call(@environment, data)
         data[:digest] = @environment.digestor.digest(data[:source])
         data[:digest_name] = @environment.digestor.name.sub(/^.*::/, '').downcase
         data

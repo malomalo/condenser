@@ -1,7 +1,7 @@
 class Condenser
   module Resolve
     
-    def initialize(root)
+    def initialize
       @reverse_mapping = nil
     end
     
