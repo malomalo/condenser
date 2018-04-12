@@ -28,7 +28,7 @@ class Condenser
         # 'sourceMapTarget' => input[:filename]
         # # 'inputSourceMap'
       }.merge(@options)
-
+      
       result = exec_runtime(<<-JS)
         module.paths.push("#{UGLIFY_SOURCE}")
         const UglifyJS = require("uglify-js");

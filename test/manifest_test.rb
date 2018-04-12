@@ -152,8 +152,6 @@ class ManifestTest < ActiveSupport::TestCase
     manifest.compile('application.js', 'gallery.css')
 
     assert File.exist?("#{@dir}/manifest.json")
-    puts app_digest_path
-    puts Dir.glob(File.join(@dir, '**/*'))
     assert File.exist?("#{@dir}/#{app_digest_path}")
     assert File.exist?("#{@dir}/#{gallery_digest_path}")
 

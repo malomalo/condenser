@@ -17,13 +17,11 @@ class Condenser
       @options = options.merge({
         ast: false,
         compact: false,
-        plugins: ["transform-runtime"],
-        # presets: ["env", { "es2015": { "modules": false }, "targets": { "browsers": "> 1%" } } ],
-        # presets: ["latest", {
-        #   "targets": {
-        #     "browsers": ["last 2 versions", "safari >= 7"]
-        #   }
-        # }],
+        plugins: ["@babel/plugin-transform-runtime"],
+        presets: [["@babel/preset-env", {
+          "modules": false,
+          "targets": { "browsers": "> 1%" }
+        } ]],
         sourceMap: true
       }).freeze
 
@@ -45,11 +43,13 @@ class Condenser
         # 'sourceMapTarget' => input[:filename]
         # 'inputSourceMap'
       }.merge(@options)
-
+      
       result = exec_runtime(<<-JS)
-        const babel = require('#{BABEL_SOURCE}');
+        module.paths.push("#{File.expand_path('../node_modules', __FILE__)}")
+      
+        const babel = require('@babel/core');
         const source = #{JSON.generate(input[:source])};
-        const options = #{JSON.generate(opts)};
+        const options = #{JSON.generate(opts).gsub(/"@babel\/[^"]+"/) { |m| "require(#{m})"}};
 
         try {
           const result = babel.transform(source, options);

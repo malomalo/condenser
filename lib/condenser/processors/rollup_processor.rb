@@ -37,40 +37,60 @@ class Condenser
           format: 'iife',
           sourcemap: true
         }
+        if input[:source] =~ /export\s+{[^}]+};?\z/i
+          output_options[:name] = File.basename(input[:filename], ".*").capitalize
+        end
         
         exec_runtime(<<-JS)
           const fs    = require('fs');
           const path  = require('path');
           const stdin = process.stdin;
 
+          module.paths.push("#{File.expand_path('../node_modules', __FILE__)}")
 
           var buffer = '';
           stdin.resume();
           stdin.setEncoding('utf8');
-          stdin.on('data', function (chunk) {
-            buffer += chunk;
+          function emitMessages(buffer) {
             try {
               var message = JSON.parse(buffer);
-              stdin.emit('message', message);
-              buffer = '';
+              stdin.emit('message' + message.rid, message);
+              return '';
             } catch(e) {
-              if (e.name !== "SyntaxError") {
+              if (e.name === "SyntaxError") {
+                if (e.message.startsWith('Unexpected token { in JSON at position ')) {
+                  var pos = parseInt(e.message.slice(39));
+                  emitMessages(buffer.slice(0,pos));
+                  return emitMessages(buffer.slice(pos));
+                } else {
+                  return buffer;
+                }
+              } else {
                 console.log(JSON.stringify({method: 'error', args: [e.name, e.message]}));
                 process.exit(1);
               }
             }
+          }
+
+          stdin.on('data', function (chunk) {
+            buffer += chunk;
+            buffer = emitMessages(buffer);
           });
-
-          const rollup = require("#{ROLLUP_SOURCE}");
-
+          
+          const rollup = require("rollup");
+          const commonjs = require('rollup-plugin-commonjs');
+          var rid = 0;
+          
           function request(method, args) {
+            var trid = rid;
+            rid += 1;
             var promise = new Promise(function(resolve, reject) {
-              stdin.once('message', function(message) {
+              stdin.once('message' + trid, function(message) {
                 resolve(message['return']);
               });
             });
   
-            console.log(JSON.stringify({ method: method, args: args }));
+            console.log(JSON.stringify({ rid: trid, method: method, args: args }));
 
             return promise;
           }
@@ -80,19 +100,26 @@ class Condenser
           inputOptions.plugins.push({
             name: 'erb',
             resolveId: function (importee, importer) {
+              if (importee.startsWith('\\0commonjs') || (importer && importer.startsWith('\\0commonjs'))) {
+                return;
+              }
+
               return request('resolve', [importee, importer]).then(function(value) {
                 return value;
               });
             },
             load: function(id) {
-              if (id.startsWith("#{File.dirname(ROLLUP_SOURCE)}")) {
-                return null;
+              if (id.startsWith('\\0commonjs')) {
+                return;
               }
+
               return request('load', [id]).then(function(value) {
                 return value;
               });
             }
           });
+          inputOptions.plugins.push(commonjs());
+
           const outputOptions = #{JSON.generate(output_options)};
 
           async function build() {
@@ -101,7 +128,7 @@ class Condenser
               await bundle.write(outputOptions);
               process.exit(0);
             } catch(e) {
-              console.log(JSON.stringify({method: 'error', args: [e.name, e.message]}));
+              console.log(JSON.stringify({method: 'error', args: [e.stack + e.name + 'x', e.message]}));
               process.exit(1);
             }
           }
@@ -129,21 +156,33 @@ class Condenser
 
               asset = if importer.nil? && importee == @entry
                 @entry
-              # elsif ['babel-runtime/', 'core-js/', 'regenerator-runtime/'].any? { |s| importee.start_with?(s) }
-              #   File.join(File.dirname(ROLLUP_SOURCE), importee) + '.js'
+              elsif message['args'].first.start_with?('@babel/runtime') || message['args'].first.start_with?('core-js/library')
+                x = File.expand_path('../node_modules/' +message['args'].first.gsub(/^\.\//, File.dirname(message['args'][1]) + '/'), __FILE__).sub('@babel/runtime/helpers', '@babel/runtime/helpers/es6')
+                x = "#{x}.js" if !x.end_with?('.js')
+                if File.file?(x)
+                  x
+                else
+                  x.delete_suffix('.js') + "/index.js"
+                end
+              elsif message['args'][1].start_with?(File.expand_path('../node_modules/', __FILE__))
+                x = File.expand_path(message['args'].first, File.dirname(message['args'].last))
+                x.end_with?('.js') ? x : "#{x}.js"
               else
                 @environment.find!(importee, importer ? File.dirname(@entry == importer ? @input[:source_file] : importer) : nil, accept: @input[:content_types].last)&.source_file
               end
-
-              io.write(JSON.generate({return: asset}))
+              io.write(JSON.generate({rid: message['rid'], return: asset}))
             when 'load'
               if message['args'].first == @entry
-                io.write(JSON.generate({return: {
+                io.write(JSON.generate({rid: message['rid'], return: {
                   code: @input[:source], map: @input[:map]
+                }}))
+              elsif message['args'].first.start_with?(File.expand_path('../node_modules/', __FILE__))
+                io.write(JSON.generate({rid: message['rid'], return: {
+                  code: File.read(message['args'].first), map: nil
                 }}))
               else
                 asset = @environment.find!(message['args'].first, accept: @input[:content_types].last)
-                io.write(JSON.generate({return: {
+                io.write(JSON.generate({rid: message['rid'], return: {
                   code: asset.source, map: asset.sourcemap
                 }}))
               end

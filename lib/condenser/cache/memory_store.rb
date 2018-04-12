@@ -1,5 +1,4 @@
 # frozen_string_literal: true
-
 class Condenser::Cache
   # Public: Basic in memory LRU cache.
   #
