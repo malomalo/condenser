@@ -8,7 +8,7 @@ class Condenser
     def resolve(filename, base=nil, accept: nil, ignore: [])
       dirname, basename, extensions, mime_types = decompose_path(filename, base)
       results = []
-
+      
       accept ||= mime_types.empty? ? ['*/*'] : mime_types
       accept = Array(accept)
       

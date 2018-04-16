@@ -13,7 +13,6 @@ class Condenser
       source = eval("proc { #{source} }", nil, data[:filename] || "(erubi)")
       source = environment.new_context_class.instance_eval(&source)
 
-      
       data[:source] = source
     end
     

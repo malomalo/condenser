@@ -1,7 +1,9 @@
 require 'digest/sha2'
 require 'condenser/context'
+require 'condenser/cache_store'
 require 'condenser/cache/null_store'
 require 'condenser/cache/memory_store'
+require 'condenser/cache/file_store'
 
 class Condenser
   module Environment

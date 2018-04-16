@@ -48,9 +48,6 @@ class Condenser
       [dirname, basename].compact.join('/')
     end
     
-    def cache_key(data)
-    end
-    
     def process!(source=nil, source_digest=nil, content_digest=nil)
       source ||= File.binread(@source_file)
       source_digest ||= Digest::SHA1.base64digest(source)
@@ -61,7 +58,6 @@ class Condenser
         data = {
           source: source,
           source_file: @source_file,
-          source_digest: source_digest,
         
           filename: @filename.dup,
           content_type: mime_types,
@@ -121,19 +117,24 @@ class Condenser
       @dependencies = result[:dependencies]
     end
     
+    def cache_key
+      process
+      key = [hexdigest, @content_types.join(':')]
+      
+      @dependencies.each do |i|
+        key << @environment.find!(i, File.dirname(@source_file), accept: @content_types).cache_key
+      end
+      Digest::SHA1.base64digest(JSON.generate(key))
+    end
+    
     def export
-      source ||= File.binread(@source_file)
-      source_digest ||= Digest::SHA1.base64digest(source)
-      content_digest ||= Digest::SHA1.base64digest(@content_types.join(':'))
+      process
       
-      process!(source, source_digest, content_digest) if !@processed
-      
-      result = @environment.cache.fetch("export/#{source_digest}/#{content_digest}") do
+      result = @environment.cache.fetch("export/#{cache_key}") do
         dirname, basename, extensions, mime_types = @environment.decompose_path(@filename)
         data = {
           source: @source,
           source_file: @source_file,
-          source_digest: source_digest,
         
           filename: @filename.dup,
           content_types: @content_types,

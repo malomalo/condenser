@@ -10,7 +10,7 @@ class Condenser
         io = IO.popen([binary, scriptfile.path], err: [:child, :out])
         output = io.read
         io.close
-
+        
         if $?.success?
           JSON.parse(output)
         else
