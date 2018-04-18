@@ -1,7 +1,7 @@
 class Condenser
   module Pipeline
     
-    CONFIG_VARS  = %w(mime_types extensions templates preprocessors transformers postprocessors minifiers exporters writers).map(&:to_sym)
+    CONFIG_VARS  = %w(mime_types extensions analyzers templates preprocessors transformers postprocessors minifiers exporters writers).map(&:to_sym)
     
     def self.included(base)
       base.extend(self)
@@ -34,7 +34,16 @@ class Condenser
       @mime_types[mime_type] = { extensions: extensions, charset: charset }
       extensions.each { |ext| @extensions[ext] = mime_type }
     end
-  
+    
+    def register_analyzer(mime_type, engine)
+      @preprocessors[mime_type] ||= []
+      @preprocessors[mime_type] << engine
+    end
+    
+    def analyzers_for(mime_type)
+      @preprocessors[mime_type] || []
+    end
+
     def register_template(mime_type, engine)
       @templates[mime_type] = engine
     end

@@ -1,1 +1,1 @@
-exclude = '{$exclude,tmp,coverage,.tm_properties}'
+exclude = '{$exclude,tmp,coverage,.tm_properties,node_modules}'

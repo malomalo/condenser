@@ -62,8 +62,8 @@ class Condenser
         filename:     input[:filename],
         syntax:       self.class.syntax,
         cache_store:  Cache.new(environment.cache),
-        load_paths:   environment.path,#.environment.paths.map { |p| @importer_class.new(p.to_s) },
-       importer:     @importer_class.new,
+        load_paths:   environment.path,
+        importer:     @importer_class.new,
         condenser: {
           context: environment.new_context_class,
           environment: environment

@@ -35,7 +35,7 @@ class CacheTest < ActiveSupport::TestCase
     CSS
   end
   
-  test 'changing a source dependency reflects in the next call' do
+  test 'changing a js dependency reflects in the next call' do
     file 'main.js', <<-JS
       import { cube } from 'math';
 
@@ -60,6 +60,23 @@ class CacheTest < ActiveSupport::TestCase
     
     assert_exported_file 'main.js', 'application/javascript', <<~CSS
       !function(){"use strict";var o;console.log((o=5)*o*o)}();
+    CSS
+  end
+
+  test 'changing a scss dependency reflects in the next call' do
+    file "dir/a.scss", "body { color: blue; }"
+    file "dir/b.scss", "body { color: green; }"
+    
+    file 'test.scss', '@import "dir/*"'
+    
+    assert_exported_file 'test.css', 'text/css', <<~CSS
+      body{color:blue}body{color:green}
+    CSS
+    
+    file "dir/b.scss", "body { color: red; }"
+
+    assert_exported_file 'test.css', 'text/css', <<~CSS
+      body{color:blue}body{color:red}
     CSS
   end
 

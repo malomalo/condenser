@@ -26,7 +26,8 @@ class Condenser
       
       @linked_assets  = Set.new
       @dependencies   = Set.new
-      
+
+      @analyzed       = false
       @processed      = false
       @exported       = false
     end
@@ -48,15 +49,79 @@ class Condenser
       [dirname, basename].compact.join('/')
     end
     
-    def process!(source=nil, source_digest=nil, content_digest=nil)
-      source ||= File.binread(@source_file)
-      source_digest ||= Digest::SHA1.base64digest(source)
+    def analyze
+      analyze! if !@analyzed
+    end
+    
+    def analyze!
+      @source = File.binread(@source_file)
+      @digest = @environment.digestor.digest(@source)
+      @digest_name = @environment.digestor.name.sub(/^.*::/, '').downcase
       content_digest ||= Digest::SHA1.base64digest(@content_types.join(':'))
 
-      result = @environment.cache.fetch("process/#{source_digest}/#{content_digest}") do
+      result = @environment.cache.fetch("analyze/#{[@digest].pack('m0')}:#{content_digest}") do
         dirname, basename, extensions, mime_types = @environment.decompose_path(@source_file)
         data = {
-          source: source,
+          source: @source,
+          source_file: @source_file,
+          filename: @filename.dup,
+          content_type: mime_types,
+          linked_assets: [],
+          dependencies: []
+        }
+
+        while @environment.templates.has_key?(data[:content_type].last)
+          templator = @environment.templates[data[:content_type].pop]
+          templator.call(@environment, data)
+          data[:filename] = data[:filename].gsub(/\.#{extensions.last}$/, '')
+        end
+      
+        case @environment.mime_types[data[:content_type].last][:charset]
+        when :unicode
+          detect_unicode(data[:source])
+        when :css
+          detect_css(data[:source])
+        when :html
+          detect_html(data[:source])
+        else
+          detect(data[:source]) if mime_types.last.start_with?('text/')
+        end
+        
+        @environment.analyzers_for(data[:content_type].last).each do |analyzer|
+          analyzer.call(@environment, data)
+        end
+        
+        data
+      end
+      
+      @analyzed = true
+      @linked_assets = result[:linked_assets]
+      @dependencies = result[:dependencies]
+    end
+
+    def cache_key(include_dependencies=true)
+      analyze
+      key = [[@digest].pack('m0'), @content_types.join(':')]
+
+      if include_dependencies
+        @dependencies.each do |i|
+          @environment.resolve(i, File.dirname(@source_file), accept: @content_types).each do |asset|
+            key << asset.cache_key
+          end
+        end
+      end
+
+      Digest::SHA1.base64digest(JSON.generate(key))
+    end
+    
+    def process!(source=nil, source_digest=nil, content_digest=nil)
+      analyze
+      content_digest ||= Digest::SHA1.base64digest(@content_types.join(':'))
+      
+      result = @environment.cache.fetch("process/#{cache_key}/#{content_digest}") do
+        dirname, basename, extensions, mime_types = @environment.decompose_path(@source_file)
+        data = {
+          source: @source,
           source_file: @source_file,
         
           filename: @filename.dup,
@@ -111,26 +176,13 @@ class Condenser
       @sourcemap = result[:map]
       @filename = result[:filename]
       @content_types = result[:content_type]
-      @linked_assets = result[:linked_assets]
       @digest = result[:digest]
       @digest_name = result[:digest_name]
-      @dependencies = result[:dependencies]
-    end
-    
-    def cache_key
-      process
-      key = [hexdigest, @content_types.join(':')]
-      
-      @dependencies.each do |i|
-        key << @environment.find!(i, File.dirname(@source_file), accept: @content_types).cache_key
-      end
-      Digest::SHA1.base64digest(JSON.generate(key))
     end
     
     def export
-      process
-      
       result = @environment.cache.fetch("export/#{cache_key}") do
+        process
         dirname, basename, extensions, mime_types = @environment.decompose_path(@filename)
         data = {
           source: @source,

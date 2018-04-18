@@ -50,21 +50,9 @@ class Condenser
         const babel = require('@babel/core');
         const source = #{JSON.generate(input[:source])};
         const options = #{JSON.generate(opts).gsub(/"@babel\/[^"]+"/) { |m| "require(#{m})"}};
-        let imports = [];
-        
-        options['plugins'].push(function({ types: t }) {
-          return {
-            visitor: {
-              ImportDeclaration(path, state) {
-                imports.push(path.node.source.value);
-              }
-            }
-          };
-        });
         
         try {
           const result = babel.transform(source, options);
-          result.imports = imports;
           console.log(JSON.stringify(result));
         } catch(e) {
           console.log(JSON.stringify({'error': e.name + ": " + e.message}));
@@ -75,10 +63,6 @@ class Condenser
       if result['error']
         raise Error, result['error']
       else
-        result['imports'].each do |i|
-          input[:dependencies] << i unless i.start_with?('@babel/')
-        end
-        
         input[:source] = result['code']
           # result['metadata']["modules"]["imports"].each do |import|
           #   asset.prepend(asset.environment.find!(import['source'], accept: asset.content_type))
