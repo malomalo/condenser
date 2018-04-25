@@ -79,6 +79,7 @@ class Condenser
           
           const rollup = require("rollup");
           const commonjs = require('rollup-plugin-commonjs');
+          const nodeResolve = require('rollup-plugin-node-resolve');
           var rid = 0;
           
           function request(method, args) {
@@ -103,7 +104,7 @@ class Condenser
               if (importee.startsWith('\\0commonjs') || (importer && importer.startsWith('\\0commonjs'))) {
                 return;
               }
-
+              
               return request('resolve', [importee, importer]).then(function(value) {
                 return value;
               });
@@ -118,6 +119,15 @@ class Condenser
               });
             }
           });
+
+          if ('#{environment.npm_path}' !== '') {
+            inputOptions.plugins.push(nodeResolve({ jsnext: true,
+              customResolveOptions: {
+                moduleDirectory: '#{environment.npm_path}'
+              }
+            }));
+          }
+
           inputOptions.plugins.push(commonjs());
 
           const outputOptions = #{JSON.generate(output_options)};
@@ -167,8 +177,11 @@ class Condenser
               elsif message['args'][1].start_with?(File.expand_path('../node_modules/', __FILE__))
                 x = File.expand_path(message['args'].first, File.dirname(message['args'].last))
                 x.end_with?('.js') ? x : "#{x}.js"
+              elsif @environment.npm_path && message['args'][1].start_with?(@environment.npm_path)
+                x = File.expand_path(message['args'].first, File.dirname(message['args'].last))
+                x.end_with?('.js') ? x : "#{x}.js"
               else
-                @environment.find!(importee, importer ? File.dirname(@entry == importer ? @input[:source_file] : importer) : nil, accept: @input[:content_types].last)&.source_file
+                @environment.find(importee, importer ? File.dirname(@entry == importer ? @input[:source_file] : importer) : nil, accept: @input[:content_types].last)&.source_file
               end
               io.write(JSON.generate({rid: message['rid'], return: asset}))
             when 'load'
@@ -181,10 +194,14 @@ class Condenser
                   code: File.read(message['args'].first), map: nil
                 }}))
               else
-                asset = @environment.find!(message['args'].first, accept: @input[:content_types].last)
-                io.write(JSON.generate({rid: message['rid'], return: {
-                  code: asset.source, map: asset.sourcemap
-                }}))
+                asset = @environment.find(message['args'].first, accept: @input[:content_types].last)
+                if asset
+                  io.write(JSON.generate({rid: message['rid'], return: {
+                    code: asset.source, map: asset.sourcemap
+                  }}))
+                else
+                  io.write(JSON.generate({rid: message['rid'], return: nil}))
+                end
               end
             when 'error'
               raise exec_runtime_error(message['args'][0] + ': ' + message['args'][1])

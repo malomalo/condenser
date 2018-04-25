@@ -8,7 +8,7 @@ require 'condenser/cache/file_store'
 class Condenser
   module Environment
     
-    attr_reader :path
+    attr_reader :path, :npm_path
     attr_accessor :cache
     
     def initialize
@@ -30,6 +30,12 @@ class Condenser
         raise ArgumentError, "Path \"#{path}\" does not exists" if !File.directory?(path)
         @path.push(path)
       end
+    end
+
+    def npm_path=(path)
+      path = File.expand_path(path)
+      raise ArgumentError, "Path \"#{path}\" does not exists" if !File.directory?(path)
+      @npm_path = path
     end
   
     def clear_path

@@ -22,12 +22,13 @@ class Condenser
   attr_reader :logger
   attr_accessor :digestor
   
-  def initialize(*path, digestor: nil)
+  def initialize(*path, digestor: nil, cache: nil)
     super()
     @logger = Logger.new($stderr, level: :warn)
     @path = []
+    @npm_path = nil
     append_path(path)
-    @cache = Cache::MemoryStore.new
+    @cache = cache || Cache::MemoryStore.new
     self.digestor = digestor || Digest::SHA256
   end
 end
