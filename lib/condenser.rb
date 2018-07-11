@@ -28,6 +28,7 @@ class Condenser
     @path = []
     @npm_path = nil
     append_path(path)
+    append_path(EJS::ASSET_DIR)
     @cache = cache || Cache::MemoryStore.new
     self.digestor = digestor || Digest::SHA256
   end
@@ -110,6 +111,11 @@ Condenser.configure do
   register_exporter     'application/javascript', Condenser::RollupProcessor
   register_minifier     'application/javascript', Condenser::UglifyMinifier
 
+  # EJS
+  require 'condenser/transformers/ejs'
+  register_mime_type    'application/ejs', extensions: %w(.ejs .jst.ejs)
+  register_transformer  'application/ejs', 'application/javascript', Condenser::EjsTransformer
+  
   # Writers
   require 'condenser/writers/file_writer'
   require 'condenser/writers/zlib_writer'
