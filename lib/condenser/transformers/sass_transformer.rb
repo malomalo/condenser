@@ -71,7 +71,7 @@ class Condenser
       })
 
       engine = Sass::Engine.new(input[:source], engine_options)
-
+      
       css, map = Utils.module_include(Sass::Script::Functions, @functions) do
         engine.render_with_sourcemap('')
       end
@@ -137,7 +137,6 @@ class Condenser
         path = condenser_context.asset_path(asset.path, options)
         query    = "?#{query}" if query
         fragment = "##{fragment}" if fragment
-
         Sass::Script::String.new("#{path}#{query}#{fragment}", :string)
       end
 

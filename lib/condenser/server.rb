@@ -67,7 +67,6 @@ class Condenser
 
       # Look up the asset.
       asset = @condenser.find_export(path)
-
       if asset.nil?
         status = :not_found
       elsif fingerprint && asset.etag != fingerprint
@@ -94,7 +93,7 @@ class Condenser
         logger.info "#{msg} 412 Precondition Failed (#{time_elapsed.call}ms)"
         precondition_failed_response(env)
       end
-    rescue StandardError => e
+    rescue StandardError, ScriptError => e
       logger.error "Error compiling asset #{path}:"
       logger.error "#{e.class.name}: #{e.message}"
 

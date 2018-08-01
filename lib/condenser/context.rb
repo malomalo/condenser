@@ -193,7 +193,7 @@ Extend your environment context with a custom method.
       end
     end
       EOS
-      raise NotImplementedError, message
+      raise LoadError, message # Rack does not catch NotImplementedError
     end
 
     # Expand logical image asset path.
