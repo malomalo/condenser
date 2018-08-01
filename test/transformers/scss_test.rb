@@ -46,4 +46,40 @@ class CondenserSCSSTest < ActiveSupport::TestCase
     CSS
   end
   
+  test "url functions" do
+    file 'test.scss', <<~SCSS
+    div {
+       url: asset-url("foo.svg");
+       url: image-url("foo.png");
+       url: video-url("foo.mov");
+       url: audio-url("foo.mp3");
+       url: font-url("foo.woff2");
+       url: font-url("foo.woff");
+       url: javascript-url("foo.js");
+       url: stylesheet-url("foo.css");
+    }
+    SCSS
+
+    file 'foo.svg', ''
+    file 'foo.png', ''
+    file 'foo.mov', ''
+    file 'foo.mp3', ''
+    file 'foo.woff2', ''
+    file 'foo.woff', ''
+    file 'foo.js', ''
+    file 'foo.css', ''
+    
+    assert_file 'test.css', 'text/css', <<~CSS
+    div {
+      url: url(/assets/foo-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.svg);
+      url: url(/assets/foo-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.png);
+      url: url(/assets/foo-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.mov);
+      url: url(/assets/foo-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.mp3);
+      url: url(/assets/foo-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.woff2);
+      url: url(/assets/foo-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.woff);
+      url: url(/assets/foo-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.js);
+      url: url(/assets/foo-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.css); }
+    CSS
+  end
+  
 end

@@ -32,6 +32,12 @@ class ActiveSupport::TestCase
   def setup
     @path = Dir.mktmpdir
     @env = Condenser.new(@path)
+    @env.context_class.class_eval do
+      def asset_path(path, options = {})
+        "/assets/#{path}"
+      end
+    end
+    
   end
 
   def teardown

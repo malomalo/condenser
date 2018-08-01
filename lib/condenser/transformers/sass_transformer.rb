@@ -72,10 +72,9 @@ class Condenser
 
       engine = Sass::Engine.new(input[:source], engine_options)
 
-      css, map = engine.render_with_sourcemap('')
-      # Utils.module_include(Sass::Script::Functions, @functions) do
-      #   engine.render_with_sourcemap('')
-      # end
+      css, map = Utils.module_include(Sass::Script::Functions, @functions) do
+        engine.render_with_sourcemap('')
+      end
 
       css = css.delete_suffix!("\n/*# sourceMappingURL= */\n")
 
@@ -92,7 +91,7 @@ class Condenser
     # version - the cache version.
     #
     # Override this method if you need to use a different cache than the
-    # Sprockets cache.
+    # Condenser cache.
     def build_cache_store(input, version)
       CacheStore.new(input[:cache], version)
     end
@@ -108,13 +107,13 @@ class Condenser
       options
     end
 
-    # Public: Functions injected into Sass context during Sprockets evaluation.
+    # Public: Functions injected into Sass context during Condenser evaluation.
     #
-    # This module may be extended to add global functionality to all Sprockets
+    # This module may be extended to add global functionality to all Condenser
     # Sass environments. Though, scoping your functions to just your environment
     # is preferred.
     #
-    # module Sprockets::SassProcessor::Functions
+    # module Condenser::SassProcessor::Functions
     #   def asset_path(path, options = {})
     #   end
     # end
@@ -133,7 +132,9 @@ class Condenser
         path = path.value
 
         path, _, query, fragment = URI.split(path)[5..8]
-        path     = sprockets_context.asset_path(path, options)
+        asset = condenser_environment.find!(path)
+        condenser_context.link_asset(path)
+        path = condenser_context.asset_path(asset.path, options)
         query    = "?#{query}" if query
         fragment = "##{fragment}" if fragment
 
@@ -263,31 +264,27 @@ class Condenser
       #
       # Returns a Sass::Script::String.
       def asset_data_url(path)
-        url = sprockets_context.asset_data_uri(path.value)
+        url = condenser_environment.asset_data_uri(path.value)
         Sass::Script::String.new("url(" + url + ")")
       end
 
       protected
         # Public: The Environment.
         #
-        # Returns Sprockets::Environment.
-        def sprockets_environment
-          options[:sprockets][:environment]
+        # Returns Condenser::Environment.
+        def condenser_context
+          options[:condenser][:context]
+        end
+        
+        def condenser_environment
+          options[:condenser][:environment]
         end
 
         # Public: Mutatable set of dependencies.
         #
         # Returns a Set.
-        def sprockets_dependencies
-          options[:sprockets][:dependencies]
-        end
-
-        # Deprecated: Get the Context instance. Use APIs on
-        # sprockets_environment or sprockets_dependencies directly.
-        #
-        # Returns a Context instance.
-        def sprockets_context
-          options[:sprockets][:context]
+        def condenser_dependencies
+          options[:condenser][:dependencies]
         end
 
     end

@@ -39,6 +39,8 @@ class Condenser
 
     def initialize(environment)
       @environment  = environment
+      @dependencies = Set.new
+      @links = Set.new
     end
 
     def metadata
@@ -129,7 +131,9 @@ class Condenser
     # file. Unlike `depend_on`, this will recursively include
     # the target asset's dependencies.
     def depend_on_asset(path)
-      load(resolve(path))
+      asset = environment.find!(path)
+      @dependencies << asset.source_file
+      asset
     end
 
     # `depend_on_env` allows you to state a dependency on an environment
@@ -148,7 +152,7 @@ class Condenser
     # Returns an Asset or nil.
     def link_asset(path)
       asset = depend_on_asset(path)
-      @links << asset.uri
+      @links << asset.path
       asset
     end
 

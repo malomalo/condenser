@@ -67,6 +67,7 @@ Condenser.configure do
   register_mime_type 'audio/aac', extensions: ['.aac']
   register_mime_type 'audio/mp4', extensions: ['.m4a']
   register_mime_type 'audio/flac', extensions: ['.flac']
+  register_mime_type 'video/quicktime', extensions: ['.mov']
 
   # Common font types
   register_mime_type 'application/vnd.ms-fontobject', extensions: ['.eot']
