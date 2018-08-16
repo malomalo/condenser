@@ -81,6 +81,23 @@ class Condenser
         @writers[mime_type] << [engine, added_mime_types || []]
       end
     end
+        
+    def unregister_writer(mime_types, engine, added_mime_types=nil)
+      mime_types = @writers.keys if mime_types.nil?
+      Array(mime_types).each do |mime_type|
+        @writers[mime_type].select! do |writer|
+          if engine.nil? || engine == writer[0] || writer[0].is_a?(engine)
+            if added_mime_types.nil? || added_mime_types == writer[1]
+              false
+            else
+              true
+            end
+          else
+            true
+          end
+        end
+      end
+    end
     
     def clear_pipeline
       (CONFIG_VARS - [:mime_types, :extensions]).each { |v| self.instance_variable_set("@#{v}", {}) }
