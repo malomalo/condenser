@@ -30,6 +30,7 @@ class Condenser
     append_path(path)
     append_path(EJS::ASSET_DIR)
     @cache = cache || Cache::MemoryStore.new
+    @build_cc = 0
     self.digestor = digestor || Digest::SHA256
   end
 end
@@ -90,24 +91,19 @@ Condenser.configure do
   register_minifier       'text/css', Condenser::SassMinifier
   
   # SASS
-  require 'condenser/analyzers/sass_analyzer'
   require 'condenser/transformers/sass_transformer'
   register_mime_type    'text/sass', extensions: %w(.sass .css.sass)
-  register_analyzer     'text/sass', Condenser::SassAnalyzer
   # register_transformer  'text/sass', 'text/css', SassProcessor
   
   # SCSS
   register_mime_type    'text/scss', extensions: %w(.scss .css.scss)
-  register_analyzer     'text/scss', Condenser::ScssAnalyzer
   register_transformer  'text/scss', 'text/css', Condenser::ScssTransformer
   
   # Javascript
-  require 'condenser/analyzers/javascript_analyzer'
   require 'condenser/processors/rollup_processor'
   require 'condenser/processors/babel_processor'
   require 'condenser/minifiers/uglify_minifier'
   register_mime_type    'application/javascript', extension: '.js', charset: :unicode
-  register_analyzer     'application/javascript', Condenser::JavascriptAnalyzer
   register_preprocessor 'application/javascript', Condenser::BabelProcessor
   register_exporter     'application/javascript', Condenser::RollupProcessor
   register_minifier     'application/javascript', Condenser::UglifyMinifier

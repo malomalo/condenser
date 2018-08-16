@@ -67,7 +67,8 @@ class Condenser
         condenser: {
           context: environment.new_context_class,
           environment: environment
-        }
+        },
+        asset: input
       })
 
       engine = Sass::Engine.new(input[:source], engine_options)

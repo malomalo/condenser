@@ -5,9 +5,7 @@ class Condenser
   class BabelProcessor < NodeProcessor
     class Error           < StandardError; end
     
-    # From https://github.com/babel/babel-standalone/releases/download/release-6.26.0/babel.min.js
-    BABEL_VERSION = '6.26.0'
-    BABEL_SOURCE = File.expand_path('../babel.min.js', __FILE__)
+    BABEL_VERSION = '7.0.0-rc.1'
     
     def self.call(environment, input)
       new.call(environment, input)
@@ -17,7 +15,12 @@ class Condenser
       @options = options.merge({
         ast: false,
         compact: false,
-        plugins: ["@babel/plugin-transform-runtime"],
+        plugins: [
+          ["@babel/plugin-proposal-class-properties", {}],
+          ['@babel/plugin-transform-runtime', {
+                corejs: 2,
+          }],
+        ],
         presets: [["@babel/preset-env", {
           "modules": false,
           "targets": { "browsers": "> 1%" }
@@ -51,8 +54,21 @@ class Condenser
         const source = #{JSON.generate(input[:source])};
         const options = #{JSON.generate(opts).gsub(/"@babel\/[^"]+"/) { |m| "require(#{m})"}};
         
+        let imports = [];
+        options['plugins'].push(function({ types: t }) {
+          return {
+            visitor: {
+              ImportDeclaration(path, state) {
+                imports.push(path.node.source.value);
+              }
+            }
+          };
+        });
+        
+        
         try {
           const result = babel.transform(source, options);
+          result.imports = imports;
           console.log(JSON.stringify(result));
         } catch(e) {
           console.log(JSON.stringify({'error': e.name + ": " + e.message}));
@@ -64,11 +80,10 @@ class Condenser
         raise Error, result['error']
       else
         input[:source] = result['code']
-          # result['metadata']["modules"]["imports"].each do |import|
-          #   asset.prepend(asset.environment.find!(import['source'], accept: asset.content_type))
-          # end
-          # asset.exports = !result['metadata']["modules"]["exports"]['exported'].empty?
         input[:map] = result['map']
+        input[:dependencies] = result['imports'].map do |i|
+          i.end_with?('.js') ? i : "#{i}.js"
+        end
       end
     end
     

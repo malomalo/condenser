@@ -9,7 +9,7 @@ class Condenser
   module Environment
     
     attr_reader :path, :npm_path
-    attr_accessor :cache
+    attr_accessor :cache, :build_cache
     
     def initialize
       @context_class = Class.new(Condenser::Context)
@@ -36,6 +36,12 @@ class Condenser
       path = File.expand_path(path)
       raise ArgumentError, "Path \"#{path}\" does not exists" if !File.directory?(path)
       @npm_path = path
+    end
+  
+    def append_npm_path(*paths)
+      paths.flatten.each do |path|
+        self.npm_path = path
+      end
     end
   
     def clear_path

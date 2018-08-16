@@ -10,7 +10,7 @@ class Condenser::Cache
   #
   #   ActiveSupport::Cache::MemoryStore
   #
-  class MemoryStore
+  class MemoryStore < Condenser::CacheStore
     # Internal: Default key limit for store.
     DEFAULT_MAX_SIZE = 33_554_432 # 32 Megabytes
     PER_ENTRY_OVERHEAD = 240
@@ -26,18 +26,6 @@ class Condenser::Cache
       @cache.clear
       @key_access.clear
       @cache_size = 0
-    end
-    
-    def fetch(key)
-      value = get(key)
-      
-      if value.nil?
-        value = yield
-        set(key, Marshal.dump(value))
-      else
-        value = Marshal.load(value)
-      end
-      value
     end
     
     def get(key)
@@ -60,16 +48,6 @@ class Condenser::Cache
       @key_access[key] = Time.now.to_f
       prune if @cache_size > @max_size
       value
-    end
-    
-    def delete(key)
-      @key_access.delete(key)
-      if value = @cache.delete(key)
-        @cache_size -= cached_size(key, value)
-        true
-      else
-        false
-      end
     end
     
     def prune

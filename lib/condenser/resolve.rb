@@ -6,103 +6,129 @@ class Condenser
     end
     
     def resolve(filename, base=nil, accept: nil, ignore: [])
-      dirname, basename, extensions, mime_types = decompose_path(filename, base)
-      results = []
+      build do
+        dirname, basename, extensions, mime_types = decompose_path(filename, base)
+        results = []
       
-      accept ||= mime_types.empty? ? ['*/*'] : mime_types
-      accept = Array(accept)
+        accept ||= mime_types.empty? ? ['*/*'] : mime_types
+        accept = Array(accept)
       
-      paths = if dirname&.start_with?('/')
-        if pat = path.find { |pa| dirname.start_with?(pa) }
-          dirname.delete_prefix!(pat)
-          dirname.delete_prefix!('/')
-          [pat]
+        paths = if dirname&.start_with?('/')
+          if pat = path.find { |pa| dirname.start_with?(pa) }
+            dirname.delete_prefix!(pat)
+            dirname.delete_prefix!('/')
+            [pat]
+          else
+            []
+          end
         else
-          []
+          path
         end
-      else
-        path
-      end
 
-      paths.each do |path|
-        glob = path
-        glob = File.join(glob, dirname) if dirname
-        glob = File.join(glob, basename)
-        glob << '.*' unless glob.end_with?('*')
+        paths.each do |path|
+          glob = path
+          glob = File.join(glob, dirname) if dirname
+          glob = File.join(glob, basename)
+          glob << '.*' unless glob.end_with?('*')
         
-        Dir.glob(glob).sort.each do |f|
-          next if !File.file?(f) || ignore.include?(f)
+          Dir.glob(glob).sort.each do |f|
+            next if !File.file?(f) || ignore.include?(f)
           
-          f_dirname, f_basename, f_extensions, f_mime_types = decompose_path(f)
-          if (basename == '*' || basename == f_basename)
-            if accept == ['*/*'] || mime_type_match_accept?(f_mime_types, accept)
-              asset_dir = f_dirname.delete_prefix(path).delete_prefix('/')
-              asset_basename = f_basename + f_extensions.join('')
-              asset_filename = asset_dir.empty? ? asset_basename : File.join(asset_dir, asset_basename)
-              results << Asset.new(self, {
-                filename: asset_filename,
-                content_types: f_mime_types,
-                source_file: f,
-                source_path: path
-              })
-            end
-            
-            reverse_mapping[f_mime_types]&.each do |derivative_mime_types|
-              if accept == ['*/*'] || mime_type_match_accept?(derivative_mime_types, accept)
+            f_dirname, f_basename, f_extensions, f_mime_types = decompose_path(f)
+            if (basename == '*' || basename == f_basename)
+              if accept == ['*/*'] || mime_type_match_accept?(f_mime_types, accept)
                 asset_dir = f_dirname.delete_prefix(path).delete_prefix('/')
-                asset_basename = f_basename + derivative_mime_types.map { |t| @mime_types[t][:extensions].first }.join('')
+                asset_basename = f_basename + f_extensions.join('')
                 asset_filename = asset_dir.empty? ? asset_basename : File.join(asset_dir, asset_basename)
-                results << Asset.new(self, {
+                @build_cache[asset_filename] ||= Asset.new(self, {
                   filename: asset_filename,
-                  content_types: derivative_mime_types,
+                  content_types: f_mime_types,
                   source_file: f,
                   source_path: path
                 })
+                results << @build_cache[asset_filename]
+              end
+            
+              reverse_mapping[f_mime_types]&.each do |derivative_mime_types|
+                if accept == ['*/*'] || mime_type_match_accept?(derivative_mime_types, accept)
+                  asset_dir = f_dirname.delete_prefix(path).delete_prefix('/')
+                  asset_basename = f_basename + derivative_mime_types.map { |t| @mime_types[t][:extensions].first }.join('')
+                  asset_filename = asset_dir.empty? ? asset_basename : File.join(asset_dir, asset_basename)
+                  @build_cache[asset_filename] ||= Asset.new(self, {
+                    filename: asset_filename,
+                    content_types: derivative_mime_types,
+                    source_file: f,
+                    source_path: path
+                  })
+                  results << @build_cache[asset_filename]
+                end
               end
             end
           end
         end
-      end
 
-      results = results.group_by do |a|
-        accept.find_index { |m| match_mime_types?(a.content_types, m) }
-      end
+        results = results.group_by do |a|
+          accept.find_index { |m| match_mime_types?(a.content_types, m) }
+        end
       
-      results = results.keys.sort.reduce([]) do |c, key|
-        c += results[key].sort_by(&:filename)
+        results = results.keys.sort.reduce([]) do |c, key|
+          c += results[key].sort_by(&:filename)
+        end
+
+        results = results.map { |a| a.basepath }.uniq.map {|fn| results.find {|r| r.filename.sub(/\.(\w+)$/, '') == fn}}
+
+        results.sort_by(&:filename)
       end
-
-      results = results.map { |a| a.basepath }.uniq.map {|fn| results.find {|r| r.filename.sub(/\.(\w+)$/, '') == fn}}
-
-      results.sort_by(&:filename)
     end
 
     def resolve!(filename, base=nil, **kargs)
-      assets = resolve(filename, base, **kargs)
-      if assets.empty?
-        raise FileNotFound, "couldn't find file '#{filename}'"
-      else
-        assets
+      build do
+        assets = resolve(filename, base, **kargs)
+        if assets.empty?
+          raise FileNotFound, "couldn't find file '#{filename}'"
+        else
+          assets
+        end
       end
     end
 
     def find(filename, base=nil, **kargs)
-      resolve(filename, base, **kargs).first
+      build do
+        resolve(filename, base, **kargs).first
+      end
     end
     
     def find!(filename, base=nil, **kargs)
-      resolve!(filename, base, **kargs).first
+      build do
+        resolve!(filename, base, **kargs).first
+      end
     end
     
     def [](filename)
-      find!(filename).export
+      build do
+        find!(filename).export
+      end
     end
     
     def find_export(filename, base=nil, **kargs)
-      asset = resolve(filename, base, **kargs).first
-      asset&.export
+      build do
+        asset = resolve(filename, base, **kargs).first
+        asset&.export
+      end
     end
-
+    
+    def build
+      @build_cc += 1
+      if @build_cc == 1
+        @build_cache = {}
+      end
+      yield
+    ensure
+      @build_cc -= 1
+      if @build_cc == 0
+        @build_cache = nil
+      end
+    end
     
     def decompose_path(path, base=nil)
       dirname = path.index('/') ? File.dirname(path) : nil

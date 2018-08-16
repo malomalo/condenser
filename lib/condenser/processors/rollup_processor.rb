@@ -30,7 +30,7 @@ class Condenser
       Dir.mktmpdir do |output_dir|
         @entry = File.join(output_dir, 'entry.js')
         input_options = {
-          input: @entry,
+          input: @entry
         }
         output_options = {
           file: File.join(output_dir, 'result.js'),
@@ -40,7 +40,7 @@ class Condenser
         if input[:source] =~ /export\s+{[^}]+};?\z/i
           output_options[:name] = File.basename(input[:filename], ".*").capitalize
         end
-        
+
         exec_runtime(<<-JS)
           const fs    = require('fs');
           const path  = require('path');
@@ -134,8 +134,11 @@ class Condenser
 
           async function build() {
             try {
+              // inputOptions.cache = await JSON.parse(request('get_cache', []));
+              
               const bundle = await rollup.rollup(inputOptions);
               await bundle.write(outputOptions);
+              // await request('set_cache', [JSON.stringify(bundle)]);
               process.exit(0);
             } catch(e) {
               console.log(JSON.stringify({method: 'error', args: [e.stack + e.name + 'x', e.message]}));
@@ -157,9 +160,12 @@ class Condenser
       output = ''
       
       begin
+        
         while line = io.readline
           output << line
+          
           if message = JSON.parse(output)
+            t = Time.now.to_f
             case message['method']
             when 'resolve'
               importee, importer = message['args']
@@ -205,9 +211,15 @@ class Condenser
               end
             when 'error'
               raise exec_runtime_error(message['args'][0] + ': ' + message['args'][1])
+            # when 'set_cache'
+            #   @environment.cache.set('rollup', message['args'][0])
+            #   io.write(JSON.generate({rid: message['rid'], return: true}))
+            # when 'get_cache'
+            #   io.write(JSON.generate({rid: message['rid'], return: [(@environment.cache.get('rollup') || '{}')] }))
             end
             output = ''
           end
+
         end
       rescue EOFError
       end

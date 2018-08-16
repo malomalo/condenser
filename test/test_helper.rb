@@ -49,8 +49,14 @@ class ActiveSupport::TestCase
   end
   
   def file(name, source)
-    FileUtils.mkdir_p(File.join(@path, File.dirname(name)))
-    File.write(File.join(@path, name), source)
+    dir = File.join(@path, File.dirname(name))
+    path = File.join(@path, name)
+    
+    FileUtils.mkdir_p(dir)
+    # if File.exist?(path) && (File.stat(path).mtime.to_i - Time.now.to_i < 1)
+    #   sleep(1)
+    # end
+    File.write(path, source)
   end
   
   def assert_file(path, mime_types, source=nil)
