@@ -41,6 +41,7 @@ class Condenser
         # 'moduleRoot' => nil,
         'filename' => input[:filename],
         'moduleId' => input[:filename].sub(/(\..+)+/, ''),
+        'cwd' => '/assets/',
         'filenameRelative' => input[:filename],#split_subpath(input[:load_path], input[:filename]),
         'sourceFileName' => input[:filename],
         # 'sourceMapTarget' => input[:filename]

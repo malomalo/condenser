@@ -229,7 +229,7 @@ class ServerTest < ActiveSupport::TestCase
 
     get "/assets/error.js"
     assert_equal 200, last_response.status
-    assert_match(/SyntaxError: error\.js: Unexpected token/, last_response.body)
+    assert_match(/SyntaxError: \/assets\/error\.js: Unexpected token/, last_response.body)
   end
 
   test "display CSS exceptions in the browser" do
@@ -336,5 +336,5 @@ class ServerTest < ActiveSupport::TestCase
     get "/assets/%E2%EF%BF%BD%A6.js"
     assert_equal 400, last_response.status
   end
-  
+
 end

@@ -53,9 +53,10 @@ class ActiveSupport::TestCase
     path = File.join(@path, name)
     
     FileUtils.mkdir_p(dir)
-    # if File.exist?(path) && (File.stat(path).mtime.to_i - Time.now.to_i < 1)
-    #   sleep(1)
-    # end
+    if File.exist?(path)
+      stat = Time.now.to_f - File.stat(path).mtime.to_f
+      sleep(1 - stat) if stat < 1
+    end
     File.write(path, source)
   end
   
