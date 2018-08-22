@@ -102,4 +102,10 @@ class ResolveTest < ActiveSupport::TestCase
     end
   end
   
+  test 'resolve a file with a / as the prefix' do
+    file 'file.js', 'test'
+    
+    assert_file('/file.js', 'application/javascript')
+  end
+  
 end

@@ -6,6 +6,8 @@ class Condenser
     end
     
     def resolve(filename, base=nil, accept: nil, ignore: [])
+      filename.delete_prefix!("/") if path.none? { |p| filename.start_with?(p) }
+      
       build do
         dirname, basename, extensions, mime_types = decompose_path(filename, base)
         results = []
