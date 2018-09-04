@@ -110,7 +110,7 @@ Condenser.configure do
 
   # EJS
   require 'condenser/transformers/ejs'
-  register_mime_type    'application/ejs', extensions: %w(.ejs .jst.ejs)
+  register_mime_type    'application/ejs', extensions: %w(.ejs .jst.ejs), charset: :unicode
   register_transformer  'application/ejs', 'application/javascript', Condenser::EjsTransformer
   
   # Writers

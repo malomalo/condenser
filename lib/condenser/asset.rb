@@ -10,7 +10,7 @@ class Condenser
     include EncodingUtils
     
     attr_reader :environment, :filename, :content_types, :source_file, :source_path
-    attr_reader :linked_assets
+    attr_reader :linked_assets, :content_types_digest
     attr_writer :source, :sourcemap
 
     attr_accessor :imports
@@ -62,12 +62,25 @@ class Condenser
       d
     end
     
+    def all_dependenies(deps, visited, &block)
+      deps.each do |dep|
+        if !visited.include?(dep.source_file)
+          visited << dep.source_file
+          block.call(dep)
+          all_dependenies(dep.dependencies, visited, &block)
+        end
+
+      end
+    end
+    
     def cache_key(include_dependencies=true)
       key = []
       key << [@source_file, @content_types_digest, stat.ino, stat.mtime.to_f, stat.size]
 
       if include_dependencies
-        dependencies.each { |d| key << d.cache_key(false) }
+        all_dependenies(dependencies, []) do |dep|
+          key << [dep.source_file, dep.content_types_digest, dep.stat.ino, dep.stat.mtime.to_f, dep.stat.size]
+        end
       end
 
       Digest::SHA1.base64digest(JSON.generate(key))
