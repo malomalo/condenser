@@ -110,7 +110,7 @@ class Condenser
           else
             detect(data[:source]) if mime_types.last.start_with?('text/')
           end
-        
+          
           if @environment.preprocessors.has_key?(data[:content_type].last)
             @environment.preprocessors[data[:content_type].last].each do |processor|
               processor.call(@environment, data)

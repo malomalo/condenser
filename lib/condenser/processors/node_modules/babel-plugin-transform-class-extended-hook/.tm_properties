@@ -1,0 +1,2 @@
+exclude = '{$exclude,log,bin,dist,tmp,.tm_properties,node_modules}'
+excludeInFolderSearch = '{$excludeInFolderSearch,public/static}'

@@ -6,6 +6,7 @@ class Condenser
     class Error           < StandardError; end
     
     BABEL_VERSION = '7.0.0-rc.1'
+    # npm install @babel/core @babel/runtime-corejs2 @babel/plugin-transform-runtime @babel/preset-env rollup rollup-plugin-commonjs  rollup-plugin-node-resolve  @babel/plugin-proposal-class-properties babel-plugin-transform-class-extended-hook
     
     def self.call(environment, input)
       new.call(environment, input)
@@ -16,6 +17,7 @@ class Condenser
         ast: false,
         compact: false,
         plugins: [
+          ['babel-plugin-transform-class-extended-hook', {}],
           ["@babel/plugin-proposal-class-properties", {}],
           ['@babel/plugin-transform-runtime', {
                 corejs: 2,
@@ -53,7 +55,7 @@ class Condenser
       
         const babel = require('@babel/core');
         const source = #{JSON.generate(input[:source])};
-        const options = #{JSON.generate(opts).gsub(/"@babel\/[^"]+"/) { |m| "require(#{m})"}};
+        const options = #{JSON.generate(opts).gsub(/"@?babel[\/-][^"]+"/) { |m| "require(#{m})"}};
         
         let imports = [];
         options['plugins'].push(function({ types: t }) {
