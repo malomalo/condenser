@@ -141,7 +141,7 @@ class Condenser
               // await request('set_cache', [JSON.stringify(bundle)]);
               process.exit(0);
             } catch(e) {
-              console.log(JSON.stringify({method: 'error', args: [e.stack + e.name + 'x', e.message]}));
+              console.log(JSON.stringify({method: 'error', args: [e.name, e.message, e.stack]}));
               process.exit(1);
             }
           }
@@ -172,8 +172,8 @@ class Condenser
 
               asset = if importer.nil? && importee == @entry
                 @entry
-              elsif message['args'].first.start_with?('@babel/runtime') || message['args'].first.start_with?('core-js/library')
-                x = File.expand_path('../node_modules/' +message['args'].first.gsub(/^\.\//, File.dirname(message['args'][1]) + '/'), __FILE__).sub('@babel/runtime/helpers', '@babel/runtime/helpers/es6')
+              elsif message['args'].first.start_with?('@babel/runtime') || message['args'].first.start_with?('core-js/library') || message['args'].first.start_with?('regenerator-runtime')
+                x = File.expand_path('../node_modules/' + message['args'].first.gsub(/^\.\//, File.dirname(message['args'][1]) + '/'), __FILE__).sub('/node_modules/regenerator-runtime', '/node_modules/regenerator-runtime/runtime.js')
                 x = "#{x}.js" if !x.end_with?('.js')
                 if File.file?(x)
                   x

@@ -80,6 +80,9 @@ Condenser.configure do
   # Sourmaps
   register_mime_type 'application/sourcemap', extension: '.map', charset: :unicode
   
+  # Web Manifest
+  register_mime_type 'application/manifest+json', extension: '.webmanifest', charset: :unicode
+
   # ERB
   require 'condenser/templating_engine/erb'
   register_mime_type 'application/erb', extension: '.erb'

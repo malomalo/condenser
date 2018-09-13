@@ -47,25 +47,4 @@ class CondenserEJSTest < ActiveSupport::TestCase
     JS
   end
 
-
-  test 'locals' do
-    file 'test.ejs', "1<%= input %>3\n"
-    
-    assert_file 'test.js', 'application/javascript', <<~JS
-      import { escape } from 'ejs';
-      export default function (locals) {
-        var __output = [],
-            __append = __output.push.bind(__output);
-      
-        __append(`1`);
-      
-        __append(escape(locals.input));
-      
-        __append(`3\\n`);
-      
-        return __output.join("");
-      }
-    JS
-  end
-  
 end

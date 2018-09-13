@@ -24,8 +24,18 @@ class Condenser
           # 'inputSourceMap'
           ast: false,
           compact: false,
-          sourceMap: true,
-          plugins: []
+          plugins: [
+            ['babel-plugin-transform-class-extended-hook', {}],
+            ["@babel/plugin-proposal-class-properties", {}],
+            ['@babel/plugin-transform-runtime', {
+                  corejs: 2,
+            }],
+          ],
+          presets: [["@babel/preset-env", {
+            "modules": false,
+            "targets": { "browsers": "> 1%" }
+          } ]],
+          sourceMap: true
         }
   
         result = exec_runtime(<<-JS)
@@ -33,7 +43,7 @@ class Condenser
   
           const babel = require('@babel/core');
           const source = #{JSON.generate(input[:source])};
-          const options = #{JSON.generate(opts)};
+          const options = #{JSON.generate(opts).gsub(/"@?babel[\/-][^"]+"/) { |m| "require(#{m})"}};
 
           function globalVar(scope, name) {
             if (name in scope.globals) {

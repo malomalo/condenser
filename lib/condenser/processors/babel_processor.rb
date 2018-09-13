@@ -74,13 +74,13 @@ class Condenser
           result.imports = imports;
           console.log(JSON.stringify(result));
         } catch(e) {
-          console.log(JSON.stringify({'error': e.name + ": " + e.message}));
-          process.exit(1);
+          console.log(JSON.stringify({'error': [e.name, e.message, e.stack]}));
+          process.exit(0);
         }
       JS
       
       if result['error']
-        raise Error, result['error']
+        raise exec_runtime_error(result['error'][0] + ': ' + result['error'][1])
       else
         input[:source] = result['code']
         input[:map] = result['map']
