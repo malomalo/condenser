@@ -82,4 +82,29 @@ class CondenserSCSSTest < ActiveSupport::TestCase
     CSS
   end
   
+  test "sass dependencies" do
+    file 'd.scss', <<~SCSS
+      $secondary-color: #444;
+    SCSS
+
+    file 'a.scss', <<~SCSS
+      @import 'd';
+      $primary-color: #333;
+    SCSS
+
+    file 'b.scss', <<~SCSS
+      body {
+        color: $primary-color;
+      }
+    SCSS
+
+    file 'c.scss', <<~SCSS
+      @import 'a';
+      @import 'b';
+    SCSS
+
+    asset = @env.find('c.css')
+    assert_equal ["a.scss", "d.scss", "b.scss"], asset.dependencies.map(&:filename)
+  end
+
 end

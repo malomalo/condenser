@@ -47,6 +47,13 @@ class Condenser
       @stat ||= File.stat(@source_file)
     end
     
+    def inspect
+      dirname, basename, extensions, mime_types = @environment.decompose_path(@filename)
+      <<-TEXT
+        #<#{self.class.name} @filename=#{@filename} @content_types=#{@content_types.inspect} @source_file=#{@source_file} @source_mime_types=#{mime_types.inspect}>
+      TEXT
+    end
+    
     def dependencies
       deps = @environment.cache.fetch("dependencies/#{cache_key(false)}") do
         process
@@ -55,7 +62,8 @@ class Condenser
       
       d = []
       deps.each do |i|
-        @environment.resolve(i, File.dirname(@source_file), accept: @content_types).each do |asset|
+        i = [i, nil] if i.is_a?(String)
+        @environment.resolve(i[0], File.dirname(@source_file), accept: i[1]).each do |asset|
           d << asset
         end
       end

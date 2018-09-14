@@ -17,8 +17,8 @@ class Condenser::SassTransformer
       name = expand_path(name, base)
       env = options[:condenser][:environment]
       accept = extensions.keys.map { |x| options[:condenser][:environment].extensions[x] }
-      
-      options[:asset][:dependencies] << name
+
+      options[:asset][:dependencies] << [name, accept.map{ |i| [i] }]
       if name.match(GLOB)
         contents = ""
         env.resolve(name, accept: accept).sort_by(&:filename).each do |asset|
