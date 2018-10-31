@@ -5,7 +5,7 @@ class Condenser
   class BabelProcessor < NodeProcessor
     class Error           < StandardError; end
     
-    BABEL_VERSION = '7.0.0-rc.1'
+    BABEL_VERSION = '7.1.2'
     # npm install @babel/core @babel/runtime-corejs2 @babel/plugin-transform-runtime @babel/preset-env rollup rollup-plugin-commonjs  rollup-plugin-node-resolve  @babel/plugin-proposal-class-properties babel-plugin-transform-class-extended-hook
     
     def self.call(environment, input)
