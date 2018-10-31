@@ -6,13 +6,13 @@ class CondenserSCSSTest < ActiveSupport::TestCase
     file 'test.scss', <<~SCSS
     body {
       background-color: green;
-      
+
       &:hover {
         background-color: blue;
       }
     }
     SCSS
-    
+
     assert_file 'test.css', 'text/css', <<~CSS
     body {
       background-color: green; }
@@ -20,32 +20,32 @@ class CondenserSCSSTest < ActiveSupport::TestCase
         background-color: blue; }
     CSS
   end
-  
+
   test 'scss import globing' do
     file "c/dir/a.scss", "body { color: blue; }"
     file "c/dir/b.scss", "body { color: green; }"
-    
+
     file 'c/test.scss', '@import "./dir/*"'
-    
+
     assert_file 'c/test.css', 'text/css', <<~CSS
     body {
       color: blue; }
-    
+
     body {
       color: green; }
     CSS
-    
+
     file 'c/test2.scss', '@import "c/dir/*"'
-    
+
     assert_file 'c/test2.css', 'text/css', <<~CSS
     body {
       color: blue; }
-    
+
     body {
       color: green; }
     CSS
   end
-  
+
   test "url functions" do
     file 'test.scss', <<~SCSS
     div {
@@ -68,7 +68,7 @@ class CondenserSCSSTest < ActiveSupport::TestCase
     file 'foo.woff', ''
     file 'foo.js', ''
     file 'foo.css', ''
-    
+
     assert_file 'test.css', 'text/css', <<~CSS
     div {
       url: url(/assets/foo-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.svg);
@@ -86,25 +86,25 @@ class CondenserSCSSTest < ActiveSupport::TestCase
     file 'd.scss', <<~SCSS
       $secondary-color: #444;
     SCSS
-
+    
     file 'a.scss', <<~SCSS
       @import 'd';
       $primary-color: #333;
     SCSS
-
+    
     file 'b.scss', <<~SCSS
       body {
         color: $primary-color;
       }
     SCSS
-
+    
     file 'c.scss', <<~SCSS
       @import 'a';
       @import 'b';
     SCSS
-
+    
     asset = @env.find('c.css')
     assert_equal ["a.scss", "d.scss", "b.scss"], asset.dependencies.map(&:filename)
   end
-
+  
 end

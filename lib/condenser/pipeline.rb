@@ -71,7 +71,7 @@ class Condenser
       @minifiers[mime_type] = engine
     end
     
-    def unregister_minifier(mime_type, engine)
+    def unregister_minifier(mime_type)
       @minifiers[mime_type] = nil
     end
     
