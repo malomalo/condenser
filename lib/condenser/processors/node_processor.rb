@@ -1,4 +1,5 @@
 require 'tempfile'
+require 'open3'
 
 class Condenser
   class NodeProcessor
@@ -7,14 +8,14 @@ class Condenser
       Tempfile.open(['script', 'js']) do |scriptfile|
         scriptfile.write(script)
         scriptfile.flush
-        io = IO.popen([binary, scriptfile.path], err: [:child, :out])
-        output = io.read
-        io.close
+
+        stdout, stderr, status = Open3.capture3(binary, scriptfile.path)
         
-        if $?.success?
-          JSON.parse(output)
+        if status.success?
+          puts stderr if !stderr.strip.empty?
+          JSON.parse(stdout)
         else
-          raise exec_runtime_error(output)
+          raise exec_runtime_error(stdout + stderr)
         end
       end
     end
