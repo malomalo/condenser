@@ -28,7 +28,10 @@ class Condenser
           full_path = File.join(p, cmd)
           File.executable?(full_path) && File.file?(full_path)
         }
-        path && File.expand_path(cmd, path)
+        if path.nil?
+          raise Condenser::CommandNotFoundError, "Could not find executable #{cmd}"
+        end
+        File.expand_path(cmd, path)
       end
     end
     

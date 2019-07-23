@@ -5,6 +5,8 @@ class ResolveTest < ActiveSupport::TestCase
   def setup
     super
     @env.clear_pipeline
+    @env.clear_path
+    @env.append_path(@path)
     @env.register_template  'application/erb', Condenser::Erubi
     @env.register_transformer 'text/scss', 'text/css', Condenser::Erubi
     @env.register_exporter     'application/javascript', Condenser::RollupProcessor

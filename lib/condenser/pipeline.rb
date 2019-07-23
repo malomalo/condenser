@@ -44,8 +44,12 @@ class Condenser
       @preprocessors[mime_type] << engine
     end
     
-    def unregister_preprocessor(mime_type, engine)
-      @preprocessors[mime_type].delete(engine)
+    def unregister_preprocessor(mime_type, engine=nil)
+      if engine.nil?
+        @preprocessors[mime_type].clear
+      else
+        @preprocessors[mime_type].delete(engine)
+      end
     end
 
     def register_transformer(from_mime_type, to_mime_type, engine)

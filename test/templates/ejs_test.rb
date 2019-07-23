@@ -16,11 +16,11 @@ class CondenserEJSTest < ActiveSupport::TestCase
         var __output = [],
             __append = __output.push.bind(__output);
       
-        __append(`1`);
+        __append("1");
       
         __append(escape(1 + 1));
       
-        __append(`3\\n`);
+        __append("3\\n");
       
         return __output.join("");
       }
@@ -36,11 +36,11 @@ class CondenserEJSTest < ActiveSupport::TestCase
         var __output = [],
             __append = __output.push.bind(__output);
       
-        __append(`1`);
+        __append("1");
       
         __append(escape(locals.input));
       
-        __append(`3\\n`);
+        __append("3\\n");
       
         return __output.join("");
       }

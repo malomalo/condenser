@@ -4,8 +4,8 @@ class RollupTest < ActiveSupport::TestCase
   
   def setup
     super
-    @env.unregister_preprocessor('application/javascript', Condenser::BabelProcessor)
-    @env.unregister_minifier('application/javascript', Condenser::UglifyMinifier)
+    @env.unregister_preprocessor('application/javascript')
+    @env.unregister_minifier('application/javascript')
   end
   
   test 'import file' do
