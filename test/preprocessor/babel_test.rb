@@ -115,7 +115,7 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	});
 
       	var _core = createCommonjsModule(function (module) {
-      	var core = module.exports = { version: '2.5.7' };
+      	var core = module.exports = { version: '2.6.9' };
       	if (typeof __e == 'number') __e = core; // eslint-disable-line no-undef
       	});
       	var _core_1 = _core.version;
@@ -359,8 +359,6 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	    } return !IS_INCLUDES && -1;
       	  };
       	};
-
-      	var _library = true;
       
       	var _shared = createCommonjsModule(function (module) {
       	var SHARED = '__core-js_shared__';
@@ -370,8 +368,8 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	  return store[key] || (store[key] = value !== undefined ? value : {});
       	})('versions', []).push({
       	  version: _core.version,
-      	  mode: _library ? 'pure' : 'global',
-      	  copyright: '© 2018 Denis Pushkarev (zloirock.ru)'
+      	  mode:  'pure' ,
+      	  copyright: '© 2019 Denis Pushkarev (zloirock.ru)'
       	});
       	});
 
@@ -440,6 +438,7 @@ class CondenserBabelTest < ActiveSupport::TestCase
 
 
 
+
       	var $assign = Object.assign;
 
       	// should work with symbols and should have deterministic property order (V8 bug)
@@ -464,7 +463,10 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	    var length = keys.length;
       	    var j = 0;
       	    var key;
-      	    while (length > j) if (isEnum.call(S, key = keys[j++])) T[key] = S[key];
+      	    while (length > j) {
+      	      key = keys[j++];
+      	      if (!_descriptors || isEnum.call(S, key)) T[key] = S[key];
+      	    }
       	  } return T;
       	} : $assign;
 

@@ -35,10 +35,12 @@ class Condenser
         output_options = {
           file: File.join(output_dir, 'result.js'),
           format: 'iife',
+          # output: { sourcemap: true, format: 'iife' },
           sourcemap: true
         }
         if input[:source] =~ /export\s+{[^}]+};?\z/i
           output_options[:name] = File.basename(input[:filename], ".*").capitalize
+          # output_options[:output][:name] = File.basename(input[:filename], ".*").capitalize
         end
 
         exec_runtime(<<-JS)
@@ -101,7 +103,7 @@ class Condenser
           inputOptions.plugins.push({
             name: 'erb',
             resolveId: function (importee, importer) {
-              if (importee.startsWith('\\0commonjs') || (importer && importer.startsWith('\\0commonjs'))) {
+              if (importee.startsWith('\\0') || (importer && importer.startsWith('\\0'))) {
                 return;
               }
               
@@ -110,7 +112,7 @@ class Condenser
               });
             },
             load: function(id) {
-              if (id.startsWith('\\0commonjs')) {
+              if (id.startsWith('\\0')) {
                 return;
               }
 
@@ -165,6 +167,7 @@ class Condenser
           output << line
           
           if message = JSON.parse(output)
+            puts message.inspect
             t = Time.now.to_f
             case message['method']
             when 'resolve'
