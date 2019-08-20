@@ -167,7 +167,6 @@ class Condenser
           output << line
           
           if message = JSON.parse(output)
-            puts message.inspect
             t = Time.now.to_f
             case message['method']
             when 'resolve'
