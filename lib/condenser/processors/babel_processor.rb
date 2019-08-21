@@ -58,12 +58,31 @@ class Condenser
         const options = #{JSON.generate(opts).gsub(/"@?babel[\/-][^"]+"/) { |m| "require(#{m})"}};
         
         let imports = [];
+        let defaultExport = false;
+        let hasExports = false;
         options['plugins'].push(function({ types: t }) {
           return {
             visitor: {
               ImportDeclaration(path, state) {
                 imports.push(path.node.source.value);
-              }
+              },
+              ExportDefaultDeclaration(path, state) {
+                hasExports = true;
+                defaultExport = true;
+              },
+              ExportDefaultSpecifier(path, state) {
+                hasExports = true;
+                defaultExport = true;
+              },
+              ExportAllDeclaration(path, state) {
+                hasExports = true;
+              },
+              ExportNamedDeclaration(path, state) {
+                hasExports = true;
+              },
+              ExportSpecifier(path, state) {
+                hasExports = true;
+              },
             }
           };
         });
@@ -72,6 +91,8 @@ class Condenser
         try {
           const result = babel.transform(source, options);
           result.imports = imports;
+          result.exports = hasExports;
+          result.defaultExport = defaultExport;
           console.log(JSON.stringify(result));
         } catch(e) {
           console.log(JSON.stringify({'error': [e.name, e.message, e.stack]}));
@@ -87,6 +108,8 @@ class Condenser
         input[:dependencies] = result['imports'].map do |i|
           i.end_with?('.js') ? i : "#{i}.js"
         end
+        input[:default_export] = result['defaultExport']
+        input[:exports] = result['exports']
       end
     end
     

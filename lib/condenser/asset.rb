@@ -27,6 +27,8 @@ class Condenser
       
       @linked_assets  = Set.new
       @dependencies   = Set.new
+      @default_export = nil
+      @exports        = nil
       @processed = false
     end
     
@@ -68,6 +70,20 @@ class Condenser
         end
       end
       d
+    end
+    
+    def has_default_export?
+      @environment.cache.fetch("has_default_export/#{cache_key(false)}") do
+        process
+        @default_export
+      end
+    end
+    
+    def has_exports?
+      @environment.cache.fetch("has_exports/#{cache_key(false)}") do
+        process
+        @exports
+      end
     end
     
     def all_dependenies(deps, visited, &block)
@@ -162,6 +178,8 @@ class Condenser
           @digest_name = data[:digest_name]
           @linked_assets = data[:linked_assets]
           @dependencies = data[:dependencies]
+          @default_export = data[:default_export]
+          @exports = data[:exports]
           @processed = true
           
           data
@@ -176,6 +194,8 @@ class Condenser
       @digest_name = result[:digest_name]
       @linked_assets = result[:linked_assets]
       @dependencies = result[:dependencies]
+      @default_export = result[:default_export]
+      @exports = result[:exports]
       @processed = true
     end
     

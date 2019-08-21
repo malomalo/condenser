@@ -123,7 +123,9 @@ class Condenser
           });
 
           if ('#{environment.npm_path}' !== '') {
-            inputOptions.plugins.push(nodeResolve({ jsnext: true,
+            inputOptions.plugins.push(nodeResolve({
+              mainFields: ['module', 'main'],
+              modulesOnly: true,
               customResolveOptions: {
                 moduleDirectory: '#{environment.npm_path}'
               }
@@ -174,35 +176,76 @@ class Condenser
 
               asset = if importer.nil? && importee == @entry
                 @entry
-              elsif message['args'].first.start_with?('@babel/runtime') || message['args'].first.start_with?('core-js/library') || message['args'].first.start_with?('regenerator-runtime')
-                x = File.expand_path('../node_modules/' + message['args'].first.gsub(/^\.\//, File.dirname(message['args'][1]) + '/'), __FILE__).sub('/node_modules/regenerator-runtime', '/node_modules/regenerator-runtime/runtime.js')
+              elsif importee.start_with?('@babel/runtime') || importee.start_with?('core-js/library') || importee.start_with?('regenerator-runtime')
+                x = File.expand_path('../node_modules/' + importee.gsub(/^\.\//, File.dirname(importer) + '/'), __FILE__).sub('/node_modules/regenerator-runtime', '/node_modules/regenerator-runtime/runtime.js')
                 x = "#{x}.js" if !x.end_with?('.js')
                 if File.file?(x)
                   x
                 else
                   x.delete_suffix('.js') + "/index.js"
                 end
-              elsif message['args'][1].start_with?(File.expand_path('../node_modules/', __FILE__))
-                x = File.expand_path(message['args'].first, File.dirname(message['args'].last))
+              elsif importer.start_with?(File.expand_path('../node_modules/', __FILE__))
+                x = File.expand_path(importee, File.dirname(importer))
                 x.end_with?('.js') ? x : "#{x}.js"
-              elsif @environment.npm_path && message['args'][1].start_with?(@environment.npm_path)
-                x = File.expand_path(message['args'].first, File.dirname(message['args'].last))
+              elsif @environment.npm_path &&
+                    importer.start_with?(@environment.npm_path) &&
+                    File.file?(File.expand_path(importee, File.dirname(importer))) &&
+                    File.file?(File.expand_path(importee, File.dirname(importer)) + '.js')
+                x = File.expand_path(importee, File.dirname(importer))
                 x.end_with?('.js') ? x : "#{x}.js"
               else
-                @environment.find(importee, importer ? File.dirname(@entry == importer ? @input[:source_file] : importer) : nil, accept: @input[:content_types].last)&.source_file
+                x = @environment.find(importee, importer ? File.dirname(@entry == importer ? @input[:source_file] : importer) : nil, accept: @input[:content_types].last)&.source_file
+                if importee.end_with?('*')
+                  File.join(File.dirname(x), '*')
+                else
+                  x
+                end
               end
-              io.write(JSON.generate({rid: message['rid'], return: asset}))
+              begin
+                io.write(JSON.generate({rid: message['rid'], return: asset}))
+              rescue Errno::EPIPE
+                puts io.read
+                raise
+              end
             when 'load'
-              if message['args'].first == @entry
+              importee = message['args'].first
+              if importee == @entry
                 io.write(JSON.generate({rid: message['rid'], return: {
                   code: @input[:source], map: @input[:map]
                 }}))
-              elsif message['args'].first.start_with?(File.expand_path('../node_modules/', __FILE__))
+              elsif importee.start_with?(File.expand_path('../node_modules/', __FILE__))
                 io.write(JSON.generate({rid: message['rid'], return: {
-                  code: File.read(message['args'].first), map: nil
+                  code: File.read(importee), map: nil
                 }}))
+              elsif importee.end_with?('*')
+                importees = @environment.resolve(importee, importer ? File.dirname(@entry == importer ? @input[:source_file] : importer) : nil, accept: @input[:content_types].last)
+                code = ""
+                code_imports = [];
+                importees.each_with_index.map do |f, i|
+                  if f.has_default_export?
+                    code << "import _#{i} from '#{f.source_file}';\n"
+                    code_imports << "_#{i}"
+                  elsif f.has_exports?
+                    code << "import * as _#{i} from '#{f.source_file}';\n"
+                    code_imports << "_#{i}"
+                  else
+                    code << "import '#{f.source_file}';\n"
+                  end
+                end
+                if !code_imports.empty?
+                  code += "export default [#{code_imports.join(', ')}];"
+                end
+
+                io.write(JSON.generate({
+                  rid: message['rid'],
+                  return: {
+                    code: code,
+                    map: nil
+                  }
+                }))
+                
               else
-                asset = @environment.find(message['args'].first, accept: @input[:content_types].last)
+                asset = @environment.find(importee, accept: @input[:content_types].last)
                 if asset
                   io.write(JSON.generate({rid: message['rid'], return: {
                     code: asset.source, map: asset.sourcemap
