@@ -91,8 +91,7 @@ class Condenser
     #
     # Returns an Asset URI String.
     def resolve(path, **kargs)
-      kargs[:base_path] = @dirname
-      uri, deps = environment.resolve!(path, **kargs)
+      uri, deps = environment.resolve!(path, @dirname, **kargs)
       @dependencies.merge(deps)
       uri
     end

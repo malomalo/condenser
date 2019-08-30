@@ -18,14 +18,14 @@ class ManifestTest < ActiveSupport::TestCase
 
     manifest = Condenser::Manifest.new(@env, filename)
 
-    assert_equal directory, manifest.directory
+    assert_equal directory, manifest.dir
     assert_equal filename,  manifest.filename
   end
 
   test "specify manifest directory yields manifest.json" do
     manifest = Condenser::Manifest.new(@env, @dir)
 
-    assert_equal @dir, manifest.directory
+    assert_equal @dir, manifest.dir
     assert_match('manifest.json', File.basename(manifest.filename))
   end
 
@@ -53,7 +53,7 @@ class ManifestTest < ActiveSupport::TestCase
     assert !File.exist?("#{@dir}/#{asset.path}")
 
     manifest.compile('application.js')
-    assert File.directory?(manifest.directory)
+    assert File.directory?(manifest.dir)
     assert File.file?(manifest.filename)
 
     assert File.exist?("#{@dir}/manifest.json")
@@ -77,7 +77,7 @@ class ManifestTest < ActiveSupport::TestCase
   #   assert !File.exist?("#{@dir}/#{dep_digest_path}")
   #
   #   manifest.compile('alias-index-link.js')
-  #   assert File.directory?(manifest.directory)
+  #   assert File.directory?(manifest.dir)
   #   assert File.file?(manifest.filename)
   #
   #   assert File.exist?("#{@dir}/manifest.json")
@@ -109,7 +109,7 @@ class ManifestTest < ActiveSupport::TestCase
     manifest = Condenser::Manifest.new(@env, dir, path)
 
     manifest.compile('application.js')
-    assert File.directory?(manifest.directory)
+    assert File.directory?(manifest.dir)
     assert File.file?(path)
     FileUtils.remove_entry(root, true)
   end
@@ -195,7 +195,7 @@ class ManifestTest < ActiveSupport::TestCase
   #   assert !File.exist?("#{@dir}/#{dep_digest_path}")
   #
   #   manifest.compile('gallery-link.js')
-  #   assert File.directory?(manifest.directory)
+  #   assert File.directory?(manifest.dir)
   #   assert File.file?(manifest.filename)
   #
   #   assert File.exist?("#{@dir}/manifest.json")
@@ -224,7 +224,7 @@ class ManifestTest < ActiveSupport::TestCase
   #   assert !File.exist?("#{@dir}/#{subdep_digest_path}")
   #
   #   manifest.compile('explore-link.js')
-  #   assert File.directory?(manifest.directory)
+  #   assert File.directory?(manifest.dir)
   #   assert File.file?(manifest.filename)
   #
   #   assert File.exist?("#{@dir}/manifest.json")

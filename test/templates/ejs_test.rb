@@ -11,10 +11,13 @@ class CondenserEJSTest < ActiveSupport::TestCase
     file 'test.ejs', "1<%= 1 + 1 %>3\n"
     
     assert_file 'test.js', 'application/javascript', <<~JS
+      import _bindInstanceProperty from "@babel/runtime-corejs3/core-js-stable/instance/bind";
       import { escape } from 'ejs';
       export default function (locals) {
+        var _context;
+
         var __output = [],
-            __append = __output.push.bind(__output);
+            __append = _bindInstanceProperty(_context = __output.push).call(_context, __output);
       
         __append("1");
       
@@ -31,10 +34,13 @@ class CondenserEJSTest < ActiveSupport::TestCase
     file 'test.ejs', "1<%= input %>3\n"
     
     assert_file 'test.js', 'application/javascript', <<~JS
+      import _bindInstanceProperty from "@babel/runtime-corejs3/core-js-stable/instance/bind";
       import { escape } from 'ejs';
       export default function (locals) {
+        var _context;
+
         var __output = [],
-            __append = __output.push.bind(__output);
+            __append = _bindInstanceProperty(_context = __output.push).call(_context, __output);
       
         __append("1");
       

@@ -3,7 +3,7 @@ class Condenser
     
     CONFIG_VARS  = %w(mime_types extensions templates preprocessors transformers postprocessors minifiers exporters writers).map(&:to_sym)
     
-    def self.included(base)
+    def self.prepended(base)
       base.extend(self)
       CONFIG_VARS.each do |var|
         base.instance_variable_set("@#{var}", {})
@@ -12,7 +12,7 @@ class Condenser
       end
     end
     
-    def initialize
+    def initialize(*args)
       CONFIG_VARS.each do |var_name|
         original_var = self.class.instance_variable_get("@#{var_name}")
         new_var = original_var.dup
@@ -71,18 +71,21 @@ class Condenser
     end
     
     def register_minifier(mime_type, engine)
-      @minifiers[mime_type] ||= []
       @minifiers[mime_type] = engine
+    end
+    
+    def minifier_for(mime_type)
+      @minifiers[mime_type]
     end
     
     def unregister_minifier(mime_type)
       @minifiers[mime_type] = nil
     end
     
-    def register_writer(mime_types, engine, added_mime_types=nil)
-      Array(mime_types).each do |mime_type|
+    def register_writer(engine)
+      Array(engine.mime_types).each do |mime_type|
         @writers[mime_type] ||= []
-        @writers[mime_type] << [engine, added_mime_types || []]
+        @writers[mime_type] << engine
       end
     end
         

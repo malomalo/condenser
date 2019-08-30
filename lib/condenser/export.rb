@@ -50,12 +50,22 @@ class Condenser
     end
     
     def to_json
-      { path: path, digest: hexdigest, size: size, integrity: integrity }
+      {
+        'path' => path,
+        'size' => size,
+        'digest' => hexdigest,
+        'integrity' => integrity
+      }
     end
     
     def write(output_directory)
       files = @environment.writers_for_mime_type(content_type).map do |writer|
-        writer[0].call(output_directory, self)
+        if writer.exist?(self)
+          @environment.logger.debug "Skipping #{ self.path }, already exists"
+        else
+          @environment.logger.info "Writing #{ self.path }"
+          writer.call(output_directory, self)
+        end
       end
       files.flatten.compact
     end

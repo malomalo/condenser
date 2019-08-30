@@ -1,5 +1,3 @@
-require 'sass'
-
 class Condenser
   # Transformer engine class for the SASS/SCSS compiler. Depends on the `sass`
   # gem.
@@ -27,6 +25,8 @@ class Condenser
     end
 
     def self.call(environment, input)
+      require "sass" unless defined?(::Sass::Engine)
+      
       instance.call(environment, input)
     end
 

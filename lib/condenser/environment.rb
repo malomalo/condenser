@@ -11,7 +11,7 @@ class Condenser
     attr_reader :path, :npm_path
     attr_accessor :cache, :build_cache
     
-    def initialize
+    def initialize(*args)
       @context_class = Class.new(Condenser::Context)
       super
     end

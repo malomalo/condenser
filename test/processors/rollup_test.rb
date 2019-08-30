@@ -146,7 +146,11 @@ class RollupTest < ActiveSupport::TestCase
     file 'main.js', <<~JS
       import maths from 'maths/*';
 
-      console.log( maths.reduce( (v, f) => f(v), 1) );
+      let x = 1;
+      for (var i = 0; i < maths.length; i++) {
+        x = maths[i](x);
+      }
+      console.log(x);
     JS
     
     file 'maths/square.js', <<~JS
@@ -175,9 +179,13 @@ class RollupTest < ActiveSupport::TestCase
 
         var maths = [cube, square];
 
-        console.log(maths.reduce(function (v, f) {
-          return f(v);
-        }, 1));
+        var x = 1;
+
+        for (var i = 0; i < maths.length; i++) {
+          x = maths[i](x);
+        }
+
+        console.log(x);
 
       }());
     FILE

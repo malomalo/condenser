@@ -1,33 +1,39 @@
 class Condenser
   class Manifest
     
-    attr_reader :filename, :directory
+    attr_reader :filename, :dir, :environment, :logger
     
     def initialize(*args)
+      args.compact!
+      
       if args.first.is_a?(Condenser)
         @environment = args.shift
+        @logger = @environment.logger
+      else
+        @environment = nil
+        @logger = Logger.new($stdout, level: :info)
       end
       
-      @directory, @filename = args[0], args[1]
+      @dir, @filename = args[0], args[1]
       
       # Expand paths
-      @directory = File.expand_path(@directory) if @directory
+      @dir = File.expand_path(@dir) if @dir
       @filename  = File.expand_path(@filename) if @filename
       
       # If filename is given as the second arg
-      if @directory && File.extname(@directory) != ""
-        @directory, @filename = nil, @directory
+      if @dir && File.extname(@dir) != ""
+        @dir, @filename = nil, @dir
       end
-
+      
       # Default dir to the directory of the filename
-      @directory ||= File.dirname(@filename) if @filename
+      @dir ||= File.dirname(@filename) if @filename
       
       # If directory is given w/o filename, pick a random manifest location
-      if @directory && @filename.nil?
-        @filename = File.join(@directory, 'manifest.json')
+      if @dir && @filename.nil?
+        @filename = File.join(@dir, 'manifest.json')
       end
       
-      unless @directory && @filename
+      unless @dir && @filename
         raise ArgumentError, "manifest requires output filename"
       end
       
@@ -36,8 +42,7 @@ class Condenser
           @data = JSON.parse(File.read(@filename))
         rescue JSON::ParserError => e
           @data = {}
-          # logger.error "#{@filename} is invalid: #{e.class} #{e.message}"
-          puts "#{@filename} is invalid: #{e.class} #{e.message}"
+          logger.error "#{@filename} is invalid: #{e.class} #{e.message}"
         end
       else
         @data = {}
@@ -63,12 +68,16 @@ class Condenser
     
     def add_asset(asset)
       export = asset.export
-      
+
       @data[asset.filename] = export.to_json
-      
-      outputs = export.write(@directory)
+      outputs = export.write(@dir)
       asset.linked_assets.each { |a| outputs += add_asset(a) }
       outputs
+    end
+    
+    def [](key)
+      add(key) if @environment
+      @data[key]
     end
     
     def compile(*args)
@@ -85,5 +94,41 @@ class Condenser
       Utils.atomic_write(@filename) { |f| f.write(JSON.generate(@data)) }
     end
     
+    def export(*args)
+      add(*args)
+      save
+    end
+    
+    # Cleanup old assets in the compile directory. By default it will keep the
+    # latest version and remove any other files over 4 weeks old.
+    def clean(age = 2419200)
+      clean_dir(@dir, @data.values.map{ |v| v['path'] }, Time.now - age)
+    end
+
+    def clean_dir(dir, assets, age)
+      Dir.each_child(dir) do |child|
+        child = File.join(dir, child)
+        next if assets.find { |x| child.start_with?(x) }
+
+        if File.directory?(child)
+          clean_dir(dir, assets, age)
+        elsif File.file?(child) && File.stat(child).mtime < age
+          File.delete(child)
+        end
+      end
+    end
+
+    # Wipe directive
+    def clobber
+      return if !Dir.exist?(dir)
+      
+      Dir.each_child(dir) do |child|
+        FileUtils.rm_r(File.join(dir, child))
+      end
+      
+      logger.info "Removed contents of #{dir}"
+      nil
+    end
+
   end
 end

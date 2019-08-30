@@ -1,96 +1,100 @@
-require 'ejs'
+require File.expand_path('../../processors/node_processor', __FILE__)
 
-class Condenser
-  class EjsTransformer < NodeProcessor
-    
-    STRICT = true
+class Condenser::EjsTransformer < Condenser::NodeProcessor
 
-    def self.call(environment, input)
-      new.call(environment, input)
+  STRICT = true
+
+  def self.call(environment, input)
+    unless defined?(::EJS)
+      require 'ejs'
     end
+    if !environment.path.include?(EJS::ASSET_DIR)
+      environment.append_path(EJS::ASSET_DIR)
+    end
+    new.call(environment, input)
+  end
 
-    def call(environment, input)
-      input[:source] = ::EJS.transform(input[:source], {strict: STRICT})
-      
-      if STRICT
-        opts = {
-          # 'moduleRoot' => nil,
-          'filename' => input[:filename],
-          'moduleId' => input[:filename].sub(/(\..+)+/, ''),
-          'cwd' => '/assets/',
-          'filenameRelative' => input[:filename],#split_subpath(input[:load_path], input[:filename]),
-          'sourceFileName' => input[:filename],
-          # 'sourceMapTarget' => input[:filename]
-          # 'inputSourceMap'
-          ast: false,
-          compact: false,
-          plugins: [
-            ['babel-plugin-transform-class-extended-hook', {}],
-            ["@babel/plugin-proposal-class-properties", {}],
-            ['@babel/plugin-transform-runtime', {
-                  corejs: 2,
-            }],
-          ],
-          presets: [["@babel/preset-env", {
-            "modules": false,
-            "targets": { "browsers": "> 1%" }
-          } ]],
-          sourceMap: true
+  def call(environment, input)
+    input[:source] = ::EJS.transform(input[:source], {strict: STRICT})
+    
+    if STRICT
+      opts = {
+        # 'moduleRoot' => nil,
+        'filename' => input[:filename],
+        'moduleId' => input[:filename].sub(/(\..+)+/, ''),
+        'cwd' => '/assets/',
+        'filenameRelative' => input[:filename],#split_subpath(input[:load_path], input[:filename]),
+        'sourceFileName' => input[:filename],
+        # 'sourceMapTarget' => input[:filename]
+        # 'inputSourceMap'
+        ast: false,
+        compact: false,
+        plugins: [
+          ['babel-plugin-transform-class-extended-hook', {}],
+          ["@babel/plugin-proposal-class-properties", {}],
+          ['@babel/plugin-transform-runtime', {
+                corejs: 3,
+          }],
+        ],
+        presets: [["@babel/preset-env", {
+          "modules": false,
+          "targets": { "browsers": "> 1% and not dead" }
+        } ]],
+        sourceMap: true
+      }
+
+      result = exec_runtime(<<-JS)
+        module.paths.push("#{File.expand_path('../../processors/node_modules', __FILE__)}")
+
+        const babel = require('@babel/core');
+        const source = #{JSON.generate(input[:source])};
+        const options = #{JSON.generate(opts).gsub(/"@?babel[\/-][^"]+"/) { |m| "require(#{m})"}};
+
+        function globalVar(scope, name) {
+          if (name in scope.globals) {
+            return true;
+          } else if (scope.parent === null) {
+            return false;
+          } else {
+            return globalVar(scope.parent, name);
+          }
         }
   
-        result = exec_runtime(<<-JS)
-          module.paths.push("#{File.expand_path('../../processors/node_modules', __FILE__)}")
-  
-          const babel = require('@babel/core');
-          const source = #{JSON.generate(input[:source])};
-          const options = #{JSON.generate(opts).gsub(/"@?babel[\/-][^"]+"/) { |m| "require(#{m})"}};
+        options['plugins'].push(function({ types: t }) {
+          return {
+            visitor: {
+              Identifier(path, state) {
+                if ( path.parent.type == 'MemberExpression' && path.parent.object != path.node) {
+                  return;
+                }
 
-          function globalVar(scope, name) {
-            if (name in scope.globals) {
-              return true;
-            } else if (scope.parent === null) {
-              return false;
-            } else {
-              return globalVar(scope.parent, name);
-            }
-          }
-    
-          options['plugins'].push(function({ types: t }) {
-            return {
-              visitor: {
-                Identifier(path, state) {
-                  if ( path.parent.type == 'MemberExpression' && path.parent.object != path.node) {
-                    return;
-                  }
-
-                  if (globalVar(path.scope, path.node.name) && !(path.node.name in global)) {
-                    path.replaceWith(
-                      t.memberExpression(t.identifier("locals"), path.node)
-                    );
-                  }
+                if (globalVar(path.scope, path.node.name) && !(path.node.name in global)) {
+                  path.replaceWith(
+                    t.memberExpression(t.identifier("locals"), path.node)
+                  );
                 }
               }
-            };
-          });
-    
-    
-          try {
-            const result = babel.transform(source, options);
-            console.log(JSON.stringify(result));
-          } catch(e) {
-            console.log(JSON.stringify({'error': e.name + ": " + e.message}));
-            process.exit(1);
-          }
-        JS
+            }
+          };
+        });
   
-        if result['error']
-          raise Error, result['error']
-        else
-          input[:source] = result['code']
-          input[:map] = result['map']
-        end
+  
+        try {
+          const result = babel.transform(source, options);
+          console.log(JSON.stringify(result));
+        } catch(e) {
+          console.log(JSON.stringify({'error': e.name + ": " + e.message}));
+          process.exit(1);
+        }
+      JS
+
+      if result['error']
+        raise Error, result['error']
+      else
+        input[:source] = result['code']
+        input[:map] = result['map']
       end
     end
-    
   end
+
 end

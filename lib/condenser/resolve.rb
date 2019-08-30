@@ -1,15 +1,17 @@
 class Condenser
   module Resolve
     
-    def initialize
+    def initialize(*args)
       @reverse_mapping = nil
+      super
     end
     
     def resolve(filename, base=nil, accept: nil, ignore: [])
-      filename.delete_prefix!("/") if path.none? { |p| filename.start_with?(p) }
+      filename = filename.delete_prefix("/") if path.none? { |p| filename.start_with?(p) }
       
       build do
         dirname, basename, extensions, mime_types = decompose_path(filename, base)
+
         results = []
       
         accept ||= mime_types.empty? ? ['*/*'] : mime_types
@@ -32,7 +34,7 @@ class Condenser
           glob = File.join(glob, dirname) if dirname
           glob = File.join(glob, basename)
           glob << '.*' unless glob.end_with?('*')
-        
+          
           Dir.glob(glob).sort.each do |f|
             next if !File.file?(f) || ignore.include?(f)
           
@@ -49,35 +51,34 @@ class Condenser
                   source_path: path
                 })
                 results << @build_cache[asset_filename]
-              end
-            
-              reverse_mapping[f_mime_types]&.each do |derivative_mime_types|
-                if accept == ['*/*'] || mime_type_match_accept?(derivative_mime_types, accept)
-                  asset_dir = f_dirname.delete_prefix(path).delete_prefix('/')
-                  asset_basename = f_basename + derivative_mime_types.map { |t| @mime_types[t][:extensions].first }.join('')
-                  asset_filename = asset_dir.empty? ? asset_basename : File.join(asset_dir, asset_basename)
-                  @build_cache[asset_filename] ||= Asset.new(self, {
-                    filename: asset_filename,
-                    content_types: derivative_mime_types,
-                    source_file: f,
-                    source_path: path
-                  })
-                  results << @build_cache[asset_filename]
+              else
+                reverse_mapping[f_mime_types]&.each do |derivative_mime_types|
+                  if accept == ['*/*'] || mime_type_match_accept?(derivative_mime_types, accept)
+                    asset_dir = f_dirname.delete_prefix(path).delete_prefix('/')
+                    asset_basename = f_basename + derivative_mime_types.map { |t| @mime_types[t][:extensions].first }.join('')
+                    asset_filename = asset_dir.empty? ? asset_basename : File.join(asset_dir, asset_basename)
+                    @build_cache[asset_filename] ||= Asset.new(self, {
+                      filename: asset_filename,
+                      content_types: derivative_mime_types,
+                      source_file: f,
+                      source_path: path
+                    })
+                    results << @build_cache[asset_filename]
+                  end
                 end
               end
+
             end
           end
         end
-
+        
         results = results.group_by do |a|
           accept.find_index { |m| match_mime_types?(a.content_types, m) }
         end
-      
+        
         results = results.keys.sort.reduce([]) do |c, key|
           c += results[key].sort_by(&:filename)
         end
-
-        results = results.map { |a| a.basepath }.uniq.map {|fn| results.find {|r| r.filename.sub(/\.(\w+)$/, '') == fn}}
 
         results.sort_by(&:filename)
       end
@@ -137,8 +138,15 @@ class Condenser
       if base && path&.start_with?('.')
         dirname = File.expand_path(dirname, base)
       end
-      _, basename, extensions = path.match(/([^\.\/]+)(\.[^\/]*)?$/).to_a
-
+      
+      _, star, basename, extensions = path.match(/(([^\.\/]+)(\.[^\/]+)|\*|[^\/]+)$/).to_a
+      if extensions == '.*'
+        extensions = nil
+      end
+      if basename.nil? && extensions.nil?
+        basename = star
+      end
+        
       if extensions.nil? && basename == '*'
         extensions = nil
         mime_types = []

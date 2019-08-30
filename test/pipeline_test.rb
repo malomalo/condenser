@@ -2,6 +2,14 @@ require 'test_helper'
 
 class PipelineTest < ActiveSupport::TestCase
   
+  class Writer
+    
+    def mime_types
+      ['*/*']
+    end
+    
+  end
+  
   def setup
     super
     @env.clear_pipeline
@@ -14,7 +22,7 @@ class PipelineTest < ActiveSupport::TestCase
     @env.register_transformer    'application/scss', 'application/css', PipelineTest
     @env.register_postprocessor  'application/javascript', PipelineTest
     @env.register_minifier       'application/javascript', PipelineTest
-    @env.register_writer         '*/*', PipelineTest
+    @env.register_writer         PipelineTest::Writer.new
 
     vars = %w(templates preprocessors transformers postprocessors minifiers writers)
     vars.each do |var|

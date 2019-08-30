@@ -101,36 +101,185 @@ class CondenserBabelTest < ActiveSupport::TestCase
       (function () {
       	'use strict';
 
-      	function createCommonjsModule(fn, module) {
-      		return module = { exports: {} }, fn(module, module.exports), module.exports;
-      	}
+      	var commonjsGlobal = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
 
-      	var _global = createCommonjsModule(function (module) {
+      	var O = 'object';
+      	var check = function (it) {
+      	  return it && it.Math == Math && it;
+      	};
+
       	// https://github.com/zloirock/core-js/issues/86#issuecomment-115759028
-      	var global = module.exports = typeof window != 'undefined' && window.Math == Math
-      	  ? window : typeof self != 'undefined' && self.Math == Math ? self
+      	var global_1 =
+      	  // eslint-disable-next-line no-undef
+      	  check(typeof globalThis == O && globalThis) ||
+      	  check(typeof window == O && window) ||
+      	  check(typeof self == O && self) ||
+      	  check(typeof commonjsGlobal == O && commonjsGlobal) ||
       	  // eslint-disable-next-line no-new-func
-      	  : Function('return this')();
-      	if (typeof __g == 'number') __g = global; // eslint-disable-line no-undef
+      	  Function('return this')();
+
+      	var fails = function (exec) {
+      	  try {
+      	    return !!exec();
+      	  } catch (error) {
+      	    return true;
+      	  }
+      	};
+
+      	// Thank's IE8 for his funny defineProperty
+      	var descriptors = !fails(function () {
+      	  return Object.defineProperty({}, 'a', { get: function () { return 7; } }).a != 7;
       	});
 
-      	var _core = createCommonjsModule(function (module) {
-      	var core = module.exports = { version: '2.6.9' };
-      	if (typeof __e == 'number') __e = core; // eslint-disable-line no-undef
-      	});
-      	var _core_1 = _core.version;
+      	var nativePropertyIsEnumerable = {}.propertyIsEnumerable;
+      	var getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 
-      	var _aFunction = function (it) {
-      	  if (typeof it != 'function') throw TypeError(it + ' is not a function!');
+      	// Nashorn ~ JDK8 bug
+      	var NASHORN_BUG = getOwnPropertyDescriptor && !nativePropertyIsEnumerable.call({ 1: 2 }, 1);
+
+      	// `Object.prototype.propertyIsEnumerable` method implementation
+      	// https://tc39.github.io/ecma262/#sec-object.prototype.propertyisenumerable
+      	var f = NASHORN_BUG ? function propertyIsEnumerable(V) {
+      	  var descriptor = getOwnPropertyDescriptor(this, V);
+      	  return !!descriptor && descriptor.enumerable;
+      	} : nativePropertyIsEnumerable;
+
+      	var objectPropertyIsEnumerable = {
+      		f: f
+      	};
+
+      	var createPropertyDescriptor = function (bitmap, value) {
+      	  return {
+      	    enumerable: !(bitmap & 1),
+      	    configurable: !(bitmap & 2),
+      	    writable: !(bitmap & 4),
+      	    value: value
+      	  };
+      	};
+
+      	var toString = {}.toString;
+
+      	var classofRaw = function (it) {
+      	  return toString.call(it).slice(8, -1);
+      	};
+
+      	var split = ''.split;
+
+      	// fallback for non-array-like ES3 and non-enumerable old V8 strings
+      	var indexedObject = fails(function () {
+      	  // throws an error in rhino, see https://github.com/mozilla/rhino/issues/346
+      	  // eslint-disable-next-line no-prototype-builtins
+      	  return !Object('z').propertyIsEnumerable(0);
+      	}) ? function (it) {
+      	  return classofRaw(it) == 'String' ? split.call(it, '') : Object(it);
+      	} : Object;
+
+      	// `RequireObjectCoercible` abstract operation
+      	// https://tc39.github.io/ecma262/#sec-requireobjectcoercible
+      	var requireObjectCoercible = function (it) {
+      	  if (it == undefined) throw TypeError("Can't call method on " + it);
       	  return it;
       	};
 
-      	// optional / simple context binding
+      	// toObject with fallback for non-array-like ES3 strings
 
-      	var _ctx = function (fn, that, length) {
-      	  _aFunction(fn);
+
+
+      	var toIndexedObject = function (it) {
+      	  return indexedObject(requireObjectCoercible(it));
+      	};
+
+      	var isObject = function (it) {
+      	  return typeof it === 'object' ? it !== null : typeof it === 'function';
+      	};
+
+      	// `ToPrimitive` abstract operation
+      	// https://tc39.github.io/ecma262/#sec-toprimitive
+      	// instead of the ES6 spec version, we didn't implement @@toPrimitive case
+      	// and the second argument - flag - preferred type is a string
+      	var toPrimitive = function (input, PREFERRED_STRING) {
+      	  if (!isObject(input)) return input;
+      	  var fn, val;
+      	  if (PREFERRED_STRING && typeof (fn = input.toString) == 'function' && !isObject(val = fn.call(input))) return val;
+      	  if (typeof (fn = input.valueOf) == 'function' && !isObject(val = fn.call(input))) return val;
+      	  if (!PREFERRED_STRING && typeof (fn = input.toString) == 'function' && !isObject(val = fn.call(input))) return val;
+      	  throw TypeError("Can't convert object to primitive value");
+      	};
+
+      	var hasOwnProperty = {}.hasOwnProperty;
+
+      	var has = function (it, key) {
+      	  return hasOwnProperty.call(it, key);
+      	};
+
+      	var document = global_1.document;
+      	// typeof document.createElement is 'object' in old IE
+      	var EXISTS = isObject(document) && isObject(document.createElement);
+
+      	var documentCreateElement = function (it) {
+      	  return EXISTS ? document.createElement(it) : {};
+      	};
+
+      	// Thank's IE8 for his funny defineProperty
+      	var ie8DomDefine = !descriptors && !fails(function () {
+      	  return Object.defineProperty(documentCreateElement('div'), 'a', {
+      	    get: function () { return 7; }
+      	  }).a != 7;
+      	});
+
+      	var nativeGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+
+      	// `Object.getOwnPropertyDescriptor` method
+      	// https://tc39.github.io/ecma262/#sec-object.getownpropertydescriptor
+      	var f$1 = descriptors ? nativeGetOwnPropertyDescriptor : function getOwnPropertyDescriptor(O, P) {
+      	  O = toIndexedObject(O);
+      	  P = toPrimitive(P, true);
+      	  if (ie8DomDefine) try {
+      	    return nativeGetOwnPropertyDescriptor(O, P);
+      	  } catch (error) { /* empty */ }
+      	  if (has(O, P)) return createPropertyDescriptor(!objectPropertyIsEnumerable.f.call(O, P), O[P]);
+      	};
+
+      	var objectGetOwnPropertyDescriptor = {
+      		f: f$1
+      	};
+
+      	var replacement = /#|\\.prototype\\./;
+
+      	var isForced = function (feature, detection) {
+      	  var value = data[normalize(feature)];
+      	  return value == POLYFILL ? true
+      	    : value == NATIVE ? false
+      	    : typeof detection == 'function' ? fails(detection)
+      	    : !!detection;
+      	};
+
+      	var normalize = isForced.normalize = function (string) {
+      	  return String(string).replace(replacement, '.').toLowerCase();
+      	};
+
+      	var data = isForced.data = {};
+      	var NATIVE = isForced.NATIVE = 'N';
+      	var POLYFILL = isForced.POLYFILL = 'P';
+
+      	var isForced_1 = isForced;
+
+      	var path = {};
+
+      	var aFunction = function (it) {
+      	  if (typeof it != 'function') {
+      	    throw TypeError(String(it) + ' is not a function');
+      	  } return it;
+      	};
+
+      	// optional / simple context binding
+      	var bindContext = function (fn, that, length) {
+      	  aFunction(fn);
       	  if (that === undefined) return fn;
       	  switch (length) {
+      	    case 0: return function () {
+      	      return fn.call(that);
+      	    };
       	    case 1: return function (a) {
       	      return fn.call(that, a);
       	    };
@@ -146,206 +295,166 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	  };
       	};
 
-      	var _isObject = function (it) {
-      	  return typeof it === 'object' ? it !== null : typeof it === 'function';
+      	var anObject = function (it) {
+      	  if (!isObject(it)) {
+      	    throw TypeError(String(it) + ' is not an object');
+      	  } return it;
       	};
 
-      	var _anObject = function (it) {
-      	  if (!_isObject(it)) throw TypeError(it + ' is not an object!');
-      	  return it;
-      	};
+      	var nativeDefineProperty = Object.defineProperty;
 
-      	var _fails = function (exec) {
-      	  try {
-      	    return !!exec();
-      	  } catch (e) {
-      	    return true;
-      	  }
-      	};
-
-      	// Thank's IE8 for his funny defineProperty
-      	var _descriptors = !_fails(function () {
-      	  return Object.defineProperty({}, 'a', { get: function () { return 7; } }).a != 7;
-      	});
-
-      	var document = _global.document;
-      	// typeof document.createElement is 'object' in old IE
-      	var is = _isObject(document) && _isObject(document.createElement);
-      	var _domCreate = function (it) {
-      	  return is ? document.createElement(it) : {};
-      	};
-
-      	var _ie8DomDefine = !_descriptors && !_fails(function () {
-      	  return Object.defineProperty(_domCreate('div'), 'a', { get: function () { return 7; } }).a != 7;
-      	});
-
-      	// 7.1.1 ToPrimitive(input [, PreferredType])
-
-      	// instead of the ES6 spec version, we didn't implement @@toPrimitive case
-      	// and the second argument - flag - preferred type is a string
-      	var _toPrimitive = function (it, S) {
-      	  if (!_isObject(it)) return it;
-      	  var fn, val;
-      	  if (S && typeof (fn = it.toString) == 'function' && !_isObject(val = fn.call(it))) return val;
-      	  if (typeof (fn = it.valueOf) == 'function' && !_isObject(val = fn.call(it))) return val;
-      	  if (!S && typeof (fn = it.toString) == 'function' && !_isObject(val = fn.call(it))) return val;
-      	  throw TypeError("Can't convert object to primitive value");
-      	};
-
-      	var dP = Object.defineProperty;
-
-      	var f = _descriptors ? Object.defineProperty : function defineProperty(O, P, Attributes) {
-      	  _anObject(O);
-      	  P = _toPrimitive(P, true);
-      	  _anObject(Attributes);
-      	  if (_ie8DomDefine) try {
-      	    return dP(O, P, Attributes);
-      	  } catch (e) { /* empty */ }
-      	  if ('get' in Attributes || 'set' in Attributes) throw TypeError('Accessors not supported!');
+      	// `Object.defineProperty` method
+      	// https://tc39.github.io/ecma262/#sec-object.defineproperty
+      	var f$2 = descriptors ? nativeDefineProperty : function defineProperty(O, P, Attributes) {
+      	  anObject(O);
+      	  P = toPrimitive(P, true);
+      	  anObject(Attributes);
+      	  if (ie8DomDefine) try {
+      	    return nativeDefineProperty(O, P, Attributes);
+      	  } catch (error) { /* empty */ }
+      	  if ('get' in Attributes || 'set' in Attributes) throw TypeError('Accessors not supported');
       	  if ('value' in Attributes) O[P] = Attributes.value;
       	  return O;
       	};
 
-      	var _objectDp = {
-      		f: f
+      	var objectDefineProperty = {
+      		f: f$2
       	};
 
-      	var _propertyDesc = function (bitmap, value) {
-      	  return {
-      	    enumerable: !(bitmap & 1),
-      	    configurable: !(bitmap & 2),
-      	    writable: !(bitmap & 4),
-      	    value: value
-      	  };
-      	};
-
-      	var _hide = _descriptors ? function (object, key, value) {
-      	  return _objectDp.f(object, key, _propertyDesc(1, value));
+      	var hide = descriptors ? function (object, key, value) {
+      	  return objectDefineProperty.f(object, key, createPropertyDescriptor(1, value));
       	} : function (object, key, value) {
       	  object[key] = value;
       	  return object;
       	};
 
-      	var hasOwnProperty = {}.hasOwnProperty;
-      	var _has = function (it, key) {
-      	  return hasOwnProperty.call(it, key);
+      	var getOwnPropertyDescriptor$1 = objectGetOwnPropertyDescriptor.f;
+
+
+
+
+
+
+      	var wrapConstructor = function (NativeConstructor) {
+      	  var Wrapper = function (a, b, c) {
+      	    if (this instanceof NativeConstructor) {
+      	      switch (arguments.length) {
+      	        case 0: return new NativeConstructor();
+      	        case 1: return new NativeConstructor(a);
+      	        case 2: return new NativeConstructor(a, b);
+      	      } return new NativeConstructor(a, b, c);
+      	    } return NativeConstructor.apply(this, arguments);
+      	  };
+      	  Wrapper.prototype = NativeConstructor.prototype;
+      	  return Wrapper;
       	};
 
-      	var PROTOTYPE = 'prototype';
+      	/*
+      	  options.target      - name of the target object
+      	  options.global      - target is the global object
+      	  options.stat        - export as static methods of target
+      	  options.proto       - export as prototype methods of target
+      	  options.real        - real prototype method for the `pure` version
+      	  options.forced      - export even if the native feature is available
+      	  options.bind        - bind methods to the target, required for the `pure` version
+      	  options.wrap        - wrap constructors to preventing global pollution, required for the `pure` version
+      	  options.unsafe      - use the simple assignment of property instead of delete + defineProperty
+      	  options.sham        - add a flag to not completely full polyfills
+      	  options.enumerable  - export as enumerable property
+      	  options.noTargetGet - prevent calling a getter on target
+      	*/
+      	var _export = function (options, source) {
+      	  var TARGET = options.target;
+      	  var GLOBAL = options.global;
+      	  var STATIC = options.stat;
+      	  var PROTO = options.proto;
 
-      	var $export = function (type, name, source) {
-      	  var IS_FORCED = type & $export.F;
-      	  var IS_GLOBAL = type & $export.G;
-      	  var IS_STATIC = type & $export.S;
-      	  var IS_PROTO = type & $export.P;
-      	  var IS_BIND = type & $export.B;
-      	  var IS_WRAP = type & $export.W;
-      	  var exports = IS_GLOBAL ? _core : _core[name] || (_core[name] = {});
-      	  var expProto = exports[PROTOTYPE];
-      	  var target = IS_GLOBAL ? _global : IS_STATIC ? _global[name] : (_global[name] || {})[PROTOTYPE];
-      	  var key, own, out;
-      	  if (IS_GLOBAL) source = name;
+      	  var nativeSource = GLOBAL ? global_1 : STATIC ? global_1[TARGET] : (global_1[TARGET] || {}).prototype;
+
+      	  var target = GLOBAL ? path : path[TARGET] || (path[TARGET] = {});
+      	  var targetPrototype = target.prototype;
+
+      	  var FORCED, USE_NATIVE, VIRTUAL_PROTOTYPE;
+      	  var key, sourceProperty, targetProperty, nativeProperty, resultProperty, descriptor;
+
       	  for (key in source) {
+      	    FORCED = isForced_1(GLOBAL ? key : TARGET + (STATIC ? '.' : '#') + key, options.forced);
       	    // contains in native
-      	    own = !IS_FORCED && target && target[key] !== undefined;
-      	    if (own && _has(exports, key)) continue;
-      	    // export native or passed
-      	    out = own ? target[key] : source[key];
-      	    // prevent global pollution for namespaces
-      	    exports[key] = IS_GLOBAL && typeof target[key] != 'function' ? source[key]
+      	    USE_NATIVE = !FORCED && nativeSource && has(nativeSource, key);
+
+      	    targetProperty = target[key];
+
+      	    if (USE_NATIVE) if (options.noTargetGet) {
+      	      descriptor = getOwnPropertyDescriptor$1(nativeSource, key);
+      	      nativeProperty = descriptor && descriptor.value;
+      	    } else nativeProperty = nativeSource[key];
+
+      	    // export native or implementation
+      	    sourceProperty = (USE_NATIVE && nativeProperty) ? nativeProperty : source[key];
+
+      	    if (USE_NATIVE && typeof targetProperty === typeof sourceProperty) continue;
+
       	    // bind timers to global for call from export context
-      	    : IS_BIND && own ? _ctx(out, _global)
-      	    // wrap global constructors for prevent change them in library
-      	    : IS_WRAP && target[key] == out ? (function (C) {
-      	      var F = function (a, b, c) {
-      	        if (this instanceof C) {
-      	          switch (arguments.length) {
-      	            case 0: return new C();
-      	            case 1: return new C(a);
-      	            case 2: return new C(a, b);
-      	          } return new C(a, b, c);
-      	        } return C.apply(this, arguments);
-      	      };
-      	      F[PROTOTYPE] = C[PROTOTYPE];
-      	      return F;
+      	    if (options.bind && USE_NATIVE) resultProperty = bindContext(sourceProperty, global_1);
+      	    // wrap global constructors for prevent changs in this version
+      	    else if (options.wrap && USE_NATIVE) resultProperty = wrapConstructor(sourceProperty);
       	    // make static versions for prototype methods
-      	    })(out) : IS_PROTO && typeof out == 'function' ? _ctx(Function.call, out) : out;
-      	    // export proto methods to core.%CONSTRUCTOR%.methods.%NAME%
-      	    if (IS_PROTO) {
-      	      (exports.virtual || (exports.virtual = {}))[key] = out;
-      	      // export proto methods to core.%CONSTRUCTOR%.prototype.%NAME%
-      	      if (type & $export.R && expProto && !expProto[key]) _hide(expProto, key, out);
+      	    else if (PROTO && typeof sourceProperty == 'function') resultProperty = bindContext(Function.call, sourceProperty);
+      	    // default case
+      	    else resultProperty = sourceProperty;
+
+      	    // add a flag to not completely full polyfills
+      	    if (options.sham || (sourceProperty && sourceProperty.sham) || (targetProperty && targetProperty.sham)) {
+      	      hide(resultProperty, 'sham', true);
+      	    }
+
+      	    target[key] = resultProperty;
+
+      	    if (PROTO) {
+      	      VIRTUAL_PROTOTYPE = TARGET + 'Prototype';
+      	      if (!has(path, VIRTUAL_PROTOTYPE)) hide(path, VIRTUAL_PROTOTYPE, {});
+      	      // export virtual prototype methods
+      	      path[VIRTUAL_PROTOTYPE][key] = sourceProperty;
+      	      // export real prototype methods
+      	      if (options.real && targetPrototype && !targetPrototype[key]) hide(targetPrototype, key, sourceProperty);
       	    }
       	  }
       	};
-      	// type bitmap
-      	$export.F = 1;   // forced
-      	$export.G = 2;   // global
-      	$export.S = 4;   // static
-      	$export.P = 8;   // proto
-      	$export.B = 16;  // bind
-      	$export.W = 32;  // wrap
-      	$export.U = 64;  // safe
-      	$export.R = 128; // real proto method for `library`
-      	var _export = $export;
 
-      	var toString = {}.toString;
-
-      	var _cof = function (it) {
-      	  return toString.call(it).slice(8, -1);
-      	};
-
-      	// fallback for non-array-like ES3 and non-enumerable old V8 strings
-
-      	// eslint-disable-next-line no-prototype-builtins
-      	var _iobject = Object('z').propertyIsEnumerable(0) ? Object : function (it) {
-      	  return _cof(it) == 'String' ? it.split('') : Object(it);
-      	};
-
-      	// 7.2.1 RequireObjectCoercible(argument)
-      	var _defined = function (it) {
-      	  if (it == undefined) throw TypeError("Can't call method on  " + it);
-      	  return it;
-      	};
-
-      	// to indexed object, toObject with fallback for non-array-like ES3 strings
-
-
-      	var _toIobject = function (it) {
-      	  return _iobject(_defined(it));
-      	};
-
-      	// 7.1.4 ToInteger
       	var ceil = Math.ceil;
       	var floor = Math.floor;
-      	var _toInteger = function (it) {
-      	  return isNaN(it = +it) ? 0 : (it > 0 ? floor : ceil)(it);
+
+      	// `ToInteger` abstract operation
+      	// https://tc39.github.io/ecma262/#sec-tointeger
+      	var toInteger = function (argument) {
+      	  return isNaN(argument = +argument) ? 0 : (argument > 0 ? floor : ceil)(argument);
       	};
 
-      	// 7.1.15 ToLength
-
       	var min = Math.min;
-      	var _toLength = function (it) {
-      	  return it > 0 ? min(_toInteger(it), 0x1fffffffffffff) : 0; // pow(2, 53) - 1 == 9007199254740991
+
+      	// `ToLength` abstract operation
+      	// https://tc39.github.io/ecma262/#sec-tolength
+      	var toLength = function (argument) {
+      	  return argument > 0 ? min(toInteger(argument), 0x1FFFFFFFFFFFFF) : 0; // 2 ** 53 - 1 == 9007199254740991
       	};
 
       	var max = Math.max;
       	var min$1 = Math.min;
-      	var _toAbsoluteIndex = function (index, length) {
-      	  index = _toInteger(index);
-      	  return index < 0 ? max(index + length, 0) : min$1(index, length);
+
+      	// Helper for a popular repeating case of the spec:
+      	// Let integer be ? ToInteger(index).
+      	// If integer < 0, let result be max((length + integer), 0); else let result be min(length, length).
+      	var toAbsoluteIndex = function (index, length) {
+      	  var integer = toInteger(index);
+      	  return integer < 0 ? max(integer + length, 0) : min$1(integer, length);
       	};
 
-      	// false -> Array#indexOf
-      	// true  -> Array#includes
-
-
-
-      	var _arrayIncludes = function (IS_INCLUDES) {
+      	// `Array.prototype.{ indexOf, includes }` methods implementation
+      	var createMethod = function (IS_INCLUDES) {
       	  return function ($this, el, fromIndex) {
-      	    var O = _toIobject($this);
-      	    var length = _toLength(O.length);
-      	    var index = _toAbsoluteIndex(fromIndex, length);
+      	    var O = toIndexedObject($this);
+      	    var length = toLength(O.length);
+      	    var index = toAbsoluteIndex(fromIndex, length);
       	    var value;
       	    // Array#includes uses SameValueZero equality algorithm
       	    // eslint-disable-next-line no-self-compare
@@ -354,139 +463,121 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	      // eslint-disable-next-line no-self-compare
       	      if (value != value) return true;
       	    // Array#indexOf ignores holes, Array#includes - not
-      	    } else for (;length > index; index++) if (IS_INCLUDES || index in O) {
-      	      if (O[index] === el) return IS_INCLUDES || index || 0;
+      	    } else for (;length > index; index++) {
+      	      if ((IS_INCLUDES || index in O) && O[index] === el) return IS_INCLUDES || index || 0;
       	    } return !IS_INCLUDES && -1;
       	  };
       	};
-      
-      	var _shared = createCommonjsModule(function (module) {
-      	var SHARED = '__core-js_shared__';
-      	var store = _global[SHARED] || (_global[SHARED] = {});
 
-      	(module.exports = function (key, value) {
-      	  return store[key] || (store[key] = value !== undefined ? value : {});
-      	})('versions', []).push({
-      	  version: _core.version,
-      	  mode:  'pure' ,
-      	  copyright: '© 2019 Denis Pushkarev (zloirock.ru)'
-      	});
-      	});
-
-      	var id = 0;
-      	var px = Math.random();
-      	var _uid = function (key) {
-      	  return 'Symbol('.concat(key === undefined ? '' : key, ')_', (++id + px).toString(36));
+      	var arrayIncludes = {
+      	  // `Array.prototype.includes` method
+      	  // https://tc39.github.io/ecma262/#sec-array.prototype.includes
+      	  includes: createMethod(true),
+      	  // `Array.prototype.indexOf` method
+      	  // https://tc39.github.io/ecma262/#sec-array.prototype.indexof
+      	  indexOf: createMethod(false)
       	};
 
-      	var shared = _shared('keys');
+      	var hiddenKeys = {};
 
-      	var _sharedKey = function (key) {
-      	  return shared[key] || (shared[key] = _uid(key));
-      	};
+      	var indexOf = arrayIncludes.indexOf;
 
-      	var arrayIndexOf = _arrayIncludes(false);
-      	var IE_PROTO = _sharedKey('IE_PROTO');
 
-      	var _objectKeysInternal = function (object, names) {
-      	  var O = _toIobject(object);
+      	var objectKeysInternal = function (object, names) {
+      	  var O = toIndexedObject(object);
       	  var i = 0;
       	  var result = [];
       	  var key;
-      	  for (key in O) if (key != IE_PROTO) _has(O, key) && result.push(key);
+      	  for (key in O) !has(hiddenKeys, key) && has(O, key) && result.push(key);
       	  // Don't enum bug & hidden keys
-      	  while (names.length > i) if (_has(O, key = names[i++])) {
-      	    ~arrayIndexOf(result, key) || result.push(key);
+      	  while (names.length > i) if (has(O, key = names[i++])) {
+      	    ~indexOf(result, key) || result.push(key);
       	  }
       	  return result;
       	};
 
-      	// IE 8- don't enum bug keys
-      	var _enumBugKeys = (
-      	  'constructor,hasOwnProperty,isPrototypeOf,propertyIsEnumerable,toLocaleString,toString,valueOf'
-      	).split(',');
+      	// IE8- don't enum bug keys
+      	var enumBugKeys = [
+      	  'constructor',
+      	  'hasOwnProperty',
+      	  'isPrototypeOf',
+      	  'propertyIsEnumerable',
+      	  'toLocaleString',
+      	  'toString',
+      	  'valueOf'
+      	];
 
-      	// 19.1.2.14 / 15.2.3.14 Object.keys(O)
-
-
-
-      	var _objectKeys = Object.keys || function keys(O) {
-      	  return _objectKeysInternal(O, _enumBugKeys);
+      	// `Object.keys` method
+      	// https://tc39.github.io/ecma262/#sec-object.keys
+      	var objectKeys = Object.keys || function keys(O) {
+      	  return objectKeysInternal(O, enumBugKeys);
       	};
 
-      	var f$1 = Object.getOwnPropertySymbols;
+      	var f$3 = Object.getOwnPropertySymbols;
 
-      	var _objectGops = {
-      		f: f$1
+      	var objectGetOwnPropertySymbols = {
+      		f: f$3
       	};
 
-      	var f$2 = {}.propertyIsEnumerable;
-
-      	var _objectPie = {
-      		f: f$2
+      	// `ToObject` abstract operation
+      	// https://tc39.github.io/ecma262/#sec-toobject
+      	var toObject = function (argument) {
+      	  return Object(requireObjectCoercible(argument));
       	};
 
-      	// 7.1.13 ToObject(argument)
+      	var nativeAssign = Object.assign;
 
-      	var _toObject = function (it) {
-      	  return Object(_defined(it));
-      	};
-
-      	// 19.1.2.1 Object.assign(target, source, ...)
-
-
-
-
-
-
-      	var $assign = Object.assign;
-
+      	// `Object.assign` method
+      	// https://tc39.github.io/ecma262/#sec-object.assign
       	// should work with symbols and should have deterministic property order (V8 bug)
-      	var _objectAssign = !$assign || _fails(function () {
+      	var objectAssign = !nativeAssign || fails(function () {
       	  var A = {};
       	  var B = {};
       	  // eslint-disable-next-line no-undef
-      	  var S = Symbol();
-      	  var K = 'abcdefghijklmnopqrst';
-      	  A[S] = 7;
-      	  K.split('').forEach(function (k) { B[k] = k; });
-      	  return $assign({}, A)[S] != 7 || Object.keys($assign({}, B)).join('') != K;
+      	  var symbol = Symbol();
+      	  var alphabet = 'abcdefghijklmnopqrst';
+      	  A[symbol] = 7;
+      	  alphabet.split('').forEach(function (chr) { B[chr] = chr; });
+      	  return nativeAssign({}, A)[symbol] != 7 || objectKeys(nativeAssign({}, B)).join('') != alphabet;
       	}) ? function assign(target, source) { // eslint-disable-line no-unused-vars
-      	  var T = _toObject(target);
-      	  var aLen = arguments.length;
+      	  var T = toObject(target);
+      	  var argumentsLength = arguments.length;
       	  var index = 1;
-      	  var getSymbols = _objectGops.f;
-      	  var isEnum = _objectPie.f;
-      	  while (aLen > index) {
-      	    var S = _iobject(arguments[index++]);
-      	    var keys = getSymbols ? _objectKeys(S).concat(getSymbols(S)) : _objectKeys(S);
+      	  var getOwnPropertySymbols = objectGetOwnPropertySymbols.f;
+      	  var propertyIsEnumerable = objectPropertyIsEnumerable.f;
+      	  while (argumentsLength > index) {
+      	    var S = indexedObject(arguments[index++]);
+      	    var keys = getOwnPropertySymbols ? objectKeys(S).concat(getOwnPropertySymbols(S)) : objectKeys(S);
       	    var length = keys.length;
       	    var j = 0;
       	    var key;
       	    while (length > j) {
       	      key = keys[j++];
-      	      if (!_descriptors || isEnum.call(S, key)) T[key] = S[key];
+      	      if (!descriptors || propertyIsEnumerable.call(S, key)) T[key] = S[key];
       	    }
       	  } return T;
-      	} : $assign;
+      	} : nativeAssign;
 
-      	// 19.1.3.1 Object.assign(target, source)
+      	// `Object.assign` method
+      	// https://tc39.github.io/ecma262/#sec-object.assign
+      	_export({ target: 'Object', stat: true, forced: Object.assign !== objectAssign }, {
+      	  assign: objectAssign
+      	});
 
-
-      	_export(_export.S + _export.F, 'Object', { assign: _objectAssign });
-
-      	var assign = _core.Object.assign;
+      	var assign = path.Object.assign;
 
       	var assign$1 = assign;
 
+      	var assign$2 = assign$1;
+
       	function a () {
-      	  console.log(assign$1({}, {
+      	  console.log(assign$2({}, {
       	    a: 1
       	  }));
       	}
 
       	function b () {
-      	  console.log(assign$1({}, {
+      	  console.log(assign$2({}, {
       	    b: 1
       	  }));
       	}

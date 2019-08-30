@@ -93,13 +93,12 @@ class Condenser
           block.call(dep)
           all_dependenies(dep.dependencies, visited, &block)
         end
-
       end
     end
     
     def cache_key(include_dependencies=true)
       key = []
-      key << [@source_file, @content_types_digest, stat.ino, stat.mtime.to_f, stat.size]
+      key << [Condenser::VERSION, @source_file, @content_types_digest, stat.ino, stat.mtime.to_f, stat.size]
 
       if include_dependencies
         all_dependenies(dependencies, []) do |dep|
@@ -150,12 +149,15 @@ class Condenser
           
           if @environment.preprocessors.has_key?(data[:content_type].last)
             @environment.preprocessors[data[:content_type].last].each do |processor|
+              @environment.logger.info { "Preprocessing #{self.filename} with #{processor.name}" }
               processor.call(@environment, data)
             end
           end
       
           if data[:content_type].last != @content_types.last && @environment.transformers.has_key?(data[:content_type].last)
-            @environment.transformers[data[:content_type].pop].each do |to_mime_type, processor|
+            from_mime_type = data[:content_type].pop
+            @environment.transformers[from_mime_type].each do |to_mime_type, processor|
+              @environment.logger.info { "Transforming #{self.filename} from #{from_mime_type} to #{to_mime_type} with #{processor.name}" }
               processor.call(@environment, data)
               data[:content_type] << to_mime_type
             end
@@ -216,7 +218,7 @@ class Condenser
             dependencies: []
           }
           @environment.exporters[content_type]&.call(@environment, data)
-          @environment.minifiers[content_type]&.call(@environment, data)
+          @environment.minifier_for(content_type)&.call(@environment, data)
           data[:digest] = @environment.digestor.digest(data[:source])
           data[:digest_name] = @environment.digestor.name.sub(/^.*::/, '').downcase
           data
@@ -264,6 +266,7 @@ class Condenser
     alias_method :etag, :hexdigest
     
     def integrity
+      process
       "#{@digest_name}-#{[@digest].pack('m0')}"
     end
     
@@ -273,7 +276,7 @@ class Condenser
     
     def write(output_directory)
       files = @environment.writers_for_mime_type(content_type).map do |writer|
-        writer[0].call(output_directory, self)
+        writer.call(output_directory, self)
       end
       files.flatten.compact
     end

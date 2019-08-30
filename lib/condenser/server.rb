@@ -7,7 +7,8 @@ class Condenser
     
     ALLOWED_REQUEST_METHODS = ['GET', 'HEAD'].to_set.freeze
     
-    def initialize(condenser)
+    def initialize(condenser, logger: nil)
+      @logger = logger || Logger.new($stdout, level: :info)
       @condenser = condenser
     end
     

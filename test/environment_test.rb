@@ -8,7 +8,8 @@ class EnvironmentTest < ActiveSupport::TestCase
   end
   
   test "default logger level is set to warn" do
-    assert_equal Logger::WARN, @env.logger.level
+    @env = Condenser.new(@path)
+    assert_equal Logger::INFO, @env.logger.level
   end
 
   test "paths" do

@@ -31,7 +31,7 @@ class ActiveSupport::TestCase
 
   def setup
     @path = Dir.mktmpdir
-    @env = Condenser.new(@path)
+    @env = Condenser.new(@path, logger: Logger.new('/dev/null'))
     @env.context_class.class_eval do
       def asset_path(path, options = {})
         "/assets/#{path}"
@@ -64,7 +64,7 @@ class ActiveSupport::TestCase
     asset = @env.find(path)
     assert asset, "Couldn't find asset \"#{path}\""
     asset.process
-    assert_equal path,                        asset.filename
+    assert_equal path.delete_prefix('/'),     asset.filename
     assert_equal Array(mime_types),           asset.content_types
     assert_equal(source.rstrip, asset.source.rstrip) if !source.nil?
   end
