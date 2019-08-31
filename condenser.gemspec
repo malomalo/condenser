@@ -25,8 +25,7 @@ Gem::Specification.new do |s|
   s.add_runtime_dependency  "rack",  '> 1', '< 3'
 
   s.add_development_dependency 'activesupport'
-  s.add_development_dependency "sass", "~> 3.4"
-  s.add_development_dependency "sassc", ">= 1.10.1", "< 2.0"
+  s.add_development_dependency "sassc", ">= 2.2.0", "< 3.0"
   s.add_development_dependency "zopfli", "~> 0.0.7"
 
   # s.add_development_dependency "closure-compiler", "~> 1.1"

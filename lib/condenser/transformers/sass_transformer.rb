@@ -25,7 +25,7 @@ class Condenser
     end
 
     def self.call(environment, input)
-      require "sass" unless defined?(::Sass::Engine)
+      require "sassc" unless defined?(::SassC::Engine)
       
       instance.call(environment, input)
     end
@@ -57,13 +57,14 @@ class Condenser
 
     def call(environment, input)
       # context = input[:environment].context_class.new(input)
-      
       engine_options = merge_options({
-        filename:     input[:filename],
         syntax:       self.class.syntax,
-        cache_store:  Cache.new(environment.cache),
+        filename:     input[:filename],
+        source_map_file: "#{input[:filename]}.map",
+        source_map_contents: true,
+        # cache_store:  Cache.new(environment.cache),
         load_paths:   environment.path,
-        importer:     @importer_class.new,
+        importer:     @importer_class,
         condenser: {
           context: environment.new_context_class,
           environment: environment
@@ -71,13 +72,14 @@ class Condenser
         asset: input
       })
 
-      engine = Sass::Engine.new(input[:source], engine_options)
+      engine = SassC::Engine.new(input[:source], engine_options)
       
-      css, map = Utils.module_include(Sass::Script::Functions, @functions) do
-        engine.render_with_sourcemap('')
+      css = Utils.module_include(SassC::Script::Functions, @functions) do
+        engine.render
       end
-
-      css = css.delete_suffix!("\n/*# sourceMappingURL= */\n")
+      css.delete_suffix!("\n/*# sourceMappingURL=#{File.basename(input[:filename])}.map */")
+      # engine.source_map
+      # css = css.delete_suffix!("\n/*# sourceMappingURL= */\n")
 
 
       input[:source] = css
@@ -138,7 +140,7 @@ class Condenser
         path = condenser_context.asset_path(asset.path, options)
         query    = "?#{query}" if query
         fragment = "##{fragment}" if fragment
-        Sass::Script::String.new("#{path}#{query}#{fragment}", :string)
+        SassC::Script::Value::String.new("#{path}#{query}#{fragment}", :string)
       end
 
       # Public: Generate a asset url() link.
@@ -147,7 +149,7 @@ class Condenser
       #
       # Returns a Sass::Script::String.
       def asset_url(path, options = {})
-        Sass::Script::String.new("url(#{asset_path(path, options).value})")
+        SassC::Script::Value::String.new("url(#{asset_path(path, options).value})")
       end
 
       # Public: Generate url for image path.

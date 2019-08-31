@@ -160,7 +160,6 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
         output << line
         
         if message = JSON.parse(output)
-          t = Time.now.to_f
           ret = case message['method']
           when 'resolve'
             importee, importer = message['args']

@@ -237,7 +237,7 @@ class ServerTest < ActiveSupport::TestCase
 
     get "/assets/error.css"
     assert_equal 200, last_response.status
-    assert_match %r{content: ".*?Sass::SyntaxError}, last_response.body
+    assert_match %r{content: ".*?SassC::SyntaxError}, last_response.body
   end
 
   test "serve encoded utf-8 filename" do

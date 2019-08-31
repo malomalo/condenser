@@ -5,24 +5,30 @@ class Condenser::SassMinifier
   end
 
   def self.call(environment, input)
-    require "sass" unless defined?(::Sass::Engine)
+    require "sassc" unless defined?(::SassC::Engine)
     
     instance.call(environment, input)
   end
   
   def initialize(options = {})
-    @options = options.merge({
-      syntax: :scss,
-      cache: false,
+    @options = {
+      syntax:     :scss,
+      cache:      false,
       read_cache: false,
-      style: :compressed
-    }).freeze
+      style:      :compressed
+    }.merge(options).freeze
   end
 
   def call(environment, input)
-    engine = Sass::Engine.new(input[:source], {filename: input[:filename]}.merge(@options))
-    css, map = engine.render_with_sourcemap('')
-    css = css.delete_suffix!("\n/*# sourceMappingURL= */\n")
+    engine = SassC::Engine.new(input[:source], {
+      filename: input[:filename],
+      source_map_file: "#{input[:filename]}.map",
+      source_map_contents: true
+    }.merge(@options))
+    
+    css = engine.render
+    css.delete_suffix!("\n/*# sourceMappingURL=#{File.basename(input[:filename])}.map */")
+    # engine.source_map
     
     input[:source] = css
   end
