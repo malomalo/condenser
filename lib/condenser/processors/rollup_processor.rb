@@ -27,6 +27,7 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
         file: File.join(output_dir, 'result.js'),
         format: 'iife',
         # output: { sourcemap: true, format: 'iife' },
+        globals: [],
         sourcemap: true
       }
       if input[:source] =~ /export\s+{[^}]+};?\z/i
@@ -34,7 +35,7 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
         # output_options[:output][:name] = File.basename(input[:filename], ".*").capitalize
       end
 
-      exec_runtime(<<-JS)
+      exec_runtime(<<-JS, @entry)
         const fs    = require('fs');
         const path  = require('path');
         const stdin = process.stdin;
@@ -59,7 +60,7 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
                 return buffer;
               }
             } else {
-              console.log(JSON.stringify({method: 'error', args: [e.name, e.message]}));
+              console.log(JSON.stringify({method: 'error', args: [e.name, e.message]}) + "\\n");
               process.exit(1);
             }
           }
@@ -74,6 +75,8 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
         const commonjs = require('rollup-plugin-commonjs');
         const nodeResolve = require('rollup-plugin-node-resolve');
         var rid = 0;
+        var renderStack = {};
+        var nodeResolver = null;
         
         function request(method, args) {
           var trid = rid;
@@ -84,21 +87,48 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
             });
           });
 
-          console.log(JSON.stringify({ rid: trid, method: method, args: args }));
+          console.log(JSON.stringify({ rid: trid, method: method, args: args }) + "\\n");
 
           return promise;
+        }
+
+        if ('#{environment.npm_path}' !== '') {
+          nodeResolver = nodeResolve({
+            mainFields: ['module', 'main'],
+            // modulesOnly: true,
+            // preferBuiltins: false,
+            customResolveOptions: {
+              moduleDirectory: '#{environment.npm_path}'
+            }
+          });
         }
 
         const inputOptions = #{JSON.generate(input_options)};
         inputOptions.plugins = [];
         inputOptions.plugins.push({
-          name: 'erb',
+          name: 'condenser',
           resolveId: function (importee, importer) {
             if (importee.startsWith('\\0') || (importer && importer.startsWith('\\0'))) {
               return;
             }
-            
-            return request('resolve', [importee, importer]).then(function(value) {
+
+            if (!(importer in renderStack)) {
+              renderStack[importer] = [];
+            }
+
+            return request('resolve', [importee, importer]).then((value) => {
+              if (nodeResolver && (value === null || value === undefined)) {
+                return nodeResolver.resolveId.call(this, importee, importer).then((value) => {
+                  if (!(value === null || value === undefined) && !renderStack[importer].includes(value.id)) {
+                    renderStack[importer].push(value.id);
+                  }
+                  return value;
+                });
+              }
+
+              if (!(value === null || value === undefined) && !renderStack[importer].includes(value)) {
+                renderStack[importer].push(value);
+              }
               return value;
             });
           },
@@ -112,18 +142,17 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
             });
           }
         });
-
-        if ('#{environment.npm_path}' !== '') {
-          inputOptions.plugins.push(nodeResolve({
-            mainFields: ['module', 'main'],
-            modulesOnly: true,
-            customResolveOptions: {
-              moduleDirectory: '#{environment.npm_path}'
-            }
-          }));
-        }
-
+        inputOptions.plugins.push(nodeResolver);
         inputOptions.plugins.push(commonjs());
+        
+        inputOptions.plugins.push({
+          name: 'nullHanlder',
+          resolveId: function (importee, importer) {
+            request('error', ["AssetNotFound", importee, importer, renderStack]).then(function(value) {
+              process.exit(1);
+            });
+          }
+        });
 
         const outputOptions = #{JSON.generate(output_options)};
 
@@ -136,7 +165,7 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
             // await request('set_cache', [JSON.stringify(bundle)]);
             process.exit(0);
           } catch(e) {
-            console.log(JSON.stringify({method: 'error', args: [e.name, e.message, e.stack]}));
+            await request('error', [e.name, e.message, e.stack]);
             process.exit(1);
           }
         }
@@ -150,16 +179,26 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
     end
   end
   
-  def exec_runtime(script)
+  def exec_runtime(script, input)
     io = IO.popen([binary, '-e', script], 'r+')
-    output = ''
+    buffer = ''
     
     begin
       
-      while line = io.readline
-        output << line
+      while IO.select([io]) && io_read = io.read_nonblock(1_024)
+        buffer << io_read
+        messages = buffer.split("\n\n")
         
-        if message = JSON.parse(output)
+        buffer = if buffer.end_with?("\n\n")
+          ''
+        else
+          messages.pop
+        end
+        
+        messages.each do |message|
+          # puts message
+          message = JSON.parse(message)
+          
           ret = case message['method']
           when 'resolve'
             importee, importer = message['args']
@@ -175,25 +214,26 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
               x = x.end_with?('.js') ? x : "#{x}.js"
               File.file?(x) ? x : (x.delete_suffix('.js') + "/index.js")
             elsif @environment.npm_path &&
-                  importer.start_with?(@environment.npm_path) &&
-                  File.file?(File.expand_path(importee, File.dirname(importer))) &&
-                  File.file?(File.expand_path(importee, File.dirname(importer)) + '.js')
-              x = File.expand_path(importee, File.dirname(importer))
-              x.end_with?('.js') ? x : "#{x}.js"
+                  importer.start_with?(@environment.npm_path) #&&
+              #     File.file?(File.expand_path(importee, File.dirname(importer))) &&
+              #     File.file?(File.expand_path(importee, File.dirname(importer)) + '.js')
+              # x = File.expand_path(importee, File.dirname(importer))
+              # x.end_with?('.js') ? x : "#{x}.js"
+              nil
             else
-              x = @environment.find(importee, importer ? File.dirname(@entry == importer ? @input[:source_file] : importer) : nil, accept: @input[:content_types].last)&.source_file
               if importee.end_with?('*')
-                File.join(File.dirname(x), '*')
+                File.join(File.dirname(importee), '*')
               else
-                x
+                @environment.find(importee, importer ? File.dirname(@entry == importer ? @input[:source_file] : importer) : nil, accept: @input[:content_types].last)&.source_file
               end
             end
-            begin
+
+            # begin
               asset
-            rescue Errno::EPIPE
-              puts io.read
-              raise
-            end
+            # rescue Errno::EPIPE
+              # puts io.read
+              # raise
+            # end
           when 'load'
             importee = message['args'].first
             if importee == @entry
@@ -215,9 +255,8 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
                   code << "import '#{f.source_file}';\n"
                 end
               end
-              if !code_imports.empty?
-                code += "export default [#{code_imports.join(', ')}];"
-              end
+              
+              code += "export default [#{code_imports.join(', ')}];"
 
               { code: code, map: nil }
             else
@@ -229,7 +268,16 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
               end
             end
           when 'error'
-            raise exec_runtime_error(message['args'][0] + ': ' + message['args'][1])
+            io.write(JSON.generate({rid: message['rid'], return: nil}))
+            
+            case message['args'][0]
+            when 'AssetNotFound'
+              error_message = "Could not find import \"#{message['args'][1]}\" for \"#{message['args'][2]}\".\n\n"
+              error_message << build_tree(message['args'][3], input, message['args'][2])
+              raise exec_runtime_error(error_message)
+            else
+              raise exec_runtime_error(message['args'][0] + ': ' + message['args'][1])
+            end
           # when 'set_cache'
           #   @environment.cache.set('rollup', message['args'][0])
           #   io.write(JSON.generate({rid: message['rid'], return: true}))
@@ -238,20 +286,36 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
           end
 
           io.write(JSON.generate({rid: message['rid'], return: ret}))
-          output = ''
         end
-
       end
-    rescue EOFError
+    rescue Errno::EPIPE, EOFError
     end
     
     io.close
-    
     if $?.success?
-      output
+      true
     else
-      raise exec_runtime_error(output)
+      raise exec_runtime_error(buffer)
     end
   end
 
+  def build_tree(renderStack, from, to, visited: nil)
+    visited ||= []
+    return if visited.include?(from)
+    visited << from
+    
+    if renderStack[from].nil? || renderStack[from].empty?
+      nil
+    elsif renderStack[from].include?(to)
+      from
+    else
+      renderStack[from].each do |dep|
+        if tree = build_tree(renderStack, dep, to, visited: visited)
+          return "#{from}\n└ #{tree.lines.each_with_index.map{|l, i| "#{i == 0 ? '' : '    '}#{l}"}.join("")}"
+        end
+      end
+      nil
+    end
+  end
+  
 end

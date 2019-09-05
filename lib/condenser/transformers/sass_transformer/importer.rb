@@ -1,5 +1,3 @@
-require 'sass/importers'
-
 class Condenser::SassTransformer
   class Importer < SassC::Importer
     
@@ -15,6 +13,19 @@ class Condenser::SassTransformer
         next if asset.filename == options[:filename]
         imports << Import.new(asset.filename, source: asset.source, source_map_path: nil)
       end
+
+      if imports.empty? && env.npm_path
+        package = File.join(env.npm_path, name, 'package.json')
+        if File.exists?(package)
+          package = JSON.parse(File.read(package))
+          if package['style']
+            imports << Import.new(name, source: File.read(File.join(env.npm_path, name, package['style'])), source_map_path: nil)
+          end
+        end
+      end
+
+      raise Condenser::FileNotFound, "couldn't find file '#{name}'" if imports.empty?
+
       imports
     end
     

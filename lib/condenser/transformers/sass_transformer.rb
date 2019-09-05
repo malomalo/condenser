@@ -8,7 +8,6 @@ class Condenser
   #   https://github.com/rails/sass-rails
   #
   class SassTransformer
-    autoload :Cache,    'condenser/transformers/sass_transformer/cache'
     autoload :Importer, 'condenser/transformers/sass_transformer/importer'
 
     # Internal: Defines default sass syntax to use. Exposed so the ScssProcessor
@@ -36,6 +35,10 @@ class Condenser
 
     attr_reader :cache_key
 
+    def name
+      self.class.name
+    end
+    
     # Public: Initialize template with custom options.
     #
     # options - Hash
@@ -53,6 +56,7 @@ class Condenser
         include options[:functions] if options[:functions]
         class_eval(&block) if block_given?
       end
+      # puts @functions.method(:asset_path).source_location
     end
 
     def call(environment, input)

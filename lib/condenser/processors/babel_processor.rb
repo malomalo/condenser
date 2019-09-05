@@ -19,9 +19,7 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
       plugins: [
         ['babel-plugin-transform-class-extended-hook', {}],
         ["@babel/plugin-proposal-class-properties", {}],
-        ['@babel/plugin-transform-runtime', {
-              corejs: 3,
-        }],
+        ['@babel/plugin-transform-runtime', { corejs: 3 }],
       ],
       presets: [["@babel/preset-env", {
         "modules": false,
