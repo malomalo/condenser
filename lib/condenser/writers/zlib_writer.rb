@@ -22,8 +22,12 @@ class Condenser::ZlibWriter
     @added_mime_types = added_mime_types || ADDED_MIME_TYPES
   end
   
+  def path(asset)
+    "#{asset.path}.gz"
+  end
+  
   def exist?(asset)
-    ::File.exist?("#{asset.path}.gz")
+    ::File.exist?(path(asset))
   end
 
   def call(output_directory, asset)

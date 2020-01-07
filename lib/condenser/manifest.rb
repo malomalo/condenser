@@ -60,7 +60,7 @@ class Condenser
       
       outputs = []
       args.each do |arg|
-        @environment.resolve!(arg).each do |asset|
+        @environment.resolve(arg).each do |asset|
           outputs += add_asset(asset)
         end
       end
@@ -121,6 +121,9 @@ class Condenser
     # Wipe directive
     def clobber
       return if !Dir.exist?(dir)
+      
+      FileUtils.rm(filename)
+      logger.info "Removed #{filename}"
       
       Dir.each_child(dir) do |child|
         FileUtils.rm_r(File.join(dir, child))

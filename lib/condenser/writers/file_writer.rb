@@ -9,8 +9,12 @@ class Condenser::FileWriter
     @mime_types = mime_types || '*/*'
   end
 
+  def path(asset)
+    asset.path
+  end
+  
   def exist?(asset)
-    ::File.exist?(asset.path)
+    ::File.exist?(path(asset))
   end
 
   def call(output_directory, asset)
