@@ -4,6 +4,9 @@ require 'open3'
 class Condenser
   class NodeProcessor
     
+    def self.setup(environment)
+    end
+    
     def exec_runtime(script)
       Tempfile.open(['script', 'js']) do |scriptfile|
         scriptfile.write(script)

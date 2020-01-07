@@ -53,4 +53,25 @@ class CondenserEJSTest < ActiveSupport::TestCase
     JS
   end
 
+  test 'loading a cached file alsos initializes the processors' do
+    cache_dir = File.join(@path, 'cache')
+    Dir.mkdir(cache_dir)
+    @env.cache = Condenser::Cache::FileStore.new(cache_dir)
+
+    file 'test.ejs', "1<%= 1 + 1 %>3\n"
+    file 'render.js', <<~JS
+      import template from 'test';
+      console.log(template());
+    JS
+    assert_file 'test.js', 'application/javascript'
+    
+    @env = Condenser.new(@path,
+      logger: Logger.new('/dev/null'),
+      cache: Condenser::Cache::FileStore.new(cache_dir),
+      pipeline: false
+    )
+    @env.register_exporter('application/javascript', Condenser::RollupProcessor)
+    
+    assert_exported_file 'render.js', 'application/javascript'
+  end
 end

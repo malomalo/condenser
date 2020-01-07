@@ -12,8 +12,17 @@ class Condenser
     attr_accessor :cache, :build_cache
     
     def initialize(*args)
+      @loaded_processors = Set.new
       @context_class = Class.new(Condenser::Context)
       super
+    end
+    
+    def load_processors(*processors)
+      processors.flatten!
+      (Set.new(processors) - @loaded_processors).each do |processor|
+        processor.setup(self)
+        @loaded_processors << processor
+      end
     end
 
     def prepend_path(*paths)

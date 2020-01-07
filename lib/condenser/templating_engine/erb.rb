@@ -1,8 +1,10 @@
 class Condenser::Erubi
 
-  def self.call(environment, data)
+  def self.setup(environment)
     require "erubi" unless defined?(::Erubi::Engine)
-      
+  end
+
+  def self.call(environment, data)
     source = ::Erubi::Engine.new(data[:source], {
       preamble:   "@output_buffer = String.new;",
       bufvar:     "@output_buffer",

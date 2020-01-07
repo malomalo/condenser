@@ -16,6 +16,10 @@ class Condenser
       :sass
     end
 
+    def self.setup(environment)
+      require "sassc" unless defined?(::SassC::Engine)
+    end
+    
     # Public: Return singleton instance with default options.
     #
     # Returns SassProcessor object.
@@ -24,8 +28,6 @@ class Condenser
     end
 
     def self.call(environment, input)
-      require "sassc" unless defined?(::SassC::Engine)
-      
       instance.call(environment, input)
     end
 

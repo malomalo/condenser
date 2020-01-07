@@ -48,7 +48,7 @@ class Condenser
       if engine.nil?
         @preprocessors[mime_type].clear
       else
-        @preprocessors[mime_type].delete(engine)
+        @preprocessors[mime_type]&.delete(engine)
       end
     end
 

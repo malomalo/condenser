@@ -3,14 +3,16 @@ require File.expand_path('../../processors/node_processor', __FILE__)
 class Condenser::EjsTransformer < Condenser::NodeProcessor
 
   STRICT = true
+  
+  def self.setup(environment)
+    require 'ejs' unless defined?(::EJS)
 
-  def self.call(environment, input)
-    unless defined?(::EJS)
-      require 'ejs'
-    end
     if !environment.path.include?(EJS::ASSET_DIR)
       environment.append_path(EJS::ASSET_DIR)
     end
+  end
+  
+  def self.call(environment, input)
     new.call(environment, input)
   end
 

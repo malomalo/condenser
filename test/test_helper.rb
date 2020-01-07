@@ -16,7 +16,7 @@ require 'condenser/cache/memory_store'
 
 require "active_support"
 require "active_support/testing/autorun"
-require 'mocha/setup'
+require 'mocha/minitest'
 require 'minitest/reporters'
 
 # This is because Rails changed it's minitest intergration, not sure whats
@@ -37,7 +37,6 @@ class ActiveSupport::TestCase
         "/assets/#{path}"
       end
     end
-    
   end
 
   def teardown

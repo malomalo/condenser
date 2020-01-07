@@ -29,7 +29,10 @@ class Condenser
       @dependencies   = Set.new
       @default_export = nil
       @exports        = nil
-      @processed = false
+      @processed      = false
+      
+      @processors_loaded = false
+      @processors        = Set.new
     end
     
     def path
@@ -85,6 +88,18 @@ class Condenser
         @exports
       end
     end
+
+    def load_processors
+      return if @processors_loaded
+
+      @processors_loaded = true
+      processors = @environment.cache.fetch("processors/#{cache_key(false)}") do
+        process
+        @processors
+      end
+      processors.map! { |p| p.is_a?(String) ? p.constantize : p }
+      @environment.load_processors(*processors)
+    end
     
     def all_dependenies(deps, visited, &block)
       deps.each do |dep|
@@ -127,11 +142,17 @@ class Condenser
 
             map: nil,
             linked_assets: [],
-            dependencies: []
+            dependencies: [],
+            
+            processors: Set.new
           }
         
           while @environment.templates.has_key?(data[:content_type].last)
             templator = @environment.templates[data[:content_type].pop]
+            
+            data[:processors] << (templator.is_a?(Class) ? templator : templator.class).name
+            @environment.load_processors(templator)
+            
             templator.call(@environment, data)
             data[:filename] = data[:filename].gsub(/\.#{extensions.last}$/, '')
           end
@@ -149,6 +170,9 @@ class Condenser
           
           if @environment.preprocessors.has_key?(data[:content_type].last)
             @environment.preprocessors[data[:content_type].last].each do |processor|
+              data[:processors] << (processor.is_a?(Class) ? processor : processor.class).name
+              @environment.load_processors(processor)
+              
               @environment.logger.info { "Preprocessing #{self.filename} with #{processor.name}" }
               processor.call(@environment, data)
             end
@@ -157,6 +181,9 @@ class Condenser
           if data[:content_type].last != @content_types.last && @environment.transformers.has_key?(data[:content_type].last)
             from_mime_type = data[:content_type].pop
             @environment.transformers[from_mime_type].each do |to_mime_type, processor|
+              data[:processors] << (processor.is_a?(Class) ? processor : processor.class).name
+              @environment.load_processors(processor)
+              
               @environment.logger.info { "Transforming #{self.filename} from #{from_mime_type} to #{to_mime_type} with #{processor.name}" }
               processor.call(@environment, data)
               data[:content_type] << to_mime_type
@@ -182,6 +209,8 @@ class Condenser
           @dependencies = data[:dependencies]
           @default_export = data[:default_export]
           @exports = data[:exports]
+          @processors = data[:processors]
+          @processors_loaded = true
           @processed = true
           
           data
@@ -198,6 +227,9 @@ class Condenser
       @dependencies = result[:dependencies]
       @default_export = result[:default_export]
       @exports = result[:exports]
+      @processors = result[:processors]
+      load_processors
+
       @processed = true
     end
     
