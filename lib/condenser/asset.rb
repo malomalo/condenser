@@ -150,8 +150,9 @@ class Condenser
           while @environment.templates.has_key?(data[:content_type].last)
             templator = @environment.templates[data[:content_type].pop]
             
-            data[:processors] << (templator.is_a?(Class) ? templator : templator.class).name
-            @environment.load_processors(templator)
+            templator_klass = (templator.is_a?(Class) ? templator : templator.class)
+            data[:processors] << templator_klass.name
+            @environment.load_processors(templator_klass)
             
             templator.call(@environment, data)
             data[:filename] = data[:filename].gsub(/\.#{extensions.last}$/, '')
@@ -170,8 +171,9 @@ class Condenser
           
           if @environment.preprocessors.has_key?(data[:content_type].last)
             @environment.preprocessors[data[:content_type].last].each do |processor|
-              data[:processors] << (processor.is_a?(Class) ? processor : processor.class).name
-              @environment.load_processors(processor)
+              processor_klass = (processor.is_a?(Class) ? processor : processor.class)
+              data[:processors] << processor_klass.name
+              @environment.load_processors(processor_klass)
               
               @environment.logger.info { "Preprocessing #{self.filename} with #{processor.name}" }
               processor.call(@environment, data)
@@ -181,8 +183,9 @@ class Condenser
           if data[:content_type].last != @content_types.last && @environment.transformers.has_key?(data[:content_type].last)
             from_mime_type = data[:content_type].pop
             @environment.transformers[from_mime_type].each do |to_mime_type, processor|
-              data[:processors] << (processor.is_a?(Class) ? processor : processor.class).name
-              @environment.load_processors(processor)
+              processor_klass = (processor.is_a?(Class) ? processor : processor.class)
+              data[:processors] << processor_klass.name
+              @environment.load_processors(processor_klass)
               
               @environment.logger.info { "Transforming #{self.filename} from #{from_mime_type} to #{to_mime_type} with #{processor.name}" }
               processor.call(@environment, data)
