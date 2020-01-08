@@ -20,8 +20,8 @@ class UglifyMinifierTest < ActiveSupport::TestCase
       }
     JS
     
-    @env.logger.expects(:warn).with('Dropping unused variable a [test.js:2,6]')
-    @env.logger.expects(:warn).with('Dropping unused variable c [test.js:4,6]')
+    @env.logger.expects(:warn).with('WARN: Dropping unused variable a [test.js:2,6]')
+    @env.logger.expects(:warn).with('WARN: Dropping unused variable c [test.js:4,6]')
     
     assert_exported_file 'test.js', 'application/javascript', <<~CSS
       function fa(){return console.log(1),5}

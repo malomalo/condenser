@@ -103,7 +103,6 @@ class CondenserBabelTest < ActiveSupport::TestCase
 
       	var commonjsGlobal = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
 
-      	var O = 'object';
       	var check = function (it) {
       	  return it && it.Math == Math && it;
       	};
@@ -111,10 +110,10 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	// https://github.com/zloirock/core-js/issues/86#issuecomment-115759028
       	var global_1 =
       	  // eslint-disable-next-line no-undef
-      	  check(typeof globalThis == O && globalThis) ||
-      	  check(typeof window == O && window) ||
-      	  check(typeof self == O && self) ||
-      	  check(typeof commonjsGlobal == O && commonjsGlobal) ||
+      	  check(typeof globalThis == 'object' && globalThis) ||
+      	  check(typeof window == 'object' && window) ||
+      	  check(typeof self == 'object' && self) ||
+      	  check(typeof commonjsGlobal == 'object' && commonjsGlobal) ||
       	  // eslint-disable-next-line no-new-func
       	  Function('return this')();
 
@@ -128,7 +127,7 @@ class CondenserBabelTest < ActiveSupport::TestCase
 
       	// Thank's IE8 for his funny defineProperty
       	var descriptors = !fails(function () {
-      	  return Object.defineProperty({}, 'a', { get: function () { return 7; } }).a != 7;
+      	  return Object.defineProperty({}, 1, { get: function () { return 7; } })[1] != 7;
       	});
 
       	var nativePropertyIsEnumerable = {}.propertyIsEnumerable;
@@ -273,7 +272,7 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	};
 
       	// optional / simple context binding
-      	var bindContext = function (fn, that, length) {
+      	var functionBindContext = function (fn, that, length) {
       	  aFunction(fn);
       	  if (that === undefined) return fn;
       	  switch (length) {
@@ -321,7 +320,7 @@ class CondenserBabelTest < ActiveSupport::TestCase
       		f: f$2
       	};
 
-      	var hide = descriptors ? function (object, key, value) {
+      	var createNonEnumerableProperty = descriptors ? function (object, key, value) {
       	  return objectDefineProperty.f(object, key, createPropertyDescriptor(1, value));
       	} : function (object, key, value) {
       	  object[key] = value;
@@ -395,28 +394,32 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	    if (USE_NATIVE && typeof targetProperty === typeof sourceProperty) continue;
 
       	    // bind timers to global for call from export context
-      	    if (options.bind && USE_NATIVE) resultProperty = bindContext(sourceProperty, global_1);
+      	    if (options.bind && USE_NATIVE) resultProperty = functionBindContext(sourceProperty, global_1);
       	    // wrap global constructors for prevent changs in this version
       	    else if (options.wrap && USE_NATIVE) resultProperty = wrapConstructor(sourceProperty);
       	    // make static versions for prototype methods
-      	    else if (PROTO && typeof sourceProperty == 'function') resultProperty = bindContext(Function.call, sourceProperty);
+      	    else if (PROTO && typeof sourceProperty == 'function') resultProperty = functionBindContext(Function.call, sourceProperty);
       	    // default case
       	    else resultProperty = sourceProperty;
 
       	    // add a flag to not completely full polyfills
       	    if (options.sham || (sourceProperty && sourceProperty.sham) || (targetProperty && targetProperty.sham)) {
-      	      hide(resultProperty, 'sham', true);
+      	      createNonEnumerableProperty(resultProperty, 'sham', true);
       	    }
 
       	    target[key] = resultProperty;
 
       	    if (PROTO) {
       	      VIRTUAL_PROTOTYPE = TARGET + 'Prototype';
-      	      if (!has(path, VIRTUAL_PROTOTYPE)) hide(path, VIRTUAL_PROTOTYPE, {});
+      	      if (!has(path, VIRTUAL_PROTOTYPE)) {
+      	        createNonEnumerableProperty(path, VIRTUAL_PROTOTYPE, {});
+      	      }
       	      // export virtual prototype methods
       	      path[VIRTUAL_PROTOTYPE][key] = sourceProperty;
       	      // export real prototype methods
-      	      if (options.real && targetPrototype && !targetPrototype[key]) hide(targetPrototype, key, sourceProperty);
+      	      if (options.real && targetPrototype && !targetPrototype[key]) {
+      	        createNonEnumerableProperty(targetPrototype, key, sourceProperty);
+      	      }
       	    }
       	  }
       	};
@@ -443,7 +446,7 @@ class CondenserBabelTest < ActiveSupport::TestCase
 
       	// Helper for a popular repeating case of the spec:
       	// Let integer be ? ToInteger(index).
-      	// If integer < 0, let result be max((length + integer), 0); else let result be min(length, length).
+      	// If integer < 0, let result be max((length + integer), 0); else let result be min(integer, length).
       	var toAbsoluteIndex = function (index, length) {
       	  var integer = toInteger(index);
       	  return integer < 0 ? max(integer + length, 0) : min$1(integer, length);
@@ -526,11 +529,22 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	};
 
       	var nativeAssign = Object.assign;
+      	var defineProperty = Object.defineProperty;
 
       	// `Object.assign` method
       	// https://tc39.github.io/ecma262/#sec-object.assign
-      	// should work with symbols and should have deterministic property order (V8 bug)
       	var objectAssign = !nativeAssign || fails(function () {
+      	  // should have correct order of operations (Edge bug)
+      	  if (descriptors && nativeAssign({ b: 1 }, nativeAssign(defineProperty({}, 'a', {
+      	    enumerable: true,
+      	    get: function () {
+      	      defineProperty(this, 'b', {
+      	        value: 3,
+      	        enumerable: false
+      	      });
+      	    }
+      	  }), { b: 2 })).b !== 1) return true;
+      	  // should work with symbols and should have deterministic property order (V8 bug)
       	  var A = {};
       	  var B = {};
       	  // eslint-disable-next-line no-undef
