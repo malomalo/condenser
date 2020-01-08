@@ -17,11 +17,11 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
       ast: false,
       compact: false,
       plugins: [
-        ['babel-plugin-transform-class-extended-hook', {}],
-        ["@babel/plugin-proposal-class-properties", {}],
-        ['@babel/plugin-transform-runtime', { corejs: 3 }],
+        ["#{File.expand_path('../node_modules', __FILE__)}/babel-plugin-transform-class-extended-hook", {}],
+        ["#{File.expand_path('../node_modules', __FILE__)}/@babel/plugin-proposal-class-properties", {}],
+        ["#{File.expand_path('../node_modules', __FILE__)}/@babel/plugin-transform-runtime", { corejs: 3 }],
       ],
-      presets: [["@babel/preset-env", {
+      presets: [["#{File.expand_path('../node_modules', __FILE__)}/@babel/preset-env", {
         "modules": false,
         "targets": { "browsers": "> 1% and not dead" }
       } ]],
@@ -42,9 +42,7 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
     }.merge(@options)
     
     result = exec_runtime(<<-JS)
-      module.paths.push("#{File.expand_path('../node_modules', __FILE__)}")
-    
-      const babel = require('@babel/core');
+      const babel = require("#{File.expand_path('../node_modules', __FILE__)}/@babel/core");
       const source = #{JSON.generate(input[:source])};
       const options = #{JSON.generate(opts).gsub(/"@?babel[\/-][^"]+"/) { |m| "require(#{m})"}};
       

@@ -1,12 +1,10 @@
 require File.expand_path('../../processors/node_processor', __FILE__)
 
+# From npm install uglify-js
 class Condenser::UglifyMinifier < Condenser::NodeProcessor
 
   class Error < StandardError
   end
-  
-  # From npm install uglify-js
-  UGLIFY_SOURCE = File.expand_path('../node_modules', __FILE__)
   
   def self.call(environment, input)
     new.call(environment, input)
@@ -30,8 +28,7 @@ class Condenser::UglifyMinifier < Condenser::NodeProcessor
     }.merge(@options)
     
     result = exec_runtime(<<-JS)
-      module.paths.push("#{UGLIFY_SOURCE}")
-      const UglifyJS = require("uglify-js");
+      const UglifyJS = require("#{File.expand_path('../node_modules', __FILE__)}/uglify-js");
       const source = #{JSON.generate(input[:filename] => input[:source])}
       const options = #{JSON.generate(opts)};
 

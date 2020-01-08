@@ -71,9 +71,9 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
           buffer = emitMessages(buffer);
         });
         
-        const rollup = require("rollup");
-        const commonjs = require('rollup-plugin-commonjs');
-        const nodeResolve = require('rollup-plugin-node-resolve');
+        const rollup = require("#{File.expand_path('../node_modules', __FILE__)}/rollup");
+        const commonjs = require('#{File.expand_path('../node_modules', __FILE__)}/rollup-plugin-commonjs');
+        const nodeResolve = require('#{File.expand_path('../node_modules', __FILE__)}/rollup-plugin-node-resolve');
         var rid = 0;
         var renderStack = {};
         var nodeResolver = null;
