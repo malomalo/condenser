@@ -105,9 +105,7 @@ class Condenser::Cache
     private
 
     def safe_open(path, &block)
-      if File.exist?(path)
-        File.open(path, 'rb', &block)
-      end
+      File.open(path, 'rb', &block) if File.exist?(path)
     rescue Errno::ENOENT
     end
     

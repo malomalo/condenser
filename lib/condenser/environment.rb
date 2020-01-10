@@ -9,7 +9,7 @@ class Condenser
   module Environment
     
     attr_reader :path, :npm_path
-    attr_accessor :cache, :build_cache
+    attr_accessor :cache
     
     def initialize(*args)
       @loaded_processors = Set.new

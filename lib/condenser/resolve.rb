@@ -6,81 +6,92 @@ class Condenser
       super
     end
     
-    def resolve(filename, base=nil, accept: nil, ignore: [])
+    def build_cache
+      return @build_cache if instance_variable_defined?(:@build_cache)
+      @build_cache = BuildCache.new(path)
+    end
+    
+    def resolve(filename, base=nil, accept: nil)
       filename = filename.delete_prefix("/") if path.none? { |p| filename.start_with?(p) }
+      dirname, basename, extensions, mime_types = decompose_path(filename, base)
+      accept ||= mime_types.empty? ? ['*/*'] : mime_types
+      accept = Array(accept)
       
-      build do
-        dirname, basename, extensions, mime_types = decompose_path(filename, base)
+      cache_key = [dirname, basename].flatten.join('/')
+      cache_key << "@#{accept.join(',')}" if accept
+      
+      build_cache.fetch(cache_key) do
+        build do
+          results = []
 
-        results = []
-      
-        accept ||= mime_types.empty? ? ['*/*'] : mime_types
-        accept = Array(accept)
-      
-        paths = if dirname&.start_with?('/')
-          if pat = path.find { |pa| dirname.start_with?(pa) }
-            dirname.delete_prefix!(pat)
-            dirname.delete_prefix!('/')
-            [pat]
+          paths = if dirname&.start_with?('/')
+            if pat = path.find { |pa| dirname.start_with?(pa) }
+              dirname.delete_prefix!(pat)
+              dirname.delete_prefix!('/')
+              [pat]
+            else
+              []
+            end
           else
-            []
+            path
           end
-        else
-          path
-        end
-
-        paths.each do |path|
-          glob = path
-          glob = File.join(glob, dirname) if dirname
-          glob = File.join(glob, basename)
-          glob << '.*' unless glob.end_with?('*')
+        
+          paths.each do |path|
+            glob = path
+            glob = File.join(glob, dirname) if dirname
+            glob = File.join(glob, basename)
+            glob << '.*' unless glob.end_with?('*')
           
-          Dir.glob(glob).sort.each do |f|
-            next if !File.file?(f) || ignore.include?(f)
+            Dir.glob(glob).sort.each do |f|
+              next if !File.file?(f)
           
-            f_dirname, f_basename, f_extensions, f_mime_types = decompose_path(f)
-            if (basename == '*' || basename == f_basename)
-              if accept == ['*/*'] || mime_type_match_accept?(f_mime_types, accept)
-                asset_dir = f_dirname.delete_prefix(path).delete_prefix('/')
-                asset_basename = f_basename + f_extensions.join('')
-                asset_filename = asset_dir.empty? ? asset_basename : File.join(asset_dir, asset_basename)
-                @build_cache[asset_filename] ||= Asset.new(self, {
-                  filename: asset_filename,
-                  content_types: f_mime_types,
-                  source_file: f,
-                  source_path: path
-                })
-                results << @build_cache[asset_filename]
-              else
-                reverse_mapping[f_mime_types]&.each do |derivative_mime_types|
-                  if accept == ['*/*'] || mime_type_match_accept?(derivative_mime_types, accept)
-                    asset_dir = f_dirname.delete_prefix(path).delete_prefix('/')
-                    asset_basename = f_basename + derivative_mime_types.map { |t| @mime_types[t][:extensions].first }.join('')
-                    asset_filename = asset_dir.empty? ? asset_basename : File.join(asset_dir, asset_basename)
-                    @build_cache[asset_filename] ||= Asset.new(self, {
+              f_dirname, f_basename, f_extensions, f_mime_types = decompose_path(f)
+              if (basename == '*' || basename == f_basename)
+                if accept == ['*/*'] || mime_type_match_accept?(f_mime_types, accept)
+                  asset_dir = f_dirname.delete_prefix(path).delete_prefix('/')
+                  asset_basename = f_basename + f_extensions.join('')
+                  asset_filename = asset_dir.empty? ? asset_basename : File.join(asset_dir, asset_basename)
+                  results << build_cache.map(asset_filename + f_mime_types.join('')) do
+                    Asset.new(self, {
                       filename: asset_filename,
-                      content_types: derivative_mime_types,
+                      content_types: f_mime_types,
                       source_file: f,
                       source_path: path
                     })
-                    results << @build_cache[asset_filename]
+                  end
+                else
+                  reverse_mapping[f_mime_types]&.each do |derivative_mime_types|
+                    if accept == ['*/*'] || mime_type_match_accept?(derivative_mime_types, accept)
+                      asset_dir = f_dirname.delete_prefix(path).delete_prefix('/')
+                      asset_basename = f_basename + derivative_mime_types.map { |t| @mime_types[t][:extensions].first }.join('')
+                      asset_filename = asset_dir.empty? ? asset_basename : File.join(asset_dir, asset_basename)
+                      results << build_cache.map(asset_filename + derivative_mime_types.join('')) do
+                        Asset.new(self, {
+                          filename: asset_filename,
+                          content_types: derivative_mime_types,
+                          source_file: f,
+                          source_path: path
+                        })
+                      end
+                    end
                   end
                 end
-              end
 
+              end
             end
           end
-        end
         
-        results = results.group_by do |a|
-          accept.find_index { |m| match_mime_types?(a.content_types, m) }
-        end
+          results = results.group_by do |a|
+            accept.find_index { |m| match_mime_types?(a.content_types, m) }
+          end
         
-        results = results.keys.sort.reduce([]) do |c, key|
-          c += results[key].sort_by(&:filename)
-        end
+          results = results.keys.sort.reduce([]) do |c, key|
+            c += results[key].sort_by(&:filename)
+          end
 
-        results.sort_by(&:filename)
+          results.sort_by!(&:filename)
+          results
+        end
       end
     end
 
@@ -95,9 +106,9 @@ class Condenser
       end
     end
 
-    def find(filename, base=nil, **kargs)
+    def find(filename, base=nil, accept: nil)
       build do
-        resolve(filename, base, **kargs).first
+        resolve(filename, base, accept: accept).first
       end
     end
     
@@ -123,13 +134,22 @@ class Condenser
     def build
       @build_cc += 1
       if @build_cc == 1
-        @build_cache = {}
+        # if @file_watcher_active
+          # sleep 0.25 #if !@build_cache_polling # Let the Listen gem flush
+          build_cache.semaphore.lock
+        # else
+        #   @build_cache = {}
+        # end
       end
       yield
     ensure
       @build_cc -= 1
       if @build_cc == 0
-        @build_cache = nil
+        # if @file_watcher_active
+          build_cache.semaphore.unlock
+        # else
+        #   @build_cache = nil
+        # end
       end
     end
     

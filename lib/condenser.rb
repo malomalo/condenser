@@ -11,7 +11,6 @@ require 'condenser/encoding_utils'
 require 'condenser/asset'
 require 'condenser/manifest'
 
-
 class Condenser
   
   prepend Environment, Pipeline, Resolve
@@ -26,7 +25,8 @@ class Condenser
   autoload :EjsTransformer,   'condenser/transformers/ejs'
   autoload :FileWriter,       'condenser/writers/file_writer'
   autoload :ZlibWriter,       'condenser/writers/zlib_writer'
-
+  autoload :BuildCache,       'condenser/build_cache'
+  
   def self.configure(&block)
     instance_eval(&block)
   end

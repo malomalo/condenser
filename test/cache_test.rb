@@ -116,4 +116,76 @@ class CacheTest < ActiveSupport::TestCase
     JS
 
   end
+
+  test 'a dependency is supurceeded by a new file' do
+    Dir.mkdir(File.join(@path, 'a'))
+    Dir.mkdir(File.join(@path, 'b'))
+    @env.clear_path
+    @env.append_path File.join(@path, 'a')
+    @env.append_path File.join(@path, 'b')
+    
+    file 'b/dep.js', <<-JS
+      console.log( 5 );
+    JS
+
+    file 'a/a.js', <<-JS
+      import 'dep';
+    JS
+
+    assert_exported_file 'a.js', 'application/javascript', <<~JS
+      !function(){"use strict";console.log(5)}();
+    JS
+
+    file 'a/dep.js', <<-JS
+      console.log( 10 );
+    JS
+
+    assert_exported_file 'a.js', 'application/javascript', <<~JS
+      !function(){"use strict";console.log(10)}();
+    JS
+  end
+
+  test 'a globed dependency is supurceeded by a new file' do
+    Dir.mkdir(File.join(@path, 'a'))
+    Dir.mkdir(File.join(@path, 'b'))
+    @env.clear_path
+    @env.append_path File.join(@path, 'a')
+    @env.append_path File.join(@path, 'b')
+    
+    file 'b/deps/dep.js', <<-JS
+      console.log( 5 );
+    JS
+
+    file 'a/a.js', <<-JS
+      import 'deps/*';
+    JS
+
+    assert_exported_file 'a.js', 'application/javascript', <<~JS
+      !function(){"use strict";console.log(5)}();
+    JS
+
+    file 'a/deps/dep.js', <<-JS
+      console.log( 10 );
+    JS
+
+    assert_exported_file 'a.js', 'application/javascript', <<~JS
+      !function(){"use strict";console.log(10)}();
+    JS
+  end
+  
+  test 'a new dependency for a glob call is reflected in the next call' do
+    file "dir/a.scss", "body { color: blue; }"
+    file 'test.scss', '@import "dir/*"'
+
+    assert_exported_file 'test.css', 'text/css', <<~CSS
+      body{color:blue}
+    CSS
+
+    file "dir/b.scss", "body { color: green; }"
+
+    assert_exported_file 'test.css', 'text/css', <<~CSS
+      body{color:blue}body{color:green}
+    CSS
+  end
+
 end

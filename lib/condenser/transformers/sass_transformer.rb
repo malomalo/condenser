@@ -292,7 +292,7 @@ class Condenser
         #
         # Returns a Set.
         def condenser_dependencies
-          options[:condenser][:dependencies]
+          options[:condenser][:process_dependencies]
         end
 
     end

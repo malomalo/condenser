@@ -6,7 +6,7 @@ class Condenser::SassTransformer
       env = options[:condenser][:environment]
       accept = extensions.keys.map { |x| options[:condenser][:environment].extensions[x] }
 
-      options[:asset][:dependencies] << [name, accept.map{ |i| [i] }]
+      options[:asset][:process_dependencies] << [name, accept.map{ |i| [i] }]
 
       imports = []
       env.resolve(name, accept: accept).sort_by(&:filename).each do |asset|

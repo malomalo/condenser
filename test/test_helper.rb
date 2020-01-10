@@ -30,7 +30,7 @@ Minitest::Reporters.use! Minitest::Reporters::SpecReporter.new
 class ActiveSupport::TestCase
 
   def setup
-    @path = Dir.mktmpdir
+    @path = File.realpath(Dir.mktmpdir)
     @env = Condenser.new(@path, logger: Logger.new('/dev/null'))
     @env.context_class.class_eval do
       def asset_path(path, options = {})

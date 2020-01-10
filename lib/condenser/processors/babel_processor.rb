@@ -94,7 +94,7 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
     else
       input[:source] = result['code']
       input[:map] = result['map']
-      input[:dependencies] = result['imports'].map do |i|
+      input[:export_dependencies] = result['imports'].map do |i|
         i.end_with?('.js') ? i : "#{i}.js"
       end
       input[:default_export] = result['defaultExport']

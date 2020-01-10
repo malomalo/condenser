@@ -196,7 +196,6 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
         end
         
         messages.each do |message|
-          # puts message
           message = JSON.parse(message)
           
           ret = case message['method']

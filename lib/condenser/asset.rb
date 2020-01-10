@@ -13,7 +13,7 @@ class Condenser
     attr_reader :linked_assets, :content_types_digest
     attr_writer :source, :sourcemap
 
-    attr_accessor :imports
+    attr_accessor :imports, :processed, :export
     
     def initialize(env, attributes={})
       @environment    = env
@@ -25,14 +25,17 @@ class Condenser
       @source_file    = attributes[:source_file]
       @source_path    = attributes[:source_path]
       
-      @linked_assets  = Set.new
-      @dependencies   = Set.new
-      @default_export = nil
-      @exports        = nil
-      @processed      = false
-      
-      @processors_loaded = false
-      @processors        = Set.new
+      @linked_assets        = Set.new
+      @process_dependencies = Set.new
+      @export_dependencies  = Set.new
+      @default_export       = nil
+      @exports              = nil
+      @processed            = false
+      @pcv                  = nil
+      @export               = nil
+      @ecv                  = nil
+      @processors_loaded    = false
+      @processors           = Set.new
     end
     
     def path
@@ -52,17 +55,37 @@ class Condenser
       @stat ||= File.stat(@source_file)
     end
     
+    def restat!
+      @stat = File.stat(@source_file)
+    end
+    
     def inspect
       dirname, basename, extensions, mime_types = @environment.decompose_path(@filename)
       <<-TEXT
-        #<#{self.class.name} @filename=#{@filename} @content_types=#{@content_types.inspect} @source_file=#{@source_file} @source_mime_types=#{mime_types.inspect}>
+        #<#{self.class.name}##{self.object_id} @filename=#{@filename} @content_types=#{@content_types.inspect} @source_file=#{@source_file} @source_mime_types=#{mime_types.inspect}>
       TEXT
     end
     
-    def dependencies
-      deps = @environment.cache.fetch("dependencies/#{cache_key(false)}") do
+    def process_dependencies
+      deps = @environment.cache.fetch "direct-deps/#{cache_key}" do
         process
-        @dependencies
+        @process_dependencies
+      end
+      
+      d = []
+      deps.each do |i|
+        i = [i, nil] if i.is_a?(String)
+        @environment.resolve(i[0], File.dirname(@source_file), accept: i[1]).each do |asset|
+          d << asset
+        end
+      end
+      d
+    end
+    
+    def export_dependencies
+      deps = @environment.cache.fetch "export-deps/#{cache_key}" do
+        process
+        @export_dependencies + @process_dependencies
       end
       
       d = []
@@ -76,60 +99,97 @@ class Condenser
     end
     
     def has_default_export?
-      @environment.cache.fetch("has_default_export/#{cache_key(false)}") do
-        process
-        @default_export
-      end
+      process
+      @default_export
     end
     
     def has_exports?
-      @environment.cache.fetch("has_exports/#{cache_key(false)}") do
-        process
-        @exports
-      end
+      process
+      @exports
     end
 
     def load_processors
       return if @processors_loaded
 
       @processors_loaded = true
-      processors = @environment.cache.fetch("processors/#{cache_key(false)}") do
-        process
-        @processors
-      end
-      processors.map! { |p| p.is_a?(String) ? p.constantize : p }
-      @environment.load_processors(*processors)
+      process
+      @processors.map! { |p| p.is_a?(String) ? p.constantize : p }
+      @environment.load_processors(*@processors)
     end
     
-    def all_dependenies(deps, visited, &block)
+    def all_dependenies(deps, visited, meth, &block)
       deps.each do |dep|
         if !visited.include?(dep.source_file)
           visited << dep.source_file
           block.call(dep)
-          all_dependenies(dep.dependencies, visited, &block)
+          all_dependenies(dep.send(meth), visited, meth, &block)
         end
       end
     end
     
-    def cache_key(include_dependencies=true)
-      key = []
-      key << [Condenser::VERSION, @source_file, @content_types_digest, stat.ino, stat.mtime.to_f, stat.size]
+    def all_process_dependencies
+      f = [@source_file]
+      all_dependenies(process_dependencies, [], :process_dependencies) do |dep|
+        f << dep.source_file
+      end
+      f
+    end
+    
+    def all_export_dependencies
+      f = [@source_file]
+      all_dependenies(export_dependencies, [], :export_dependencies) do |dep|
+        f << dep.source_file
+      end
+      f
+    end
+    
+    def cache_key
+      Digest::SHA1.base64digest(JSON.generate([
+        Condenser::VERSION,
+        @source_file,
+        @content_types_digest
+      ]))
+    end
+    
+    def process_cache_version
+      return @pcv if @pcv
 
-      if include_dependencies
-        all_dependenies(dependencies, []) do |dep|
-          key << [dep.source_file, dep.content_types_digest, dep.stat.ino, dep.stat.mtime.to_f, dep.stat.size]
-        end
+      f = [stat.ino, stat.mtime.to_f, stat.size]
+      all_dependenies(process_dependencies, [], :process_dependencies) do |dep|
+        f << [dep.source_file, dep.stat.ino, dep.stat.mtime.to_f, dep.stat.size]
       end
 
-      Digest::SHA1.base64digest(JSON.generate(key))
+      @pcv = Digest::SHA1.base64digest(JSON.generate(f))
+    end
+    
+    def export_cache_version
+      return @ecv if @ecv
+
+      f = [stat.ino, stat.mtime.to_f, stat.size]
+      all_dependenies(export_dependencies, [], :export_dependencies) do |dep|
+        f << [dep.source_file, dep.stat.ino, dep.stat.mtime.to_f, dep.stat.size]
+      end
+
+      @ecv = Digest::SHA1.base64digest(JSON.generate(f))
+    end
+    
+    def needs_reprocessing!
+      @processed = false
+      @pcv = nil
+      needs_reexporting!
+    end
+    
+    def needs_reexporting!
+      restat!
+      @export = nil
+      @ecv = nil
     end
     
     def process
       return if @processed
       
-      result = @environment.cache.fetch_if(Proc.new { "process/#{cache_key}" }, "dependencies/#{cache_key(false)}") do
-        @environment.build do
-          
+      result = @environment.build do
+        @environment.cache.fetch_if(Proc.new {"process/#{cache_key}/#{process_cache_version}"}, "direct-deps/#{cache_key}") do
           @source = File.binread(@source_file)
           dirname, basename, extensions, mime_types = @environment.decompose_path(@source_file)
           
@@ -142,7 +202,8 @@ class Condenser
 
             map: nil,
             linked_assets: [],
-            dependencies: [],
+            process_dependencies: [],
+            export_dependencies: [],
             
             processors: Set.new
           }
@@ -174,8 +235,7 @@ class Condenser
               processor_klass = (processor.is_a?(Class) ? processor : processor.class)
               data[:processors] << processor_klass.name
               @environment.load_processors(processor_klass)
-              
-              @environment.logger.info { "Preprocessing #{self.filename} with #{processor.name}" }
+
               processor.call(@environment, data)
             end
           end
@@ -209,7 +269,8 @@ class Condenser
           @digest = data[:digest]
           @digest_name = data[:digest_name]
           @linked_assets = data[:linked_assets]
-          @dependencies = data[:dependencies]
+          @process_dependencies = data[:process_dependencies]
+          @export_dependencies = data[:export_dependencies]
           @default_export = data[:default_export]
           @exports = data[:exports]
           @processors = data[:processors]
@@ -227,7 +288,8 @@ class Condenser
       @digest = result[:digest]
       @digest_name = result[:digest_name]
       @linked_assets = result[:linked_assets]
-      @dependencies = result[:dependencies]
+      @process_dependencies = result[:process_dependencies]
+      @export_dependencies  = result[:export_dependencies]
       @default_export = result[:default_export]
       @exports = result[:exports]
       @processors = result[:processors]
@@ -237,8 +299,10 @@ class Condenser
     end
     
     def export
-      @environment.build do
-        result = @environment.cache.fetch("export/#{cache_key}") do
+      return @export if @export
+      
+      @export = @environment.build do
+        data = @environment.cache.fetch_if(Proc.new {"export/#{cache_key}/#{export_cache_version}"}, "export-deps/#{cache_key}") do
           process
           dirname, basename, extensions, mime_types = @environment.decompose_path(@filename)
           data = {
@@ -250,16 +314,23 @@ class Condenser
 
             sourcemap: nil,
             linked_assets: [],
-            dependencies: []
+            process_dependencies: [],
+            export_dependencies: []
           }
-          @environment.exporters[content_type]&.call(@environment, data)
-          @environment.minifier_for(content_type)&.call(@environment, data)
+        
+          if exporter = @environment.exporters[content_type]
+            exporter.call(@environment, data)
+          end
+
+          if minifier = @environment.minifier_for(content_type)
+            minifier.call(@environment, data)
+          end
+        
           data[:digest] = @environment.digestor.digest(data[:source])
           data[:digest_name] = @environment.digestor.name.sub(/^.*::/, '').downcase
           data
         end
-      
-        Export.new(@environment, result)
+        Export.new(@environment, data)
       end
     end
     
