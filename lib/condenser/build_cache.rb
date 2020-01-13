@@ -1,71 +1,78 @@
-require 'listen'
-
 class Condenser
   class BuildCache
     
-    attr_reader :semaphore
+    attr_reader :semaphore, :listening
     
-    def initialize(path)
+    def initialize(path, listen: {})
       @path = path
-      @semaphore = Mutex.new
-      @polling   = Listen::Adapter.select == Listen::Adapter::Polling
       @map_cache = {}
       @lookup_cache = {}
       @process_dependencies = {}
       @export_dependencies = {}
-
-      @listener = Listen.to(*path) do |modified, added, removed|
-        @semaphore.synchronize do
-          added = added.reduce([]) do |rt, added_file|
-            rt << added_file.match(/([^\.]+)(\.|$)/).to_a[1]
-            if path_match = @path.find { |p| added_file.start_with?(p) }
-              a = added_file.delete_prefix(path_match).match(/([^\.]+)(\.|$)/).to_a[1]
-              b = (File.dirname(a) + "/*")
-              
-              rt << a << a.delete_prefix('/')
-              rt << a << b.delete_prefix('/')
-            end
-          end
-          
-          removed.each do |file|
-            @map_cache&.delete_if do |k,v|
-              v.source_file == file
-            end
-            
-            @process_dependencies[file]&.delete_if do |asset|
-              asset.source_file == file
-            end
-            
-            @export_dependencies[file]&.delete_if do |asset|
-              asset.source_file == file
-            end
-          end
-
-          @lookup_cache.delete_if do |key, value|
-            if added.any?{ |a| key.starts_with?(a) }
-              value.each do |asset|
-                modified << asset.source_file
-              end
-              true
-            end
-          end
-          @map_cache&.delete_if do |k,v|
-            added.any?{ |a| k.starts_with?(a) }
-          end
-          
-          modified.each do |file|
-            @process_dependencies[file]&.each do |asset|
-              asset.needs_reprocessing!
-            end
-            
-            @export_dependencies[file]&.each do |asset|
-              asset.needs_reexporting!
-            end
-          end
-          
-        end
+      @listening = if listen
+        require 'listen'
+        Listen::Adapter.select != Listen::Adapter::Polling
+      else
+        false
       end
-      @listener.start
+      
+      if !@listening
+        @polling = false
+      else
+        @semaphore = Mutex.new
+        @listener = Listen.to(*path) do |modified, added, removed|
+          @semaphore.synchronize do
+            added = added.reduce([]) do |rt, added_file|
+              rt << added_file.match(/([^\.]+)(\.|$)/).to_a[1]
+              if path_match = @path.find { |p| added_file.start_with?(p) }
+                a = added_file.delete_prefix(path_match).match(/([^\.]+)(\.|$)/).to_a[1]
+                b = (File.dirname(a) + "/*")
+              
+                rt << a << a.delete_prefix('/')
+                rt << a << b.delete_prefix('/')
+              end
+            end
+          
+            removed.each do |file|
+              @map_cache&.delete_if do |k,v|
+                v.source_file == file
+              end
+            
+              @process_dependencies[file]&.delete_if do |asset|
+                asset.source_file == file
+              end
+            
+              @export_dependencies[file]&.delete_if do |asset|
+                asset.source_file == file
+              end
+            end
+
+            @lookup_cache.delete_if do |key, value|
+              if added.any?{ |a| key.starts_with?(a) }
+                value.each do |asset|
+                  modified << asset.source_file
+                end
+                true
+              end
+            end
+            @map_cache&.delete_if do |k,v|
+              added.any?{ |a| k.starts_with?(a) }
+            end
+          
+            modified.each do |file|
+              @process_dependencies[file]&.each do |asset|
+                asset.needs_reprocessing!
+              end
+            
+              @export_dependencies[file]&.each do |asset|
+                asset.needs_reexporting!
+              end
+            end
+          
+          end
+        end
+        @listener.start
+      end
     end
     
     def map(key)

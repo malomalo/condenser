@@ -7,7 +7,7 @@ GIT
 PATH
   remote: .
   specs:
-    condenser (0.0.10)
+    condenser (0.0.11)
       erubi (~> 1.0)
       listen
       rack (> 1, < 3)

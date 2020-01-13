@@ -262,9 +262,8 @@ class ManifestTest < ActiveSupport::TestCase
     assert_equal digest_path, data['application.js']['path']
 
     File.write(File.join(@path, 'application.js'), "console.log(2);")
+    sleep 0.25 if @env.build_cache.listening
 
-    # mtime = Time.now + 1
-    # File.utime(mtime, mtime, filename)
     new_digest_path = @env['application.js'].path
     assert_not_equal new_digest_path, digest_path
 

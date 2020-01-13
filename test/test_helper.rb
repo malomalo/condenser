@@ -60,6 +60,7 @@ class ActiveSupport::TestCase
   end
   
   def assert_file(path, mime_types, source=nil)
+    sleep 0.25 if @env.build_cache.listening
     asset = @env.find(path)
     assert asset, "Couldn't find asset \"#{path}\""
     asset.process
@@ -69,6 +70,7 @@ class ActiveSupport::TestCase
   end
   
   def assert_exported_file(path, mime_types, source=nil)
+    sleep 0.25 if @env.build_cache.listening
     asset = @env.find(path)
     assert asset, "Couldn't find asset \"#{path}\""
     asset = asset.export

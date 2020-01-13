@@ -1,8 +1,9 @@
 class Condenser
   module Resolve
     
-    def initialize(*args)
+    def initialize(*args, **kws, &block)
       @reverse_mapping = nil
+      @build_cache_options = kws[:listen]
       super
     end
     
@@ -134,22 +135,13 @@ class Condenser
     def build
       @build_cc += 1
       if @build_cc == 1
-        # if @file_watcher_active
-          # sleep 0.25 #if !@build_cache_polling # Let the Listen gem flush
-          build_cache.semaphore.lock
-        # else
-        #   @build_cache = {}
-        # end
+        build_cache.semaphore.lock if build_cache.listening
       end
       yield
     ensure
       @build_cc -= 1
       if @build_cc == 0
-        # if @file_watcher_active
-          build_cache.semaphore.unlock
-        # else
-        #   @build_cache = nil
-        # end
+        build_cache.semaphore.unlock if build_cache.listening
       end
     end
     
