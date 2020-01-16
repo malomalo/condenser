@@ -1,9 +1,10 @@
 class Condenser
   class BuildCache
     
-    attr_reader :semaphore, :listening
+    attr_reader :semaphore, :listening, :logger
     
-    def initialize(path, listen: {})
+    def initialize(path, logger:, listen: {})
+      @logger = logger
       @path = path
       @map_cache = {}
       @lookup_cache = {}
@@ -22,6 +23,14 @@ class Condenser
         @semaphore = Mutex.new
         @listener = Listen.to(*path) do |modified, added, removed|
           @semaphore.synchronize do
+            @logger.debug do
+              (
+                removed.map { |f| "Asset removed: #{f}" } +
+                added.map { |f| "Asset created: #{f}" } +
+                modified.map { |f| "Asset updated: #{f}" }
+              ).join("\n")
+            end
+            
             added = added.reduce([]) do |rt, added_file|
               rt << added_file.match(/([^\.]+)(\.|$)/).to_a[1]
               if path_match = @path.find { |p| added_file.start_with?(p) }

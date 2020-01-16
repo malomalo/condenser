@@ -9,7 +9,7 @@ class Condenser
     
     def build_cache
       return @build_cache if instance_variable_defined?(:@build_cache)
-      @build_cache = BuildCache.new(path)
+      @build_cache = BuildCache.new(path, logger: logger)
     end
     
     def resolve(filename, base=nil, accept: nil)
@@ -133,15 +133,20 @@ class Condenser
     end
     
     def build
-      @build_cc += 1
-      if @build_cc == 1
-        build_cache.semaphore.lock if build_cache.listening
+      if build_cache.listening && !build_cache.semaphore.owned?
+        build_cache.semaphore.lock 
+        logger.debug { "build cache semaphore locked by #{Thread.current.object_id}" }
       end
+      
+      @build_cc += 1
       yield
     ensure
       @build_cc -= 1
       if @build_cc == 0
-        build_cache.semaphore.unlock if build_cache.listening
+        if build_cache.listening && build_cache.semaphore.owned?
+          logger.debug { "build cache semaphore unlocked by #{Thread.current.object_id}" }
+          build_cache.semaphore.unlock
+        end
       end
     end
     
