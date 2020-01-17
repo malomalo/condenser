@@ -31,7 +31,7 @@ class ActiveSupport::TestCase
 
   def setup
     @path = File.realpath(Dir.mktmpdir)
-    @env = Condenser.new(@path, logger: Logger.new('/dev/null'))
+    @env = Condenser.new(@path, logger: Logger.new('/dev/null', level: :debug))
     @env.context_class.class_eval do
       def asset_path(path, options = {})
         "/assets/#{path}"
@@ -57,6 +57,10 @@ class ActiveSupport::TestCase
       sleep(1 - stat) if stat < 1
     end
     File.write(path, source)
+  end
+  
+  def rm(name)
+    File.delete(File.join(@path, name))
   end
   
   def assert_file(path, mime_types, source=nil)

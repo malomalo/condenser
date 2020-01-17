@@ -20,7 +20,6 @@ class Condenser
       
       cache_key = [dirname, basename].flatten.join('/')
       cache_key << "@#{accept.join(',')}" if accept
-      
       build_cache.fetch(cache_key) do
         build do
           results = []
@@ -52,7 +51,7 @@ class Condenser
                   asset_dir = f_dirname.delete_prefix(path).delete_prefix('/')
                   asset_basename = f_basename + f_extensions.join('')
                   asset_filename = asset_dir.empty? ? asset_basename : File.join(asset_dir, asset_basename)
-                  results << build_cache.map(asset_filename + f_mime_types.join('')) do
+                  results << build_cache.map("#{asset_filename}@#{f_mime_types.join('')}") do
                     Asset.new(self, {
                       filename: asset_filename,
                       content_types: f_mime_types,
@@ -66,7 +65,7 @@ class Condenser
                       asset_dir = f_dirname.delete_prefix(path).delete_prefix('/')
                       asset_basename = f_basename + derivative_mime_types.map { |t| @mime_types[t][:extensions].first }.join('')
                       asset_filename = asset_dir.empty? ? asset_basename : File.join(asset_dir, asset_basename)
-                      results << build_cache.map(asset_filename + derivative_mime_types.join('')) do
+                      results << build_cache.map("#{asset_filename}@#{derivative_mime_types.join('')}") do
                         Asset.new(self, {
                           filename: asset_filename,
                           content_types: derivative_mime_types,

@@ -56,7 +56,7 @@ class Condenser
     end
     
     def restat!
-      @stat = File.stat(@source_file)
+      @stat = nil
     end
     
     def inspect

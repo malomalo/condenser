@@ -23,6 +23,7 @@ class Condenser
         @semaphore = Mutex.new
         @listener = Listen.to(*path) do |modified, added, removed|
           @semaphore.synchronize do
+            @logger.debug { "build cache semaphore locked by #{Thread.current.object_id}" }
             @logger.debug do
               (
                 removed.map { |f| "Asset removed: #{f}" } +
@@ -30,44 +31,56 @@ class Condenser
                 modified.map { |f| "Asset updated: #{f}" }
               ).join("\n")
             end
-            
-            added = added.reduce([]) do |rt, added_file|
-              rt << added_file.match(/([^\.]+)(\.|$)/).to_a[1]
-              if path_match = @path.find { |p| added_file.start_with?(p) }
-                a = added_file.delete_prefix(path_match).match(/([^\.]+)(\.|$)/).to_a[1]
+
+            globs = []
+            (added + removed).each do |file|
+              globs << file.match(/([^\.]+)(\.|$)/).to_a[1]
+              if path_match = @path.find { |p| file.start_with?(p) }
+                a = file.delete_prefix(path_match).match(/([^\.]+)(\.|$)/).to_a[1]
                 b = (File.dirname(a) + "/*")
               
-                rt << a << a.delete_prefix('/')
-                rt << a << b.delete_prefix('/')
+                globs << a << a.delete_prefix('/')
+                globs << a << b.delete_prefix('/')
               end
             end
-          
-            removed.each do |file|
-              @map_cache&.delete_if do |k,v|
-                v.source_file == file
-              end
             
-              @process_dependencies[file]&.delete_if do |asset|
-                asset.source_file == file
-              end
-            
-              @export_dependencies[file]&.delete_if do |asset|
-                asset.source_file == file
+            @map_cache&.delete_if do |k,v|
+              if globs.any?{ |a| k.starts_with?(a) }
+                true
+              else
+                false
               end
             end
 
             @lookup_cache.delete_if do |key, value|
-              if added.any?{ |a| key.starts_with?(a) }
+              if globs.any?{ |a| key.starts_with?(a) }
                 value.each do |asset|
                   modified << asset.source_file
                 end
                 true
               end
             end
-            @map_cache&.delete_if do |k,v|
-              added.any?{ |a| k.starts_with?(a) }
+            
+            removed.each do |file|
+              @process_dependencies[file]&.delete_if do |asset|
+                if asset.source_file == file
+                  true
+                else
+                  asset.needs_reprocessing!
+                  false
+                end
+              end
+            
+              @export_dependencies[file]&.delete_if do |asset|
+                if asset.source_file == file
+                  true
+                else
+                  asset.needs_reexporting!
+                  false
+                end
+              end
             end
-          
+            
             modified.each do |file|
               @process_dependencies[file]&.each do |asset|
                 asset.needs_reprocessing!
@@ -77,7 +90,8 @@ class Condenser
                 asset.needs_reexporting!
               end
             end
-          
+
+            @logger.debug { "build cache semaphore unlocked by #{Thread.current.object_id}" }
           end
         end
         @listener.start

@@ -188,4 +188,20 @@ class CacheTest < ActiveSupport::TestCase
     CSS
   end
 
+  test 'a dependency is removed for a glob call when one of it dependencies is delted' do
+    file "css/a.scss", "body { color: blue; }"
+    file "css/b.scss", "body { color: green; }"
+    file 'test.scss', '@import "css/*"'
+
+    assert_exported_file 'test.css', 'text/css', <<~CSS
+      body{color:blue}body{color:green}
+    CSS
+
+    rm "css/b.scss"
+
+    assert_exported_file 'test.css', 'text/css', <<~CSS
+      body{color:blue}
+    CSS
+  end
+
 end
