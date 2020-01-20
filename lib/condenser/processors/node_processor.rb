@@ -38,6 +38,15 @@ class Condenser
       end
     end
     
+    def exec_syntax_error(output, source_file)
+      error = Condenser::SyntaxError.new(output)
+      lines = output.split("\n")
+      lineno = lines[0][/\((\d+):\d+\)$/, 1] if lines[0]
+      lineno ||= 1
+      error.set_backtrace(["#{source_file}:#{lineno}"] + caller)
+      error
+    end
+    
     def exec_runtime_error(output)
       error = RuntimeError.new(output)
       lines = output.split("\n")

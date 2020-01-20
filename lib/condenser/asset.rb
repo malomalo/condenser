@@ -71,7 +71,7 @@ class Condenser
         process
         @process_dependencies
       end
-      
+    
       d = []
       deps.each do |i|
         i = [i, nil] if i.is_a?(String)
@@ -147,6 +147,9 @@ class Condenser
       Digest::SHA1.base64digest(JSON.generate([
         Condenser::VERSION,
         @source_file,
+        stat.ino,
+        stat.mtime.to_f,
+        stat.size,
         @content_types_digest
       ]))
     end
@@ -154,7 +157,7 @@ class Condenser
     def process_cache_version
       return @pcv if @pcv
 
-      f = [stat.ino, stat.mtime.to_f, stat.size]
+      f = []
       all_dependenies(process_dependencies, [], :process_dependencies) do |dep|
         f << [dep.source_file, dep.stat.ino, dep.stat.mtime.to_f, dep.stat.size]
       end
@@ -165,7 +168,7 @@ class Condenser
     def export_cache_version
       return @ecv if @ecv
 
-      f = [stat.ino, stat.mtime.to_f, stat.size]
+      f = []
       all_dependenies(export_dependencies, [], :export_dependencies) do |dep|
         f << [dep.source_file, dep.stat.ino, dep.stat.mtime.to_f, dep.stat.size]
       end

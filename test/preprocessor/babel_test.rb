@@ -24,6 +24,27 @@ class CondenserBabelTest < ActiveSupport::TestCase
     JS
   end
 
+  test "error" do
+    file 'error.js', <<~JS
+      console.log('this file has an error');
+      
+      var error = {;
+    JS
+
+    e = assert_raises Condenser::SyntaxError do
+      assert_file 'error.js', 'application/javascript'
+    end
+    assert_equal <<~ERROR.rstrip, e.message.rstrip
+      /assets/error.js: Unexpected token (3:13)
+
+        1 | console.log('this file has an error');
+        2 | 
+      > 3 | var error = {;
+          |              ^
+        4 | 
+    ERROR
+  end
+  
   test 'not duplicating babel-helpers' do
     file 'a.js', <<-JS
       export default class {

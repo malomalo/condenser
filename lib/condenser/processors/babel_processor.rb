@@ -3,9 +3,6 @@ require File.expand_path('../node_processor', __FILE__)
 
 class Condenser::BabelProcessor < Condenser::NodeProcessor
   
-  class Error < StandardError
-  end
-  
   # npm install @babel/core @babel/runtime-corejs3 @babel/plugin-transform-runtime @babel/preset-env rollup rollup-plugin-commonjs  rollup-plugin-node-resolve  @babel/plugin-proposal-class-properties babel-plugin-transform-class-extended-hook
   
   def self.call(environment, input)
@@ -90,7 +87,11 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
     JS
     
     if result['error']
-      raise exec_runtime_error(result['error'][0] + ': ' + result['error'][1])
+      if result['error'][0] == 'SyntaxError'
+        raise exec_syntax_error(result['error'][1], "/assets/#{input[:filename]}")
+      else
+        raise exec_runtime_error(result['error'][0] + ': ' + result['error'][1])
+      end
     else
       input[:source] = result['code']
       input[:map] = result['map']
