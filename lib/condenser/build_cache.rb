@@ -37,29 +37,47 @@ class Condenser
               globs << file.match(/([^\.]+)(\.|$)/).to_a[1]
               if path_match = @path.find { |p| file.start_with?(p) }
                 a = file.delete_prefix(path_match).match(/([^\.]+)(\.|$)/).to_a[1]
-                b = (File.dirname(a) + "/*")
+                b = File.join(File.dirname(a), "*")
               
                 globs << a << a.delete_prefix('/')
-                globs << a << b.delete_prefix('/')
+                globs << b << b.delete_prefix('/')
               end
             end
-            
+
+            others = []
             @map_cache&.delete_if do |k,v|
               if globs.any?{ |a| k.starts_with?(a) }
+                @export_dependencies[v.source_file]&.each do |a| 
+                  others << "/#{a.filename}".delete_suffix(File.extname(a.filename))
+                end
                 true
               else
                 false
               end
             end
-
+            @map_cache&.delete_if do |k,v|
+              others.any?{ |a| k.starts_with?(a) || k.starts_with?("/" + a) }
+            end
+            
+            others = []
             @lookup_cache.delete_if do |key, value|
               if globs.any?{ |a| key.starts_with?(a) }
+                value.each do |v|
+                  @export_dependencies[v.source_file]&.each do |a| 
+                    others << "/#{a.filename}".delete_suffix(File.extname(a.filename))
+                  end
+                end
                 value.each do |asset|
                   modified << asset.source_file
                 end
                 true
               end
             end
+            @lookup_cache&.delete_if do |k,v|
+              others.any?{ |a| k.starts_with?(a) || k.starts_with?("/" + a) }
+            end
+            
+
             
             removed.each do |file|
               @process_dependencies[file]&.delete_if do |asset|

@@ -171,6 +171,14 @@ class CacheTest < ActiveSupport::TestCase
     assert_exported_file 'a.js', 'application/javascript', <<~JS
       !function(){"use strict";console.log(10)}();
     JS
+
+    file 'a/deps/dep.js', <<-JS
+      console.log( 20 );
+    JS
+
+    assert_exported_file 'a.js', 'application/javascript', <<~JS
+      !function(){"use strict";console.log(20)}();
+    JS
   end
   
   test 'a new dependency for a glob call is reflected in the next call' do

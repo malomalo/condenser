@@ -19,6 +19,7 @@ class Condenser
       accept = Array(accept)
       
       cache_key = [dirname, basename].flatten.join('/')
+      cache_key = "/#{cache_key}" if !cache_key.starts_with?('/')
       cache_key << "@#{accept.join(',')}" if accept
       build_cache.fetch(cache_key) do
         build do
@@ -86,7 +87,7 @@ class Condenser
           end
         
           results = results.keys.sort.reduce([]) do |c, key|
-            c += results[key].sort_by(&:filename)
+            c += results[key].sort_by(&:filename).uniq { |f| f.filename }
           end
 
           results.sort_by!(&:filename)
