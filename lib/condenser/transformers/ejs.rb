@@ -1,5 +1,3 @@
-require File.expand_path('../../processors/node_processor', __FILE__)
-
 class Condenser::EjsTransformer < Condenser::NodeProcessor
 
   STRICT = true

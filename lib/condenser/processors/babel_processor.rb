@@ -1,5 +1,4 @@
 require 'json'
-require File.expand_path('../node_processor', __FILE__)
 
 class Condenser::BabelProcessor < Condenser::NodeProcessor
   
@@ -16,11 +15,16 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
       plugins: [
         ["#{File.expand_path('../node_modules', __FILE__)}/babel-plugin-transform-class-extended-hook", {}],
         ["#{File.expand_path('../node_modules', __FILE__)}/@babel/plugin-proposal-class-properties", {}],
-        ["#{File.expand_path('../node_modules', __FILE__)}/@babel/plugin-transform-runtime", { corejs: 3 }],
+        ["#{File.expand_path('../node_modules', __FILE__)}/@babel/plugin-transform-runtime", {
+          corejs: 3,
+          useESModules: true
+        }],
       ],
       presets: [["#{File.expand_path('../node_modules', __FILE__)}/@babel/preset-env", {
         "modules": false,
         "targets": { "browsers": "> 1% and not dead" }
+        # "useBuiltIns": 'usage',
+        # corejs: { version: 3, proposals: true }
       } ]],
       sourceMap: true
     }).freeze

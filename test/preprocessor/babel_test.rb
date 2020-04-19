@@ -78,16 +78,14 @@ class CondenserBabelTest < ActiveSupport::TestCase
           }
         }
 
-        var classCallCheck = _classCallCheck;
-
         var _default = function _default(height, width) {
-          classCallCheck(this, _default);
+          _classCallCheck(this, _default);
 
           console.log('A');
         };
 
         var _default$1 = function _default(height, width) {
-          classCallCheck(this, _default);
+          _classCallCheck(this, _default);
 
           console.log('B');
         };

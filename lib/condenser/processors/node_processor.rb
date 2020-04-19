@@ -4,6 +4,10 @@ require 'open3'
 class Condenser
   class NodeProcessor
     
+    def node_modules_path
+      File.expand_path('../node_modules', __FILE__)
+    end
+
     def self.setup(environment)
     end
     

@@ -17,6 +17,7 @@ class Condenser
   
   autoload :BabelProcessor,   'condenser/processors/rollup_processor'
   autoload :RollupProcessor,  'condenser/processors/babel_processor'
+  autoload :NodeProcessor,    'condenser/processors/node_processor'
   autoload :UglifyMinifier,   'condenser/minifiers/uglify_minifier'
   autoload :Erubi,            'condenser/templating_engine/erb'
   autoload :SassMinifier,     'condenser/minifiers/sass_minifier'

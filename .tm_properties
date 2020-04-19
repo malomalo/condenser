@@ -1,1 +1,1 @@
-exclude = '{$exclude,tmp,coverage,.tm_properties,lib/condenser/minifiers/node_modules}'
+exclude = '{$exclude,log,bin,tmp,.tm_properties,node_modules}'

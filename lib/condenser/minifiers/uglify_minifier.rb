@@ -1,5 +1,3 @@
-require File.expand_path('../../processors/node_processor', __FILE__)
-
 # From npm install uglify-js
 class Condenser::UglifyMinifier < Condenser::NodeProcessor
 

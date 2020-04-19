@@ -1,6 +1,5 @@
 require 'json'
 require 'tmpdir'
-require File.expand_path('../node_processor', __FILE__)
 
 class Condenser::RollupProcessor < Condenser::NodeProcessor
 
