@@ -145,7 +145,9 @@ class Condenser
       
       if value.nil?
         value = yield
-        self[key] = value
+        if (value.is_a?(Array) ? !value.empty? : value)
+          self[key] = value
+        end
       end
       
       value

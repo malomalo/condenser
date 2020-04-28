@@ -23,7 +23,8 @@ class Condenser
   autoload :SassMinifier,     'condenser/minifiers/sass_minifier'
   autoload :SassTransformer,  'condenser/transformers/sass_transformer'
   autoload :ScssTransformer,  'condenser/transformers/sass_transformer'
-  autoload :EjsTransformer,   'condenser/transformers/ejs'
+  autoload :EjsTemplare,      'condenser/templating_engine/ejs'
+  autoload :JstTransformer,   'condenser/transformers/jst_transformer'
   autoload :FileWriter,       'condenser/writers/file_writer'
   autoload :ZlibWriter,       'condenser/writers/zlib_writer'
   autoload :BuildCache,       'condenser/build_cache'
@@ -131,8 +132,12 @@ Condenser.configure do
   register_mime_type    'application/javascript', extension: '.js', charset: :unicode
   
   # EJS
-  register_mime_type    'application/ejs', extensions: %w(.ejs .jst.ejs), charset: :unicode
-  register_transformer  'application/ejs', 'application/javascript', Condenser::EjsTransformer
+  register_mime_type 'application/ejs', extensions: '.ejs', charset: :unicode
+  register_template  'application/ejs', Condenser::EjsTemplare
+  
+  # JST
+  register_mime_type    'application/jst', extensions: '.jst', charset: :unicode
+  register_transformer  'application/jst', 'application/javascript', Condenser::JstTransformer
   
   # Writers
   register_mime_type 'application/gzip',    extensions: %w(.gz .gzip)

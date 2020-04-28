@@ -8,7 +8,7 @@ class CondenserEJSTest < ActiveSupport::TestCase
   end
   
   test 'find' do
-    file 'test.ejs', "1<%= 1 + 1 %>3\n"
+    file 'test.jst.ejs', "1<%= 1 + 1 %>3\n"
     
     assert_file 'test.js', 'application/javascript', <<~JS
       import _bindInstanceProperty from "@babel/runtime-corejs3/core-js-stable/instance/bind";
@@ -31,7 +31,7 @@ class CondenserEJSTest < ActiveSupport::TestCase
   end
   
   test 'locals' do
-    file 'test.ejs', "1<%= input %>3\n"
+    file 'test.jst.ejs', "1<%= input %>3\n"
     
     assert_file 'test.js', 'application/javascript', <<~JS
       import _bindInstanceProperty from "@babel/runtime-corejs3/core-js-stable/instance/bind";
@@ -58,7 +58,7 @@ class CondenserEJSTest < ActiveSupport::TestCase
     Dir.mkdir(cache_dir)
     @env.cache = Condenser::Cache::FileStore.new(cache_dir)
 
-    file 'test.ejs', "1<%= 1 + 1 %>3\n"
+    file 'test.jst.ejs', "1<%= 1 + 1 %>3\n"
     file 'render.js', <<~JS
       import template from 'test';
       console.log(template());
