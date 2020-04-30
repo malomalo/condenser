@@ -9,13 +9,13 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
   end
   
   def initialize(options = {})
-    @options = options.merge({
+    @options = {
       ast: false,
       compact: false,
       plugins: [
-        ["#{File.expand_path('../node_modules', __FILE__)}/babel-plugin-transform-class-extended-hook", {}],
-        ["#{File.expand_path('../node_modules', __FILE__)}/@babel/plugin-proposal-class-properties", {}],
-        ["#{File.expand_path('../node_modules', __FILE__)}/@babel/plugin-transform-runtime", {
+        ["#{node_modules_path}/babel-plugin-transform-class-extended-hook", {}],
+        ["#{node_modules_path}/@babel/plugin-proposal-class-properties", {}],
+        ["#{node_modules_path}/@babel/plugin-transform-runtime", {
           corejs: 3,
           useESModules: true
         }],
@@ -26,8 +26,8 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
         # "useBuiltIns": 'usage',
         # corejs: { version: 3, proposals: true }
       } ]],
-      sourceMap: true
-    }).freeze
+      sourceMap: false
+    }.merge(options)
   end
 
   def call(environment, input)
@@ -40,7 +40,7 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
       'sourceFileName' => input[:filename]
       # 'sourceMapTarget' => input[:filename]
       # 'inputSourceMap'
-    }.merge(@options)
+    }.merge(@options).select { |k,v| !v.nil? }
     
     result = exec_runtime(<<-JS)
       const babel = require("#{File.expand_path('../node_modules', __FILE__)}/@babel/core");

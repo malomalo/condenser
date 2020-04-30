@@ -2,11 +2,6 @@ require 'test_helper'
 
 class CondenserEJSTest < ActiveSupport::TestCase
 
-  def setup
-    super
-    @env.unregister_preprocessor('application/javascript', Condenser::BabelProcessor)
-  end
-  
   test 'find' do
     file 'test.jst.ejs', "1<%= 1 + 1 %>3\n"
     

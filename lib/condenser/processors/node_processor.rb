@@ -7,6 +7,10 @@ class Condenser
     def node_modules_path
       File.expand_path('../node_modules', __FILE__)
     end
+    
+    def self.node_modules_path
+      File.expand_path('../node_modules', __FILE__)
+    end
 
     def self.setup(environment)
     end
