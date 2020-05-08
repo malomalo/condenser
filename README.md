@@ -8,17 +8,20 @@ and SCSS.
 
 ## Installation
 
-Install Sprockets from RubyGems:
+In your project's `Gemfile` with Bundler:
+
+``` ruby
+gem 'condenser'
+```
+
+Or via Ruby Gems
 
 ``` sh
 $ gem install condenser
 ```
 
-Or include it in your project's `Gemfile` with Bundler:
-
-``` ruby
-gem 'condenser'
-```
+If you are using Condenser with Rails, instead of the `condenser` gem use the
+`condenser-rails` gem.
 
 ## Guides
 
@@ -71,7 +74,8 @@ contains the directory `app/assets/javascripts`:
 
 ## File Order Processing
 
-By default files are processed in alphabetical order. This behavior can impact your asset compilation when one asset needs to be loaded before another.
+By default files are processed in alphabetical order. This behavior can impact
+your asset compilation when one asset needs to be loaded before another.
 
 For example if you have an `application.js` and it loads another directory
 
@@ -81,7 +85,8 @@ import initializers from 'config/initializers/*';
 initializers.forEach((i) => i());
 ```
 
-The files in that directory will be loaded in alphabetical order. If the directory looks like this:
+The files in that directory will be loaded in alphabetical order. If the directory
+looks like this:
 
 ```sh
 $ ls -1 config/initializers/
@@ -91,7 +96,10 @@ beta.js
 gamma.js
 ```
 
-Then `alpha.js` will be loaded before either of the other two. This can be a problem if `gamma.js` needs to be called before `alpha.js`. For files that are ordering dependent you can either require individual files manually:
+Then `alpha.js` will be loaded before either of the other two. This can be a
+problem if `gamma.js` needs to be called before `alpha.js`. For files that are
+order dependent you can either rename the files or require individual files
+manually:
 
 ```js
 import alpha from 'config/initializers/alpha';
@@ -105,11 +113,19 @@ beta();
 
 ## Cache
 
-Compiling assets is slow. It requires a lot of disk use to pull assets off of hard drives, a lot of RAM to manipulate those files in memory, and a lot of CPU for compilation operations. Because of this Condenser has a cache to speed up asset compilation times. That's the good news. The bad news, is that Condenser has a cache and if you've found a bug it's likely going to involve the cache.
+Compiling assets is slow. It requires a lot of disk use to pull assets off of
+hard drives, a lot of RAM to manipulate those files in memory, and a lot of CPU
+for compilation operations. Because of this Condenser has a cache to speed up
+asset compilation times. That's the good news. The bad news, is that Condenser
+has a cache and if you've found a bug it's likely going to involve the cache.
 
-By default Condenser uses the file system to cache assets. It makes sense that Condenser does not want to generate assets that already exist on disk in `public/assets`, what might not be as intuitive is that Condenser needs to cache "partial" assets.
+By default Condenser uses the file system to cache assets. It makes sense that
+Condenser does not want to generate assets that already exist on disk in
+`public/assets`, what might not be as intuitive is that Condenser needs to cache
+"partial" assets.
 
-For example if you have an `application.js` and it is made up of `a.js`, `b.js`, all the way to `z.js`
+For example if you have an `application.js` and it is made up of `a.js`, `b.js`,
+all the way to `z.js`
 
 ```js
 import 'a';
@@ -118,19 +134,27 @@ import 'b';
 import 'z';
 ```
 
-The first time this file is compiled the `application.js` output will be written to disk, but also intermediary compiled files for `a.js` etc. will be written to the cache directory (usually `tmp/cache/assets`).
+The first time this file is compiled the `application.js` output will be written
+to disk, but also intermediary compiled files for `a.js` etc. will be written to
+the cache directory (usually `tmp/cache/assets`).
 
-So, if `b.js` changes it will get recompiled. However instead of having to recompile the other files from `a.js` to `z.js` since they did not change, we can use the prior intermediary files stored in the cached values . If these files were expensive to generate, then this "partial" asset cache strategy can save a lot of time.
+So, if `b.js` changes it will get recompiled. However instead of having to
+recompile the other files from `a.js` to `z.js` since they did not change,
+we can use the prior intermediary files stored in the cached values . If these
+files were expensive to generate, then this "partial" asset cache strategy can
+save a lot of time.
 
-Directives such as `import` in Javascript and `@import` in SCSS tell Condenser what assets need to be re-compiled when a file changes. Files are considered "fresh" based on their inode number, mtime, size and a combination of cache keys.
+Directives such as `import` in Javascript and `@import` in SCSS tell Condenser
+what assets need to be re-compiled when a file changes. Files are considered
+"fresh" based on their inode number, mtime, size and a combination of cache keys.
 
-In Rails you can force a "clean" install by clearing the `public/assets` and `tmp/cache/assets` directories.
+In Rails you can force a "clean" install by clearing the `public/assets` and
+`tmp/cache/assets` directories.
 
 ### Invoking Ruby with ERB
 
-Condenser provides an ERB engine for preprocessing assets using
-embedded Ruby code. Append `.erb` to a CSS or JavaScript asset's
-filename to enable the ERB engine.
+Condenser provides an ERB engine for preprocessing assets using embedded Ruby
+code. Append `.erb` to a CSS or JavaScript asset's filename to enable the ERB engine.
 
 For example if you have an `app/application/javascripts/app_name.js.erb`
 you could have this in the template
@@ -179,7 +203,9 @@ convert `foo.scss` to `foo.css`.
 
 ## Javascript, ES#, & ES Modules
 
-Condenser transforms Javascript for the browser by transpiling all the files `.js` through [babel](https://babeljs.io) and bundled together via [rollup.js](https://rollupjs.org/).
+Condenser transforms Javascript for the browser by transpiling all the files
+`.js` through [babel](https://babeljs.io) and bundled together via
+[rollup.js](https://rollupjs.org/).
 
 ```js
 // app/assets/javascript/application.js
@@ -189,7 +215,9 @@ var square = (n) => n * n
 console.log(square);
 ```
 
-Start a Rails server in development mode and visit `localhost:3000/assets/application.js`, and this asset will be transpiled to JavaScript:
+Start a Rails server in development mode and visit
+`localhost:3000/assets/application.js`, and this asset will be transpiled to
+JavaScript:
 
 ```js
 var square = function square(n) {
