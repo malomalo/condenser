@@ -33,6 +33,8 @@ class ActiveSupport::TestCase
   def setup
     @path = File.realpath(Dir.mktmpdir)
     @env = Condenser.new(@path, logger: Logger.new('/dev/null', level: :debug))
+    @env.unregister_writer(Condenser::ZlibWriter)
+    @env.unregister_writer(Condenser::BrotliWriter)
     @env.context_class.class_eval do
       def asset_path(path, options = {})
         "/assets/#{path}"

@@ -11,7 +11,7 @@ class Condenser::ZlibWriter
     application/javascript text/javascript text/plain text/xml
     application/json application/vnd.ms-fontobject application/x-font-opentype
     application/x-font-truetype application/x-font-ttf application/xml font/eot
-    font/opentype font/otf image/svg+xml image/vnd.microsoft.icon image/x-icon)
+    font/opentype font/otf image/svg+xml image/vnd.microsoft.icon image/x-icon )
 
   ADDED_MIME_TYPES = ['application/gzip']
   

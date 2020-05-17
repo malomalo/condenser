@@ -27,6 +27,7 @@ class Condenser
   autoload :JstTransformer,   'condenser/transformers/jst_transformer'
   autoload :FileWriter,       'condenser/writers/file_writer'
   autoload :ZlibWriter,       'condenser/writers/zlib_writer'
+  autoload :BrotliWriter,     'condenser/writers/brotli_writer'
   autoload :BuildCache,       'condenser/build_cache'
   
   def self.configure(&block)
@@ -56,6 +57,9 @@ class Condenser
       
         register_writer Condenser::FileWriter.new
         register_writer Condenser::ZlibWriter.new
+        if Gem::Specification::find_all_by_name('brotli').any?
+          register_writer Condenser::BrotliWriter.new
+        end
       end
     end
   end

@@ -26,6 +26,7 @@ Gem::Specification.new do |s|
 
   s.add_development_dependency "ruby-ejs", '~> 1.0'  
   s.add_development_dependency "sassc", ">= 2.2.0", "< 3.0"
+  s.add_development_dependency "brotli"
   
   s.add_development_dependency "rake"
   s.add_development_dependency 'bundler'

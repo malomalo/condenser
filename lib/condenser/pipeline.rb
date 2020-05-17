@@ -89,9 +89,9 @@ class Condenser
       end
     end
         
-    def unregister_writer(mime_types, engine, added_mime_types=nil)
+    def unregister_writer(engine, for_mime_types: [])
       mime_types = @writers.keys if mime_types.nil?
-      Array(mime_types).each do |mime_type|
+      Array(for_mime_types || @writers.keys).each do |mime_type|
         @writers[mime_type].select! do |writer|
           if engine.nil? || engine == writer[0] || writer[0].is_a?(engine)
             if added_mime_types.nil? || added_mime_types == writer[1]
