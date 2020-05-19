@@ -179,7 +179,7 @@ class RollupTest < ActiveSupport::TestCase
 
         var maths = [cube, square];
 
-        var x = 1;
+        let x = 1;
 
         for (var i = 0; i < maths.length; i++) {
           x = maths[i](x);

@@ -2,14 +2,11 @@ require 'json'
 require 'tmpdir'
 
 class Condenser::RollupProcessor < Condenser::NodeProcessor
-
-  ROLLUP_VERSION = '0.56.1'
   
-  def self.call(environment, input)
-    new.call(environment, input)
-  end
-  
-  def initialize(options = {})
+  def initialize(dir = nil, options = {})
+    super(dir)
+    npm_install('rollup', 'rollup-plugin-commonjs', 'rollup-plugin-node-resolve')
+    
     @options = options.merge({}).freeze
   end
 
@@ -33,13 +30,13 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
         output_options[:name] = File.basename(input[:filename], ".*").capitalize
         # output_options[:output][:name] = File.basename(input[:filename], ".*").capitalize
       end
-
+      
       exec_runtime(<<-JS, @entry)
         const fs    = require('fs');
         const path  = require('path');
         const stdin = process.stdin;
 
-        module.paths.push("#{File.expand_path('../node_modules', __FILE__)}")
+        module.paths.push("#{File.join(npm_path, 'node_modules')}")
 
         var buffer = '';
         stdin.resume();
@@ -70,9 +67,9 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
           buffer = emitMessages(buffer);
         });
         
-        const rollup = require("#{File.expand_path('../node_modules', __FILE__)}/rollup");
-        const commonjs = require('#{File.expand_path('../node_modules', __FILE__)}/rollup-plugin-commonjs');
-        const nodeResolve = require('#{File.expand_path('../node_modules', __FILE__)}/rollup-plugin-node-resolve');
+        const rollup = require("#{npm_module_path('rollup')}");
+        const commonjs = require("#{npm_module_path('rollup-plugin-commonjs')}");
+        const nodeResolve = require("#{npm_module_path('rollup-plugin-node-resolve')}");
         var rid = 0;
         var renderStack = {};
         var nodeResolver = null;
@@ -97,7 +94,7 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
             // modulesOnly: true,
             // preferBuiltins: false,
             customResolveOptions: {
-              moduleDirectory: '#{environment.npm_path}'
+              moduleDirectory: '#{npm_module_path}'
             }
           });
         }
@@ -204,28 +201,25 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
             asset = if importer.nil? && importee == @entry
               @entry
             elsif importee.start_with?('@babel/runtime') || importee.start_with?('core-js-pure') || importee.start_with?('regenerator-runtime')
-              x = File.expand_path('../node_modules/' + importee.gsub(/^\.\//, File.dirname(importer) + '/'), __FILE__).sub('/node_modules/regenerator-runtime', '/node_modules/regenerator-runtime/runtime.js')
+              x = File.join(npm_module_path, importee.gsub(/^\.\//, File.dirname(importer) + '/')).sub('/node_modules/regenerator-runtime', '/node_modules/regenerator-runtime/runtime.js')
               x = "#{x}.js" if !x.end_with?('.js')
               File.file?(x) ? x : (x.delete_suffix('.js') + "/index.js")
-            elsif importer.start_with?(File.expand_path('../node_modules/', __FILE__))
+            elsif importer.start_with?(npm_module_path)
               x = File.expand_path(importee, File.dirname(importer))
               x = x.end_with?('.js') ? x : "#{x}.js"
               File.file?(x) ? x : (x.delete_suffix('.js') + "/index.js")
-            elsif @environment.npm_path &&
-                  importer.start_with?(@environment.npm_path) #&&
+            elsif npm_module_path &&
+                  importer.start_with?(npm_module_path) #&&
               #     File.file?(File.expand_path(importee, File.dirname(importer))) &&
               #     File.file?(File.expand_path(importee, File.dirname(importer)) + '.js')
               # x = File.expand_path(importee, File.dirname(importer))
               # x.end_with?('.js') ? x : "#{x}.js"
               nil
+            elsif importee.end_with?('*')
+              File.join(File.dirname(importee), '*')
             else
-              if importee.end_with?('*')
-                File.join(File.dirname(importee), '*')
-              else
-                @environment.find(importee, importer ? File.dirname(@entry == importer ? @input[:source_file] : importer) : nil, accept: @input[:content_types].last)&.source_file
-              end
+              @environment.find(importee, importer ? File.dirname(@entry == importer ? @input[:source_file] : importer) : nil, accept: @input[:content_types].last)&.source_file
             end
-
             # begin
               asset
             # rescue Errno::EPIPE
@@ -236,7 +230,7 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
             importee = message['args'].first
             if importee == @entry
               { code: @input[:source], map: @input[:map] }
-            elsif importee.start_with?(File.expand_path('../node_modules/', __FILE__))
+            elsif importee.start_with?(npm_module_path)
               { code: File.read(importee), map: nil }
             elsif importee.end_with?('*')
               importees = @environment.resolve(importee, importer ? File.dirname(@entry == importer ? @input[:source_file] : importer) : nil, accept: @input[:content_types].last)

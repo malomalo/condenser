@@ -1,0 +1,172 @@
+require 'condenser/helpers/parse_helpers'
+
+class Condenser::JSAnalyzer
+
+  include Condenser::ParseHelpers
+  
+  def self.setup(env)
+  end
+  
+  def self.call(environment, input)
+    new.call(environment, input)
+  end
+  
+  def call(environment, input)
+    seek(0)
+    @source = input[:source]
+    @stack =  []
+    
+    
+    input[:export_dependencies] = parse_imports
+
+    while !eos?
+      case @stack.last
+      when :tick_value
+        scan_until(/(\$\{|\`)/)
+        case matched
+        when '`'
+          @stack.pop
+        when '${'
+          @stack << :tick_statment
+        end
+      else
+        scan_until(/(\/\/|\/\*|\/|\(|\)|\{|\}|\"|\'|\`|export|\z)/)
+        case matched
+        when '//'
+          scan_until(/(\n|\z)/)
+        when '/*'
+          scan_until(/\*\//)
+        when '"'
+          double_quoted_value
+        when "'"
+          single_quoted_value
+        when '`'
+          @stack << :tick_value
+        when '/'
+          if match_index = @source.rindex(/(\w+|\))\s*\//, @index)
+            match = @source.match(/(\w+|\))\s*\//, match_index)
+            if match[0].length + match_index != @index
+              regex_value
+            end
+          else
+            regex_value
+          end
+        when '('
+          @stack.push :parenthesis
+        when ')'
+          raise 'error' if @stack.last != :parenthesis
+          @stack.pop
+        when '{'
+          @stack.push :brackets
+        when '}'
+          case @stack.last
+          when :brackets, :tick_statment
+            @stack.pop
+          else
+            raise 'error'
+          end
+        when 'export'
+          input[:exports] = true;
+          input[:default_export] = true if next_word == 'default'
+        else
+          @stack.pop
+        end
+      end
+    end
+  end
+  
+  def parse_imports
+    imports = []
+    
+    while @stack.first != :statment
+      case @stack.last
+      when nil
+        scan_until(/(\S+|\z)/)
+        case matched
+        when 'import'
+          @stack << :import
+        else
+          seek(@old_index)
+          @stack << :statment
+        end
+      when :import
+        scan_until(/[\"\'\`]/)
+        imports << case matched
+        when "\""
+          double_quoted_value
+        when "'"
+          single_quoted_value
+        when '`'
+          tick_quoted_value
+        end
+        scan_until(/(;|\n)/)
+        @stack.pop
+      end
+    end
+    
+    imports
+  end
+  
+  def double_quoted_value
+    ret_value = ""
+
+    while scan_until(/[\"\n]/)
+      if matched == "\n"
+        raise 'error'
+      elsif matched == "\""
+        if pre_match[-1] != "\\"
+          ret_value << pre_match
+          return ret_value
+        else
+          ret_value << pre_match << "\\\""
+        end
+
+        
+      else
+        ret_value << match
+      end
+    end
+  end
+  
+  def single_quoted_value
+    ret_value = ""
+
+    while scan_until(/[\'\n]/)
+      if matched == "\n"
+        raise 'error'
+      elsif matched == "\'" && pre_match[-1] != "\\"
+        ret_value << pre_match
+        return ret_value
+      else
+        ret_value << pre_match
+      end
+    end
+  end
+
+  def tick_quoted_value
+    ret_value = ""
+
+    while scan_until(/[\`]/)
+      if matched == "\`" && pre_match[-1] != "\\"
+        ret_value << pre_match
+        return ret_value
+      else
+        ret_value << pre_match
+      end
+    end
+  end
+  
+  def regex_value
+    ret_value = ""
+
+    while scan_until(/\//)
+      if matched == "/" && pre_match[-1] != "\\"
+        ret_value << pre_match
+        return ret_value
+      else
+        ret_value << pre_match
+      end
+    end
+  end
+
+end

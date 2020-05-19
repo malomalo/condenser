@@ -9,7 +9,7 @@ class ResolveTest < ActiveSupport::TestCase
     @env.append_path(@path)
     @env.register_template    'application/erb', Condenser::Erubi
     @env.register_transformer 'text/scss', 'text/css', Condenser::Erubi
-    @env.register_exporter    'application/javascript', Condenser::RollupProcessor
+    @env.register_exporter    'application/javascript', Condenser::RollupProcessor.new(@npm_dir)
     @env.register_writer      Condenser::ZlibWriter.new(mime_types: 'application/javascript')
   end
   

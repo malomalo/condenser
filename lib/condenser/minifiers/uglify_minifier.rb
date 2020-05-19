@@ -4,11 +4,10 @@ class Condenser::UglifyMinifier < Condenser::NodeProcessor
   class Error < StandardError
   end
   
-  def self.call(environment, input)
-    new.call(environment, input)
-  end
-  
-  def initialize(options = {})
+  def initialize(dir, options = {})
+    super(dir)
+    npm_install('uglify-js')
+    
     @options = options.merge({
       warnings: true
     }).freeze
@@ -26,7 +25,7 @@ class Condenser::UglifyMinifier < Condenser::NodeProcessor
     }.merge(@options)
     
     result = exec_runtime(<<-JS)
-      const UglifyJS = require("#{File.expand_path('../node_modules', __FILE__)}/uglify-js");
+      const UglifyJS = require("#{npm_module_path('uglify-js')}");
       const source = #{JSON.generate(input[:filename] => input[:source])}
       const options = #{JSON.generate(opts)};
 

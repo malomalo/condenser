@@ -12,7 +12,7 @@ class Condenser
       end
     end
     
-    def initialize(*args)
+    def initialize(*args, **kws, &block)
       CONFIG_VARS.each do |var_name|
         original_var = self.class.instance_variable_get("@#{var_name}")
         new_var = original_var.dup
@@ -48,7 +48,7 @@ class Condenser
       if engine.nil?
         @preprocessors[mime_type].clear
       else
-        @preprocessors[mime_type]&.delete(engine)
+        @preprocessors[mime_type]&.reject! { |e| e == engine || e.is_a?(engine) }
       end
     end
 

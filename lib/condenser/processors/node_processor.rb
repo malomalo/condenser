@@ -4,15 +4,19 @@ require 'open3'
 class Condenser
   class NodeProcessor
     
-    def node_modules_path
-      File.expand_path('../node_modules', __FILE__)
-    end
+    attr_accessor :npm_path
     
-    def self.node_modules_path
-      File.expand_path('../node_modules', __FILE__)
+    def self.setup(environment)
     end
 
-    def self.setup(environment)
+    def self.call(environment, input)
+      @instances ||= {}
+      @instances[environment] ||= new(environment.npm_path)
+      @instances[environment].call(environment, input)
+    end
+    
+    def initialize(dir = nil)
+      self.npm_path = dir
     end
     
     def exec_runtime(script)
@@ -62,6 +66,28 @@ class Condenser
       lineno ||= 1
       error.set_backtrace(["(node):#{lineno}"] + caller)
       error
+    end
+    
+    def npm_install(*packages)
+      return if packages.empty?
+      packages.flatten!
+      packages.select! do |package|
+        !Dir.exist?(File.join(npm_module_path, package))
+      end
+      
+      Dir.chdir(npm_path) do
+        if !packages.empty?
+          if File.exist?(File.join(npm_path, 'package.json'))
+            system("npm", "install", "--silent", *packages)
+          else
+            system("npm", "install", "--silent", *packages)
+          end
+        end
+      end
+    end
+    
+    def npm_module_path(package=nil)
+      File.join(*[npm_path, 'node_modules', package].compact)
     end
     
   end

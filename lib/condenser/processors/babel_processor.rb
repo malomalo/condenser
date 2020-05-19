@@ -4,32 +4,47 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
   
   # npm install @babel/core @babel/runtime-corejs3 @babel/plugin-transform-runtime @babel/preset-env rollup rollup-plugin-commonjs  rollup-plugin-node-resolve  @babel/plugin-proposal-class-properties babel-plugin-transform-class-extended-hook
   
-  def self.call(environment, input)
-    new.call(environment, input)
+  def initialize(dir = nil, plugins: nil)
+    super(dir)
+    
+    plugins ||= [
+      ["@babel/plugin-transform-runtime", { corejs: 3, useESModules: true }]
+    ]
+
+    packages = plugins.map { |p| p.is_a?(Array) ? p[0] : p}
+    packages.unshift('@babel/core')
+    if packages.include?('@babel/plugin-transform-runtime')
+      runtime = plugins.find { |i| i.is_a?(Array) ? i[0] == '@babel/plugin-transform-runtime' : i == '@babel/plugin-transform-runtime' }
+      packages << if runtime.is_a?(Array) && runtime[1][:corejs]
+        if runtime[1][:corejs].is_a?(Hash)
+          "@babel/runtime-corejs#{runtime[1][:corejs][:version]}"
+        else
+          "@babel/runtime-corejs#{runtime[1][:corejs]}"
+        end
+      else
+        '@babel/runtime'
+      end
+    end
+    
+    npm_install(*packages)
+    
+    plugins.map! do |plugin|
+      if plugin.is_a?(Array)
+        plugin[0] = npm_module_path(plugin[0])
+        plugin
+      else
+        npm_module_path(plugin)
+      end
+    end
+    
+    @options = {
+      ast:        false,
+      compact:    false,
+      plugins:    plugins,
+      sourceMap:  false
+    }
   end
   
-  def initialize(options = {})
-    @options = {
-      ast: false,
-      compact: false,
-      plugins: [
-        ["#{node_modules_path}/babel-plugin-transform-class-extended-hook", {}],
-        ["#{node_modules_path}/@babel/plugin-proposal-class-properties", {}],
-        ["#{node_modules_path}/@babel/plugin-transform-runtime", {
-          corejs: 3,
-          useESModules: true
-        }],
-      ],
-      presets: [["#{File.expand_path('../node_modules', __FILE__)}/@babel/preset-env", {
-        "modules": false,
-        "targets": { "browsers": "> 1% and not dead" }
-        # "useBuiltIns": 'usage',
-        # corejs: { version: 3, proposals: true }
-      } ]],
-      sourceMap: false
-    }.merge(options)
-  end
-
   def call(environment, input)
     opts = {
       # 'moduleRoot' => nil,
@@ -43,7 +58,7 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
     }.merge(@options).select { |k,v| !v.nil? }
     
     result = exec_runtime(<<-JS)
-      const babel = require("#{File.expand_path('../node_modules', __FILE__)}/@babel/core");
+      const babel = require("#{File.join(npm_module_path('@babel/core'))}");
       const source = #{JSON.generate(input[:source])};
       const options = #{JSON.generate(opts).gsub(/"@?babel[\/-][^"]+"/) { |m| "require(#{m})"}};
       

@@ -2,17 +2,20 @@ require 'test_helper'
 
 class CondenserEJSTest < ActiveSupport::TestCase
 
+  def setup
+    super
+    @env.unregister_preprocessor('application/javascript', Condenser::BabelProcessor)
+    @env.unregister_exporter('application/javascript', Condenser::RollupProcessor)
+  end
+  
   test 'find' do
     file 'test.jst.ejs', "1<%= 1 + 1 %>3\n"
     
     assert_file 'test.js', 'application/javascript', <<~JS
-      import _bindInstanceProperty from "@babel/runtime-corejs3/core-js-stable/instance/bind";
       import { escape } from 'ejs';
       export default function (locals) {
-        var _context;
-
         var __output = [],
-            __append = _bindInstanceProperty(_context = __output.push).call(_context, __output);
+            __append = __output.push.bind(__output);
       
         __append("1");
       
@@ -29,13 +32,10 @@ class CondenserEJSTest < ActiveSupport::TestCase
     file 'test.jst.ejs', "1<%= input %>3\n"
     
     assert_file 'test.js', 'application/javascript', <<~JS
-      import _bindInstanceProperty from "@babel/runtime-corejs3/core-js-stable/instance/bind";
       import { escape } from 'ejs';
       export default function (locals) {
-        var _context;
-
         var __output = [],
-            __append = _bindInstanceProperty(_context = __output.push).call(_context, __output);
+            __append = __output.push.bind(__output);
       
         __append("1");
       
@@ -63,7 +63,8 @@ class CondenserEJSTest < ActiveSupport::TestCase
     @env = Condenser.new(@path,
       logger: Logger.new('/dev/null'),
       cache: Condenser::Cache::FileStore.new(cache_dir),
-      pipeline: false
+      pipeline: false,
+      npm_path: @npm_dir
     )
     @env.register_exporter('application/javascript', Condenser::RollupProcessor)
     

@@ -4,7 +4,7 @@ class CondenserBabelTest < ActiveSupport::TestCase
   
   def setup
     super
-    @env.unregister_minifier('application/javascript')
+    @env.unregister_minifier    'application/javascript'
   end
   
   test 'find' do
@@ -16,7 +16,7 @@ class CondenserBabelTest < ActiveSupport::TestCase
 
     assert_file 'name.js', 'application/javascript', <<~JS
     var t = {
-      'var': function _var() {
+      'var': () => {
         return 2;
       }
     };
@@ -72,26 +72,22 @@ class CondenserBabelTest < ActiveSupport::TestCase
       (function () {
         'use strict';
 
-        function _classCallCheck(instance, Constructor) {
-          if (!(instance instanceof Constructor)) {
-            throw new TypeError("Cannot call a class as a function");
+        class a {
+          constructor(height, width) {
+            console.log('A');
           }
+      
         }
 
-        var _default = function _default(height, width) {
-          _classCallCheck(this, _default);
+        class b {
+          constructor(height, width) {
+            console.log('B');
+          }
+      
+        }
 
-          console.log('A');
-        };
-
-        var _default$1 = function _default(height, width) {
-          _classCallCheck(this, _default);
-
-          console.log('B');
-        };
-
-        new _default();
-        new _default$1();
+        new a();
+        new b();
 
       }());
     JS

@@ -1,7 +1,9 @@
 class Condenser::JstTransformer < Condenser::NodeProcessor
   
-  def self.call(environment, input)
-    new.call(environment, input)
+  def initialize(dir = nil)
+    super(dir)
+    
+    npm_install('@babel/core')
   end
 
   def call(environment, input)
@@ -17,7 +19,7 @@ class Condenser::JstTransformer < Condenser::NodeProcessor
     }
 
     result = exec_runtime(<<-JS)
-      const babel = require("#{File.expand_path('../../processors/node_modules', __FILE__)}/@babel/core");
+      const babel = require("#{npm_module_path('@babel/core')}");
       const source = #{JSON.generate(input[:source])};
       const options = #{JSON.generate(opts).gsub(/"@?babel[\/-][^"]+"/) { |m| "require(#{m})"}};
 
