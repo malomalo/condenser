@@ -1,14 +1,13 @@
-class Condenser::UglifyMinifier < Condenser::NodeProcessor
+class Condenser::TerserMinifier < Condenser::NodeProcessor
 
-  class Error < StandardError
-  end
-  
   def initialize(dir, options = {})
     super(dir)
-    npm_install('uglify-js')
+    npm_install('terser')
     
     @options = options.merge({
-      warnings: true
+      warnings: true,
+      sourceMap: false,
+      keep_classnames: true
     }).freeze
   end
 
@@ -24,31 +23,23 @@ class Condenser::UglifyMinifier < Condenser::NodeProcessor
     }.merge(@options)
     
     result = exec_runtime(<<-JS)
-      const UglifyJS = require("#{npm_module_path('uglify-js')}");
+      const Terser = require("#{npm_module_path('terser')}");
       const source = #{JSON.generate(input[:filename] => input[:source])}
       const options = #{JSON.generate(opts)};
 
-      // {
-      //     sourceMap: {
-      //         content: "content from compiled.js.map",
-      //         url: "minified.js.map"
-      //     }
-      // });
-      
-      try {
-        var result = UglifyJS.minify(source, options);
-        console.log(JSON.stringify(result));
-      } catch(e) {
-        console.log(JSON.stringify({'error': e.name + ": " + e.message}));
+
+      var result = Terser.minify(source, options);
+      if (result.error !== undefined) {
+        console.log(JSON.stringify({'error': result.error.name + ": " + result.error.message}));
         process.exit(1);
+      } else {
+        console.log(JSON.stringify(result));
       }
     JS
 
-    raise Error, result['error'] if result['error']
+    exec_runtime_error(result['error']) if result['error']
     
-    if result['warnings']
-      result['warnings'].each { |w| environment.logger.warn(w) }
-    end
+    result['warnings']&.each { |w| environment.logger.warn(w) }
     
     input[:source] = result['code']
     input[:map] = result['map']

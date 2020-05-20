@@ -20,6 +20,7 @@ class Condenser
   autoload :JSAnalyzer,       'condenser/processors/js_analyzer'
   autoload :NodeProcessor,    'condenser/processors/node_processor'
   autoload :UglifyMinifier,   'condenser/minifiers/uglify_minifier'
+  autoload :TerserMinifier,   'condenser/minifiers/terser_minifier'
   autoload :Erubi,            'condenser/templating_engine/erb'
   autoload :SassMinifier,     'condenser/minifiers/sass_minifier'
   autoload :SassTransformer,  'condenser/transformers/sass_transformer'
