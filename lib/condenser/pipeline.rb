@@ -28,6 +28,40 @@ class Condenser
       super
     end
     
+    def pipline_to_json(values)
+      if values.is_a?(Hash)
+        values.transform_values do |value|
+          pipline_to_json(value)
+        end
+      elsif values.is_a?(Array)
+        values.map do |value|
+          pipline_to_json(value)
+        end
+      elsif values.is_a?(Class) || values.is_a?(Module)
+        values.name
+      elsif values == true || values == false || values.is_a?(String) || values.is_a?(Symbol) || values.is_a?(Integer) || values.is_a?(Float)
+        values
+      else
+        { values.class.name => pipline_to_json(values.options) }
+      end
+    end
+    
+    def pipline_hash
+      puts 'X'*80
+      JSON.generate(pipline_to_json([
+        @templates,
+        @preprocessors,
+        @transformers,
+        @postprocessors,
+        @minifiers,
+        @exporters
+      ]))
+    end
+    
+    def pipline_digest
+      @pipline_digest ||= Digest::MD5.hexdigest(pipline_hash)
+    end
+    
     def register_mime_type(mime_type, extensions: nil, extension: nil, charset: :default)
       extensions = Array(extensions || extension)
 

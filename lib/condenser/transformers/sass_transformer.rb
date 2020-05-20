@@ -10,6 +10,8 @@ class Condenser
   class SassTransformer
     autoload :Importer, 'condenser/transformers/sass_transformer/importer'
 
+    attr_accessor :options
+    
     # Internal: Defines default sass syntax to use. Exposed so the ScssProcessor
     # may override it.
     def self.syntax
@@ -48,6 +50,7 @@ class Condenser
     #                 change after code changes are made to Sass Functions.
     #
     def initialize(options = {}, &block)
+      @options = options
       @cache_version = options[:cache_version]
       # @cache_key = "#{self.class.name}:#{VERSION}:#{Autoload::Sass::VERSION}:#{@cache_version}".freeze
       @importer_class = options[:importer] || Condenser::SassTransformer::Importer

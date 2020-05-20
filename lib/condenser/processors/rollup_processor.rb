@@ -3,11 +3,13 @@ require 'tmpdir'
 
 class Condenser::RollupProcessor < Condenser::NodeProcessor
   
+  attr_accessor :options
+  
   def initialize(dir = nil, options = {})
     super(dir)
     npm_install('rollup', 'rollup-plugin-commonjs', 'rollup-plugin-node-resolve')
     
-    @options = options.merge({}).freeze
+    @options = options.freeze
   end
 
   def call(environment, input)

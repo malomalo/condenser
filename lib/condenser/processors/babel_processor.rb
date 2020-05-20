@@ -2,19 +2,25 @@ require 'json'
 
 class Condenser::BabelProcessor < Condenser::NodeProcessor
   
-  # npm install @babel/core @babel/runtime-corejs3 @babel/plugin-transform-runtime @babel/preset-env rollup rollup-plugin-commonjs  rollup-plugin-node-resolve  @babel/plugin-proposal-class-properties babel-plugin-transform-class-extended-hook
+  attr_accessor :options
   
-  def initialize(dir = nil, plugins: nil)
+  def initialize(dir = nil, options = {})
     super(dir)
     
-    plugins ||= [
+    options[:plugins] ||= [
       ["@babel/plugin-transform-runtime", { corejs: 3, useESModules: true }]
     ]
+    options[:presets] ||= [
+      ['@babel/preset-env', {
+        modules: false,
+        targets: { browsers: '> 1% and not dead' }
+      }]
+    ]
 
-    packages = plugins.map { |p| p.is_a?(Array) ? p[0] : p}
+    packages = options.slice(:plugins, :presets).values.reduce(&:+).map { |p| p.is_a?(Array) ? p[0] : p}
     packages.unshift('@babel/core')
     if packages.include?('@babel/plugin-transform-runtime')
-      runtime = plugins.find { |i| i.is_a?(Array) ? i[0] == '@babel/plugin-transform-runtime' : i == '@babel/plugin-transform-runtime' }
+      runtime = options[:plugins].find { |i| i.is_a?(Array) ? i[0] == '@babel/plugin-transform-runtime' : i == '@babel/plugin-transform-runtime' }
       packages << if runtime.is_a?(Array) && runtime[1][:corejs]
         if runtime[1][:corejs].is_a?(Hash)
           "@babel/runtime-corejs#{runtime[1][:corejs][:version]}"
@@ -28,7 +34,7 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
     
     npm_install(*packages)
     
-    plugins.map! do |plugin|
+    options[:plugins].map! do |plugin|
       if plugin.is_a?(Array)
         plugin[0] = npm_module_path(plugin[0])
         plugin
@@ -37,12 +43,20 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
       end
     end
     
+    options[:presets].map! do |plugin|
+      if plugin.is_a?(Array)
+        plugin[0] = npm_module_path(plugin[0])
+        plugin
+      else
+        npm_module_path(plugin)
+      end
+    end
+
     @options = {
       ast:        false,
       compact:    false,
-      plugins:    plugins,
       sourceMap:  false
-    }
+    }.merge(options)
   end
   
   def call(environment, input)

@@ -15,8 +15,8 @@ class Condenser
       @instances[environment].call(environment, input)
     end
     
-    def initialize(dir = nil)
-      self.npm_path = dir
+    def initialize(npm_dir = nil)
+      self.npm_path = npm_dir
     end
     
     def exec_runtime(script)

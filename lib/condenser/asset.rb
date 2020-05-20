@@ -146,6 +146,7 @@ class Condenser
     def cache_key
       Digest::SHA1.base64digest(JSON.generate([
         Condenser::VERSION,
+        @environment.pipline_digest,
         @source_file,
         stat.ino,
         stat.mtime.to_f,
