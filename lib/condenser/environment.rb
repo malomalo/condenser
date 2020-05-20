@@ -11,7 +11,7 @@ class Condenser
     attr_reader :path, :npm_path
     attr_accessor :cache
     
-    def initialize(*args)
+    def initialize(*args, **kws, &block)
       @loaded_processors = Set.new
       @context_class = Class.new(Condenser::Context)
       super
@@ -42,9 +42,13 @@ class Condenser
     end
 
     def npm_path=(path)
-      path = File.expand_path(path)
-      raise ArgumentError, "Path \"#{path}\" does not exists" if !File.directory?(path)
-      @npm_path = path
+      if path.nil?
+        @npm_path = nil
+      else
+        path = File.expand_path(path)
+        raise ArgumentError, "Path \"#{path}\" does not exists" if !File.directory?(path)
+        @npm_path = path
+      end
     end
   
     def append_npm_path(*paths)

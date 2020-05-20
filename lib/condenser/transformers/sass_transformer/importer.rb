@@ -1,3 +1,5 @@
+require "sassc"
+
 class Condenser::SassTransformer
   class Importer < SassC::Importer
     

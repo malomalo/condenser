@@ -4,7 +4,7 @@ class CondenserBabelTest < ActiveSupport::TestCase
   
   def setup
     super
-    @env.unregister_minifier('application/javascript')
+    @env.unregister_minifier    'application/javascript'
   end
   
   test 'find' do

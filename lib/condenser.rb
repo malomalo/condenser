@@ -15,10 +15,12 @@ class Condenser
   
   prepend Environment, Pipeline, Resolve
   
-  autoload :BabelProcessor,   'condenser/processors/rollup_processor'
-  autoload :RollupProcessor,  'condenser/processors/babel_processor'
+  autoload :BabelProcessor,   'condenser/processors/babel_processor'
+  autoload :RollupProcessor,  'condenser/processors/rollup_processor'
+  autoload :JSAnalyzer,       'condenser/processors/js_analyzer'
   autoload :NodeProcessor,    'condenser/processors/node_processor'
   autoload :UglifyMinifier,   'condenser/minifiers/uglify_minifier'
+  autoload :TerserMinifier,   'condenser/minifiers/terser_minifier'
   autoload :Erubi,            'condenser/templating_engine/erb'
   autoload :SassMinifier,     'condenser/minifiers/sass_minifier'
   autoload :SassTransformer,  'condenser/transformers/sass_transformer'
@@ -36,11 +38,11 @@ class Condenser
   
   attr_accessor :logger, :digestor
   
-  def initialize(*path, logger: nil, digestor: nil, cache: nil, pipeline: nil, &block)
+  def initialize(*path, logger: nil, digestor: nil, cache: nil, pipeline: nil, npm_path: nil, &block)
     @logger = logger || Logger.new($stdout, level: :info)
     @path = []
-    @npm_path = nil
     append_path(path)
+    self.npm_path = npm_path
     @cache = cache || Cache::MemoryStore.new
     @build_cc = 0
     self.digestor = digestor || Digest::SHA256
@@ -49,10 +51,11 @@ class Condenser
       configure(&block)
     elsif pipeline != false
       self.configure do
+        # register_preprocessor 'application/javascript', Condenser::JSAnalyzer
         register_preprocessor 'application/javascript', Condenser::BabelProcessor
         register_exporter     'application/javascript', Condenser::RollupProcessor
         register_minifier     'application/javascript', Condenser::UglifyMinifier
-      
+        
         register_minifier  'text/css', Condenser::SassMinifier
       
         register_writer Condenser::FileWriter.new

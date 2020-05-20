@@ -12,7 +12,7 @@ class Condenser
       end
     end
     
-    def initialize(*args)
+    def initialize(*args, **kws, &block)
       CONFIG_VARS.each do |var_name|
         original_var = self.class.instance_variable_get("@#{var_name}")
         new_var = original_var.dup
@@ -26,6 +26,39 @@ class Condenser
         instance_variable_set("@#{var_name}", new_var)
       end
       super
+    end
+    
+    def pipline_to_json(values)
+      if values.is_a?(Hash)
+        values.transform_values do |value|
+          pipline_to_json(value)
+        end
+      elsif values.is_a?(Array)
+        values.map do |value|
+          pipline_to_json(value)
+        end
+      elsif values.is_a?(Class) || values.is_a?(Module)
+        values.name
+      elsif values.nil? || values == true || values == false || values.is_a?(String) || values.is_a?(Symbol) || values.is_a?(Integer) || values.is_a?(Float)
+        values
+      else
+        { values.class.name => pipline_to_json(values.options) }
+      end
+    end
+    
+    def pipline_hash
+      JSON.generate(pipline_to_json([
+        @templates,
+        @preprocessors,
+        @transformers,
+        @postprocessors,
+        @minifiers,
+        @exporters
+      ]))
+    end
+    
+    def pipline_digest
+      @pipline_digest ||= Digest::MD5.hexdigest(pipline_hash)
     end
     
     def register_mime_type(mime_type, extensions: nil, extension: nil, charset: :default)
@@ -48,7 +81,7 @@ class Condenser
       if engine.nil?
         @preprocessors[mime_type].clear
       else
-        @preprocessors[mime_type]&.delete(engine)
+        @preprocessors[mime_type]&.reject! { |e| e == engine || e.is_a?(engine) }
       end
     end
 

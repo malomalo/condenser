@@ -1,4 +1,4 @@
-class Condenser::EjsTemplare < Condenser::NodeProcessor
+class Condenser::EjsTemplare
 
   def self.setup(environment)
     require 'ejs' unless defined?(::EJS)

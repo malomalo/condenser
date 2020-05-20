@@ -10,10 +10,10 @@ class Condenser
     include EncodingUtils
     
     attr_reader :environment, :filename, :content_types, :source_file, :source_path
-    attr_reader :linked_assets, :content_types_digest
+    attr_reader :linked_assets, :content_types_digest, :exports
     attr_writer :source, :sourcemap
 
-    attr_accessor :imports, :processed, :export
+    attr_accessor :imports, :processed
     
     def initialize(env, attributes={})
       @environment    = env
@@ -74,7 +74,7 @@ class Condenser
     
       d = []
       deps.each do |i|
-        i = [i, nil] if i.is_a?(String)
+        i = [i, @content_types] if i.is_a?(String)
         @environment.resolve(i[0], File.dirname(@source_file), accept: i[1]).each do |asset|
           d << asset
         end
@@ -90,7 +90,7 @@ class Condenser
       
       d = []
       deps.each do |i|
-        i = [i, nil] if i.is_a?(String)
+        i = [i, @content_types] if i.is_a?(String)
         @environment.resolve(i[0], File.dirname(@source_file), accept: i[1]).each do |asset|
           d << asset
         end
@@ -146,6 +146,7 @@ class Condenser
     def cache_key
       Digest::SHA1.base64digest(JSON.generate([
         Condenser::VERSION,
+        @environment.pipline_digest,
         @source_file,
         stat.ino,
         stat.mtime.to_f,

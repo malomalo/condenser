@@ -4,7 +4,6 @@ class RollupTest < ActiveSupport::TestCase
   
   def setup
     super
-    # @env.unregister_preprocessor('application/javascript')
     @env.unregister_minifier('application/javascript')
   end
   
@@ -146,7 +145,7 @@ class RollupTest < ActiveSupport::TestCase
     file 'main.js', <<~JS
       import maths from 'maths/*';
 
-      let x = 1;
+      var x = 1;
       for (var i = 0; i < maths.length; i++) {
         x = maths[i](x);
       }

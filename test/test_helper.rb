@@ -32,7 +32,9 @@ class ActiveSupport::TestCase
 
   def setup
     @path = File.realpath(Dir.mktmpdir)
-    @env = Condenser.new(@path, logger: Logger.new('/dev/null', level: :debug))
+    @npm_dir = File.expand_path('../../tmp', __FILE__)
+    Dir.mkdir(@npm_dir) if !Dir.exist?(@npm_dir)
+    @env = Condenser.new(@path, logger: Logger.new('/dev/null', level: :debug), npm_path: @npm_dir)
     @env.unregister_writer(Condenser::ZlibWriter)
     @env.unregister_writer(Condenser::BrotliWriter)
     @env.context_class.class_eval do
