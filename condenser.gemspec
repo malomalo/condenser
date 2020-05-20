@@ -1,4 +1,4 @@
-require File.expand_path("../lib/condenser/version", __FILE__)
+require_relative 'lib/condenser/version'
 
 Gem::Specification.new do |s|
   s.name          = 'condenser'
