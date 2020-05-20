@@ -39,7 +39,7 @@ class Condenser
         end
       elsif values.is_a?(Class) || values.is_a?(Module)
         values.name
-      elsif values == true || values == false || values.is_a?(String) || values.is_a?(Symbol) || values.is_a?(Integer) || values.is_a?(Float)
+      elsif values.nil? || values == true || values == false || values.is_a?(String) || values.is_a?(Symbol) || values.is_a?(Integer) || values.is_a?(Float)
         values
       else
         { values.class.name => pipline_to_json(values.options) }
@@ -47,7 +47,6 @@ class Condenser
     end
     
     def pipline_hash
-      puts 'X'*80
       JSON.generate(pipline_to_json([
         @templates,
         @preprocessors,

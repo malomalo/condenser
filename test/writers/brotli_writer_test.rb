@@ -16,7 +16,6 @@ class BrotliWriterTest < ActiveSupport::TestCase
       @env.find_export('index.js').write(dir)
       filename = "index-#{Digest::SHA256.hexdigest(data)}.js.br"
       assert_equal [filename], Dir.children(dir)
-      puts File.read(File.join(dir, filename)).inspect
       assert_equal data, Brotli.inflate(File.read(File.join(dir, filename)))
     end
   end

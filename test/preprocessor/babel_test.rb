@@ -16,7 +16,7 @@ class CondenserBabelTest < ActiveSupport::TestCase
 
     assert_file 'name.js', 'application/javascript', <<~JS
     var t = {
-      'var': () => {
+      'var': function _var() {
         return 2;
       }
     };
@@ -72,22 +72,26 @@ class CondenserBabelTest < ActiveSupport::TestCase
       (function () {
         'use strict';
 
-        class a {
-          constructor(height, width) {
-            console.log('A');
+        function _classCallCheck(instance, Constructor) {
+          if (!(instance instanceof Constructor)) {
+            throw new TypeError("Cannot call a class as a function");
           }
-      
         }
 
-        class b {
-          constructor(height, width) {
-            console.log('B');
-          }
-      
-        }
+        var _default = function _default(height, width) {
+          _classCallCheck(this, _default);
 
-        new a();
-        new b();
+          console.log('A');
+        };
+
+        var _default$1 = function _default(height, width) {
+          _classCallCheck(this, _default);
+
+          console.log('B');
+        };
+
+        new _default();
+        new _default$1();
 
       }());
     JS

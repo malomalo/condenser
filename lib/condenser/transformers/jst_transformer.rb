@@ -78,7 +78,7 @@ class Condenser::JstTransformer < Condenser::NodeProcessor
       input[:source] = result['code']
     end
     
-    environment.preprocessors['application/javascript'].each do |processor|
+    environment.preprocessors['application/javascript']&.each do |processor|
       processor_klass = (processor.is_a?(Class) ? processor : processor.class)
       input[:processors] << processor_klass.name
       environment.load_processors(processor_klass)
