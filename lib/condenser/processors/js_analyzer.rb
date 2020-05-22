@@ -14,13 +14,13 @@ class Condenser::JSAnalyzer
   def call(environment, input)
     seek(0)
     @source = input[:source]
-    @stack =  []
-    
-    
-    input[:export_dependencies] = parse_imports
+    @stack =  [:main]
 
+    input[:export_dependencies] ||= []
+    
     while !eos?
       case @stack.last
+
       when :tick_value
         scan_until(/(\$\{|\`)/)
         case matched
@@ -29,8 +29,22 @@ class Condenser::JSAnalyzer
         when '${'
           @stack << :tick_statment
         end
+
+      when :import
+        scan_until(/[\"\'\`]/)
+        input[:export_dependencies] << case matched
+        when "\""
+          double_quoted_value
+        when "'"
+          single_quoted_value
+        when '`'
+          tick_quoted_value
+        end
+        scan_until(/(;|\n)/)
+        @stack.pop
+
       else
-        scan_until(/(\/\/|\/\*|\/|\(|\)|\{|\}|\"|\'|\`|export|\z)/)
+        scan_until(/(\/\/|\/\*|\/|\(|\)|\{|\}|\"|\'|\`|export|import|\z)/)
         case matched
         when '//'
           scan_until(/(\n|\z)/)
@@ -66,45 +80,19 @@ class Condenser::JSAnalyzer
             raise 'error'
           end
         when 'export'
-          input[:exports] = true;
-          input[:default_export] = true if next_word == 'default'
+          if @stack.last == :main
+            input[:exports] = true;
+            input[:default_export] = true if next_word == 'default'
+          end
+        when 'import'
+          if @stack.last == :main
+            @stack << :import
+          end
         else
           @stack.pop
         end
       end
     end
-  end
-  
-  def parse_imports
-    imports = []
-    
-    while @stack.first != :statment
-      case @stack.last
-      when nil
-        scan_until(/(\S+|\z)/)
-        case matched
-        when 'import'
-          @stack << :import
-        else
-          seek(@old_index)
-          @stack << :statment
-        end
-      when :import
-        scan_until(/[\"\'\`]/)
-        imports << case matched
-        when "\""
-          double_quoted_value
-        when "'"
-          single_quoted_value
-        when '`'
-          tick_quoted_value
-        end
-        scan_until(/(;|\n)/)
-        @stack.pop
-      end
-    end
-    
-    imports
   end
   
   def double_quoted_value

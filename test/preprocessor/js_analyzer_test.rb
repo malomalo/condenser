@@ -187,4 +187,51 @@ class JSAnalyzerTest < ActiveSupport::TestCase
     assert_empty asset.export_dependencies.map(&:filename)
   end
   
+  test 'comments before imports' do
+    file 'a.js', ''
+    
+    file 'test.js', <<-DOC
+      /*
+          Availabilities Index
+      */
+      import template from 'a';
+
+      export default Viking.View.extend({})
+    DOC
+
+    asset = @env.find('test.js')
+    assert asset.exports
+    assert asset.has_default_export?
+    assert_equal ['a.js'], asset.export_dependencies.map(&:filename)
+
+    file 'test.js', <<-DOC
+      // Availabilities Index
+      //
+      import template from 'a';
+
+      export default Viking.View.extend({})
+    DOC
+
+    asset = @env.find('test.js')
+    assert asset.exports
+    assert asset.has_default_export?
+    assert_equal ['a.js'], asset.export_dependencies.map(&:filename)
+  end
+  
+  test 'imports interweaved' do
+    file 'a.js', ''
+    file 'b.js', ''
+    
+    file 'test.js', <<-DOC
+      import a from 'a';
+      console.log();
+      import b from 'b';
+    DOC
+
+    asset = @env.find('test.js')
+    assert_not asset.exports
+    assert_not asset.has_default_export?
+    assert_equal ['a.js', 'b.js'], asset.export_dependencies.map(&:filename)
+  end
+  
 end
