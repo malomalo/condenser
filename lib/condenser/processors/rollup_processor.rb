@@ -200,34 +200,19 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
           when 'resolve'
             importee, importer = message['args']
 
-            asset = if importer.nil? && importee == @entry
+            if importer.nil? && importee == @entry
               @entry
             elsif importee.start_with?('@babel/runtime') || importee.start_with?('core-js-pure') || importee.start_with?('regenerator-runtime')
               x = File.join(npm_module_path, importee.gsub(/^\.\//, File.dirname(importer) + '/')).sub('/node_modules/regenerator-runtime', '/node_modules/regenerator-runtime/runtime.js')
               x = "#{x}.js" if !x.end_with?('.js')
               File.file?(x) ? x : (x.delete_suffix('.js') + "/index.js")
-            elsif importer.start_with?(npm_module_path)
-              x = File.expand_path(importee, File.dirname(importer))
-              x = x.end_with?('.js') ? x : "#{x}.js"
-              File.file?(x) ? x : (x.delete_suffix('.js') + "/index.js")
-            elsif npm_module_path &&
-                  importer.start_with?(npm_module_path) #&&
-              #     File.file?(File.expand_path(importee, File.dirname(importer))) &&
-              #     File.file?(File.expand_path(importee, File.dirname(importer)) + '.js')
-              # x = File.expand_path(importee, File.dirname(importer))
-              # x.end_with?('.js') ? x : "#{x}.js"
+            elsif npm_module_path && importer.start_with?(npm_module_path)
               nil
             elsif importee.end_with?('*')
               File.join(File.dirname(importee), '*')
             else
               @environment.find(importee, importer ? File.dirname(@entry == importer ? @input[:source_file] : importer) : nil, accept: @input[:content_types].last)&.source_file
             end
-            # begin
-              asset
-            # rescue Errno::EPIPE
-              # puts io.read
-              # raise
-            # end
           when 'load'
             importee = message['args'].first
             if importee == @entry
