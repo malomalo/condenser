@@ -26,7 +26,7 @@ class Condenser::JstTransformer < Condenser::NodeProcessor
       function globalVar(scope, name) {
         if (name in scope.globals) {
           return true;
-        } else if (scope.parent === null) {
+        } else if (scope.parent === null || scope.parent === undefined) {
           return false;
         } else {
           return globalVar(scope.parent, name);
