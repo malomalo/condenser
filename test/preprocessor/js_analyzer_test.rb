@@ -159,6 +159,22 @@ class JSAnalyzerTest < ActiveSupport::TestCase
     assert_empty asset.export_dependencies.map(&:filename)
   end
   
+  test 'another example file where / as a divisor might get confused as a regex' do
+    file 'name.js', <<~JS
+      row.append(`
+        <td class="text-right">
+          ${m(amounts_by_month[month] / 1000, 'USD', {precision: 0})}K
+        </td>
+      `)
+    JS
+
+    asset = @env.find('name.js')
+    assert_nil asset.exports
+    assert_not asset.has_default_export?
+    assert_empty asset.export_dependencies
+  end
+
+  
   test 'x' do
     file 'test.js', <<-DOC
       this.$('.pagination').html(`

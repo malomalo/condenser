@@ -18,6 +18,7 @@ class Condenser::JSAnalyzer
 
     input[:export_dependencies] ||= []
     
+    last_postion = nil
     while !eos?
       case @stack.last
 
@@ -45,6 +46,7 @@ class Condenser::JSAnalyzer
 
       else
         scan_until(/(\/\/|\/\*|\/|\(|\)|\{|\}|\"|\'|\`|export|import|\z)/)
+
         case matched
         when '//'
           scan_until(/(\n|\z)/)
@@ -57,8 +59,8 @@ class Condenser::JSAnalyzer
         when '`'
           @stack << :tick_value
         when '/'
-          if match_index = @source.rindex(/(\w+|\))\s*\//, @index)
-            match = @source.match(/(\w+|\))\s*\//, match_index)
+          if match_index = @source.rindex(/(\w+|\)|\])\s*\//, @index)
+            match = @source.match(/(\w+|\)|\])\s*\//, match_index)
             if match[0].length + match_index != @index
               regex_value
             end
@@ -91,6 +93,12 @@ class Condenser::JSAnalyzer
         else
           @stack.pop
         end
+      end
+
+      if last_postion == @index
+        raise Condenser::SyntaxError, "Error parsing JS file with JSAnalyzer"
+      else
+        last_postion = @index
       end
     end
   end
