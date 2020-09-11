@@ -20,6 +20,31 @@ class CacheTest < ActiveSupport::TestCase
     123
     CSS
   end
+  
+  test 'with a base set and the same cache, the second attempt from another location should use the cache' do
+    @env.base = @path
+    
+    file 'test.txt.erb', "1<%= 1 + 1 %>3\n"
+    assert_file 'test.txt', 'text/plain', <<~CSS
+    123
+    CSS
+    
+    @new_path = File.realpath(Dir.mktmpdir)
+    @new_env = Condenser.new(@new_path, logger: Logger.new('/dev/null', level: :debug), base: @new_path)
+    @new_env.unregister_writer(Condenser::ZlibWriter)
+    @new_env.unregister_writer(Condenser::BrotliWriter)
+    @new_env.cache = @env.cache
+    FileUtils.cp(File.join(@path, 'test.txt.erb'), File.join(@new_path, 'test.txt.erb'))
+    FileUtils.touch File.join(@new_path, 'test.txt.erb'), mtime: File.stat(File.join(@path, 'test.txt.erb')).mtime
+    
+    Condenser::Erubi.stubs(:call).never
+
+    asset = @new_env.find('test.txt')
+    asset.process
+    assert_equal 'test.txt',     asset.filename
+    assert_equal ['text/plain'], asset.content_types
+    assert_equal('123'.rstrip, asset.source.rstrip)
+  end
 
   test 'changing a source file reflects in the next call' do
     file 'test.txt.erb', "1<%= 1 + 1 %>3\n"

@@ -36,13 +36,17 @@ class Condenser
     instance_eval(&block)
   end
   
-  attr_accessor :logger, :digestor
+  attr_accessor :logger, :digestor, :base
   
-  def initialize(*path, logger: nil, digestor: nil, cache: nil, pipeline: nil, npm_path: nil, &block)
+  # base: If base is passed assets cache_keys will be realitve to this.
+  #       This allows deploy systems like Capistrano to take advantage of the
+  #       cache even though it precompiles assets in a different folder
+  def initialize(*path, logger: nil, digestor: nil, cache: nil, pipeline: nil, npm_path: nil, base: nil, &block)
     @logger = logger || Logger.new($stdout, level: :info)
     @path = []
     append_path(path)
     self.npm_path = npm_path
+    @base = base
     @cache = cache || Cache::MemoryStore.new
     @build_cc = 0
     self.digestor = digestor || Digest::SHA256

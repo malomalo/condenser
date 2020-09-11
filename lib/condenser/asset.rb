@@ -147,8 +147,7 @@ class Condenser
       Digest::SHA1.base64digest(JSON.generate([
         Condenser::VERSION,
         @environment.pipline_digest,
-        @source_file,
-        stat.ino,
+        @environment.base ? @source_file.delete_prefix(@environment.base) : @source_file,
         stat.mtime.to_f,
         stat.size,
         @content_types_digest
