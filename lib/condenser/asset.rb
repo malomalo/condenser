@@ -140,7 +140,7 @@ class Condenser
     end
     
     def cache_key
-      Digest::SHA1.base64digest(JSON.generate([
+      @cache_key ||= Digest::SHA1.base64digest(JSON.generate([
         Condenser::VERSION,
         @environment.pipline_digest,
         @environment.base ? @source_file.delete_prefix(@environment.base) : @source_file,
