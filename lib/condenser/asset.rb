@@ -180,6 +180,7 @@ class Condenser
     def needs_reprocessing!
       @processed = false
       @pcv = nil
+      @cache_key = nil
       needs_reexporting!
     end
     
