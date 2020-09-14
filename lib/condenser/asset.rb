@@ -51,10 +51,6 @@ class Condenser
       [dirname, basename].compact.join('/')
     end
     
-    def stat
-      @stat ||= File.stat(@source_file)
-    end
-    
     def restat!
       @stat = nil
     end
@@ -148,8 +144,7 @@ class Condenser
         Condenser::VERSION,
         @environment.pipline_digest,
         @environment.base ? @source_file.delete_prefix(@environment.base) : @source_file,
-        stat.mtime.to_f,
-        stat.size,
+        Digest::SHA256.file(@source_file).hexdigest,
         @content_types_digest
       ]))
     end
@@ -159,7 +154,10 @@ class Condenser
 
       f = []
       all_dependenies(process_dependencies, [], :process_dependencies) do |dep|
-        f << [dep.source_file, dep.stat.ino, dep.stat.mtime.to_f, dep.stat.size]
+        f << [
+          @environment.base ? dep.source_file.delete_prefix(@environment.base) : dep.source_file,
+          Digest::SHA256.file(dep.source_file).hexdigest
+        ]
       end
 
       @pcv = Digest::SHA1.base64digest(JSON.generate(f))
@@ -170,7 +168,10 @@ class Condenser
 
       f = []
       all_dependenies(export_dependencies, [], :export_dependencies) do |dep|
-        f << [dep.source_file, dep.stat.ino, dep.stat.mtime.to_f, dep.stat.size]
+        f << [
+          @environment.base ? dep.source_file.delete_prefix(@environment.base) : dep.source_file,
+          Digest::SHA256.file(dep.source_file).hexdigest
+        ]
       end
 
       @ecv = Digest::SHA1.base64digest(JSON.generate(f))
