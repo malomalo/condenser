@@ -39,7 +39,9 @@ class Condenser
         end
       elsif values.is_a?(Class) || values.is_a?(Module)
         values.name
-      elsif values.nil? || values == true || values == false || values.is_a?(String) || values.is_a?(Symbol) || values.is_a?(Integer) || values.is_a?(Float)
+      elsif values.is_a?(String)
+        @base ? values.delete_prefix(@base) : values
+      elsif values.nil? || values == true || values == false || values.is_a?(Symbol) || values.is_a?(Integer) || values.is_a?(Float)
         values
       else
         { values.class.name => pipline_to_json(values.options) }
