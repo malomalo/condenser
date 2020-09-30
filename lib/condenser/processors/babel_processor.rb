@@ -71,6 +71,16 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
       # 'inputSourceMap'
     }.merge(@options).select { |k,v| !v.nil? }
     
+    if match = input[:source].match(/\A(\/\/[^\n]*(\n|\z))*/)
+      directives = match.to_s.split(/\n/).map { |l| l.delete_prefix("//").strip }
+      directives.each do |directive|
+        if directive.start_with?('depends_on')
+          input[:process_dependencies] << directive.sub(/\Adepends_on\s+/, '')
+        end
+      end
+    end
+    
+    
     result = exec_runtime(<<-JS)
       const babel = require("#{File.join(npm_module_path('@babel/core'))}");
       const source = #{JSON.generate(input[:source])};

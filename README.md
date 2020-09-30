@@ -111,6 +111,27 @@ alpha();
 beta();
 ```
 
+## Directives
+
+Sometimes you need to tell Condenser that a file depends on other files. For
+example a `js.erb` file maybe dynamically update depending on the contents of a
+folder as follows:
+
+```js
+console.log([<%= Dir.children("#{asset_path}/models").sort.map(&:inspect).join(', ') %>]);
+```
+
+To tell Condenser that this file depends on `models/*` simply add the depends_on
+directive:
+
+```js
+// depends_on models/*.js
+
+console.log([<%= Dir.children("#{asset_path}/models").sort.map(&:inspect).join(', ') %>]);
+```
+
+The directives must be the first portion of the file.
+
 ## Cache
 
 Compiling assets is slow. It requires a lot of disk use to pull assets off of

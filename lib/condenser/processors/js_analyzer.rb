@@ -17,6 +17,16 @@ class Condenser::JSAnalyzer
     @stack =  [:main]
 
     input[:export_dependencies] ||= []
+
+    scan_until(/\A(\/\/[^\n]*(\n|\z))*/)
+    if matched
+      directives = matched.split(/\n/).map { |l| l.delete_prefix("//").strip }
+      directives.each do |directive|
+        if directive.start_with?('depends_on')
+          input[:process_dependencies] << directive.sub(/\Adepends_on\s+/, '')
+        end
+      end
+    end
     
     last_postion = nil
     while !eos?
