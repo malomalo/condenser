@@ -13,6 +13,7 @@ class Condenser::JSAnalyzer
   
   def call(environment, input)
     seek(0)
+    @sourcefile = input[:source_file]
     @source = input[:source]
     @stack =  [:main]
 
@@ -80,7 +81,7 @@ class Condenser::JSAnalyzer
         when '('
           @stack.push :parenthesis
         when ')'
-          raise 'error' if @stack.last != :parenthesis
+          raise unexptected_token(")") if @stack.last != :parenthesis
           @stack.pop
         when '{'
           @stack.push :brackets
@@ -89,7 +90,7 @@ class Condenser::JSAnalyzer
           when :brackets, :tick_statment
             @stack.pop
           else
-            raise 'error'
+            raise unexptected_token("}")
           end
         when 'export'
           if @stack.last == :main
@@ -113,12 +114,24 @@ class Condenser::JSAnalyzer
     end
   end
   
+  def unexptected_token(token)
+    start = (@source.rindex("\n", @old_index) || 0) + 1
+    uptop = @source.index("\n", @index) || (@old_index + @matched.length)
+    lineno = @source[0..start].count("\n") + 1
+
+    message = "Unexpected token #{token} #{@sourcefile} #{lineno.to_s.rjust(4)}:#{(@index-start)}"
+    message << "\n#{lineno.to_s.rjust(4)}: " << @source[start..uptop]
+    message << "\n      #{'-'* (@index-1-start)}#{'^'*(@matched.length)}"
+    message << "\n"
+    Condenser::SyntaxError.new(message)
+  end
+  
   def double_quoted_value
     ret_value = ""
 
     while scan_until(/[\"\n]/)
       if matched == "\n"
-        raise 'error'
+        raise unexptected_token("\\n")
       elsif matched == "\""
         if pre_match[-1] != "\\"
           ret_value << pre_match
@@ -139,7 +152,7 @@ class Condenser::JSAnalyzer
 
     while scan_until(/[\'\n]/)
       if matched == "\n"
-        raise 'error'
+        raise unexptected_token("\\n")
       elsif matched == "\'" && pre_match[-1] != "\\"
         ret_value << pre_match
         return ret_value

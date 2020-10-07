@@ -52,7 +52,7 @@ module Condenser::ParseHelpers
     start = (@source.rindex("\n", @old_index) || 0) + 1
     uptop = @source.index("\n", @index) || (@old_index + @matched.length)
     lineno = @source[0..start].count("\n") + 1
-    "#{lineno.to_s.rjust(4)}: " + @source[start..uptop] + "\n      #{'-'* (@old_index+1-start)}#{'^'*(@matched.length)}"
+    "#{lineno.to_s.rjust(4)}: " + @source[start..uptop] + "\n      #{'-'* (@index-1-start)}#{'^'*(@matched.length)}"
   end
 
 end
