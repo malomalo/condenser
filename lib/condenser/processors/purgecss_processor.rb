@@ -4,6 +4,15 @@ class Condenser::PurgeCSSProcessor < Condenser::NodeProcessor
   
   attr_accessor :options
   
+  # Public: initialize with custom options.
+  #
+  # dir - String (path to node_modules directory)
+  # options - Hash
+  #   content - Array - html files to process
+  #       ex. [File.expand_path('./docs-src/**/*.erb'), File.expand_path('./docs-src/assets/javascripts/**/*.js')]
+  #
+  # Options are passed to PurgeCSS checkout [PurgeCSS Configurations](https://purgecss.com/configuration.html)
+  #
   def initialize(dir = nil, options = {})
     super(dir)
     @options = options
