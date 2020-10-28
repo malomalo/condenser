@@ -257,6 +257,16 @@ class Condenser
               data[:content_type] << to_mime_type
             end
           end
+          
+          if @environment.postprocessors.has_key?(data[:content_type].last)
+            @environment.postprocessors[data[:content_type].last].each do |processor|
+              processor_klass = (processor.is_a?(Class) ? processor : processor.class)
+              data[:processors] << processor_klass.name
+              @environment.load_processors(processor_klass)
+              @environment.logger.info { "Post Processing #{self.filename} with #{processor.name}" }
+              processor.call(@environment, data)
+            end
+          end
       
           if mime_types != @content_types
             raise ContentTypeMismatch, "mime type(s) \"#{@content_types.join(', ')}\" does not match requested mime type(s) \"#{data[:mime_types].join(', ')}\""
