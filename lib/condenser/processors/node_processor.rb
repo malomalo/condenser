@@ -8,6 +8,10 @@ class Condenser
     
     def self.setup(environment)
     end
+  
+    def name
+      self.class.name
+    end
 
     def self.call(environment, input)
       @instances ||= {}

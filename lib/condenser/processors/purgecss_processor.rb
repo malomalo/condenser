@@ -10,10 +10,6 @@ class Condenser::PurgeCSSProcessor < Condenser::NodeProcessor
     npm_install('purgecss')
   end
   
-  def name
-    self.class.name
-  end
-  
   def call(environment, input)
     result = exec_runtime(<<-JS)
       const { PurgeCSS } = require("#{File.join(npm_module_path('purgecss'))}")
