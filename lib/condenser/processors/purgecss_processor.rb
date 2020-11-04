@@ -13,6 +13,16 @@ class Condenser::PurgeCSSProcessor < Condenser::NodeProcessor
   #
   # Options are passed to PurgeCSS checkout [PurgeCSS Configurations](https://purgecss.com/configuration.html)
   #
+  
+  def self.call(environment, input)
+    @instances ||= {}
+    @instances[environment] ||= new(environment.npm_path, {
+      content: [File.join(environment.base, '**/*.html'), File.join(environment.base, '**/*.js')]
+    })
+    @instances[environment].call(environment, input)
+  end
+  
+  
   def initialize(dir = nil, options = {})
     super(dir)
     @options = options
