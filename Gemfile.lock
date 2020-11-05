@@ -61,7 +61,7 @@ GEM
     tzinfo (1.2.6)
       thread_safe (~> 0.1)
     zeitwerk (2.2.2)
-    zopfli (0.0.7)
+    zopfli (0.0.8)
 
 PLATFORMS
   ruby
