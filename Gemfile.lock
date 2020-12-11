@@ -42,7 +42,7 @@ GEM
       minitest (>= 5.0)
       ruby-progressbar
     mocha (1.10.2)
-    rack (2.2.2)
+    rack (2.2.3)
     rack-test (1.1.0)
       rack (>= 1.0, < 3)
     rake (13.0.1)
