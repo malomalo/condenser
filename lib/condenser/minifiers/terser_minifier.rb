@@ -5,9 +5,8 @@ class Condenser::TerserMinifier < Condenser::NodeProcessor
     npm_install('terser')
     
     @options = options.merge({
-      warnings: true,
-      sourceMap: false,
-      keep_classnames: true
+      keep_classnames: true,
+      keep_fnames: true
     }).freeze
   end
 
@@ -28,13 +27,12 @@ class Condenser::TerserMinifier < Condenser::NodeProcessor
       const options = #{JSON.generate(opts)};
 
 
-      var result = Terser.minify(source, options);
-      if (result.error !== undefined) {
-        console.log(JSON.stringify({'error': result.error.name + ": " + result.error.message}));
-        process.exit(1);
-      } else {
+      Terser.minify(source, options).then((result) => {
         console.log(JSON.stringify(result));
-      }
+      }, (error) => {
+        console.log(JSON.stringify({'error': error.name + ": " + error.message}));
+        process.exit(1);
+      });
     JS
 
     exec_runtime_error(result['error']) if result['error']

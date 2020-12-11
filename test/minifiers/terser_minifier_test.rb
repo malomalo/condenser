@@ -27,8 +27,8 @@ class TerserMinifierTest < ActiveSupport::TestCase
       }
     JS
     
-    @env.logger.expects(:warn).with('Dropping unused variable u [test.js:8,6]')
-    @env.logger.expects(:warn).with('Dropping unused variable bl [test.js:10,6]')
+    # @env.logger.expects(:warn).with('Dropping unused variable u [test.js:8,6]')
+    # @env.logger.expects(:warn).with('Dropping unused variable bl [test.js:10,6]')
     
     assert_exported_file 'test.js', 'application/javascript', <<~CSS
       class MyClass{fn(){console.log("Hello")}}function fa(){return console.log(1),5}
