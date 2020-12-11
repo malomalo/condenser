@@ -22,7 +22,7 @@ class CacheFileStoreTest < ActiveSupport::TestCase
 
     oldenv = @env
     begin
-      @env = Condenser.new(@path)
+      @env = Condenser.new(@path, base: @path)
       @env.cache = Condenser::Cache::FileStore.new(@cachepath)
       Condenser::Erubi.stubs(:call).never
 

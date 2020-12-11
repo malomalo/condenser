@@ -159,7 +159,7 @@ class Condenser
           Digest::SHA256.file(dep.source_file).hexdigest
         ]
       end
-
+      
       @pcv = Digest::SHA1.base64digest(JSON.generate(f))
     end
     
@@ -241,6 +241,7 @@ class Condenser
               data[:processors] << processor_klass.name
               @environment.load_processors(processor_klass)
 
+              @environment.logger.info { "Pre Processing #{self.filename} with #{processor.name}" }
               processor.call(@environment, data)
             end
           end
@@ -263,6 +264,7 @@ class Condenser
               processor_klass = (processor.is_a?(Class) ? processor : processor.class)
               data[:processors] << processor_klass.name
               @environment.load_processors(processor_klass)
+
               @environment.logger.info { "Post Processing #{self.filename} with #{processor.name}" }
               processor.call(@environment, data)
             end
