@@ -237,4 +237,32 @@ class CacheTest < ActiveSupport::TestCase
     CSS
   end
 
+  test 'a dependency is added then changed should flush the parent' do
+    file 'a.js', "console.log('a');\n"
+    file 'b.js', <<~JS
+      export default function b () { console.log('b'); }
+    JS
+
+    assert_exported_file 'a.js', 'application/javascript', <<~JS
+      !function(){"use strict";console.log("a")}();
+    JS
+
+    file 'a.js', <<~JS
+      import b from 'b';
+      console.log('a');
+      b();
+    JS
+
+    assert_exported_file 'a.js', 'application/javascript', <<~JS
+      !function(){"use strict";console.log("a"),console.log("b")}();
+    JS
+
+    file 'b.js', <<~JS
+      export default function b () { console.log('c'); }
+    JS
+
+    assert_exported_file 'a.js', 'application/javascript', <<~JS
+      !function(){"use strict";console.log("a"),console.log("c")}();
+    JS
+  end
 end

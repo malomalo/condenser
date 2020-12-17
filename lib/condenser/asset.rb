@@ -347,6 +347,15 @@ class Condenser
           data[:digest_name] = @environment.digestor.name.sub(/^.*::/, '').downcase
           data
         end
+
+        if @environment.build_cache.listening
+          # TODO we could skip file and all their depencies here if they are
+          # already in build_cache.@export_dependencies
+          all_export_dependencies.each do |sf|
+            @environment.build_cache.instance_variable_get(:@export_dependencies)[sf]&.add(self)
+          end
+        end
+
         Export.new(@environment, data)
       end
     end
