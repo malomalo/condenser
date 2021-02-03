@@ -64,4 +64,28 @@ class JSTTransformerTest < ActiveSupport::TestCase
     JS
   end
 
+  test 'jst transoformation with object' do
+    file 'test.jst', <<~SCSS
+      import {append as __ejx_append} from 'ejx';
+      export default function (locals) {
+          var __output = [];
+          __ejx_append(avatarTemplate({ account: account }), __output);
+          return __output;
+      }
+    SCSS
+
+    assert_file 'test.js', 'application/javascript', <<~JS
+      import { append as __ejx_append } from 'ejx';
+      export default function (locals) {
+        var __output = [];
+      
+        __ejx_append(locals.avatarTemplate({
+          account: locals.account
+        }), __output);
+      
+        return __output;
+      }
+    JS
+  end
+
 end

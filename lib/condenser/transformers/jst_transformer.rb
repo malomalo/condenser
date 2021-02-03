@@ -37,10 +37,15 @@ class Condenser::JstTransformer < Condenser::NodeProcessor
         return {
           visitor: {
             Identifier(path, state) {
-              if ( path.parent.type == 'MemberExpression' && path.parent.object != path.node) {
+              if ( path.parent.type === 'MemberExpression' && path.parent.object !== path.node) {
                 return;
               }
-              if ( path.parent.type == 'ImportSpecifier' || path.parent.type == 'ImportDefaultSpecifier' || path.parent.type =='FunctionDeclaration') {
+              
+              if ( path.parent.type === 'ImportSpecifier' || path.parent.type === 'ImportDefaultSpecifier' || path.parent.type === 'FunctionDeclaration') {
+                return;
+              }
+              
+              if ( path.parent.type === 'ObjectProperty' && path.parent.key === path.node ) {
                 return;
               }
 
