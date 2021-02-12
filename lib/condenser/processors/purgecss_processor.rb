@@ -44,13 +44,16 @@ class Condenser::PurgeCSSProcessor < Condenser::NodeProcessor
           return s
         })
       }
+      if(!options.defaultExtractor) {
+        options.defaultExtractor = content => content.match(/[\\w\\-\\/\\:]+(?<!:)/g) || []
+      }
       const result = new PurgeCSS().purge(options)
       try {
         result.then(
           r => console.log(JSON.stringify({
             success: r[0]
           })),
-          function() {console.log(JSON.stringify({'error': arguments}))}
+          function(e) {console.log(JSON.stringify({'error': [e.name, e.message, e.stack]}))}
         )
       } catch(e) {
         console.log(JSON.stringify({'error': [e.name, e.message, e.stack]}));
@@ -60,7 +63,7 @@ class Condenser::PurgeCSSProcessor < Condenser::NodeProcessor
       if result['error'][0] == 'SyntaxError'
         raise exec_syntax_error(result['error'][1], "/assets/#{input[:filename]}")
       else
-        raise exec_runtime_error(result['error'][0] + ': ' + result['error'][1])
+        raise exec_runtime_error(result['error']["0"]["name"] + ": " + result['error']["0"]["reason"])
       end
     else
       input[:source] = result["success"]["css"]
