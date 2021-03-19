@@ -1,7 +1,8 @@
-require 'css_parser'
-require 'json'
-
-class Condenser::MediaCombinerProcessor < Condenser::NodeProcessor
+class Condenser::CSSMediaCombinerProcessor < Condenser::NodeProcessor
+  
+  def self.setup(environment)
+    require "css_parser" unless defined?(::CssParser)
+  end
   
   def call(environment, input)
     output = CssParser::Parser.new
