@@ -16,6 +16,7 @@ class MediaCombinerTest < ActiveSupport::TestCase
       @media only screen and (max-width: 100px) {
         .test {
           display: inline-block;
+          color: blue;
         }
       }
       @media only screen and (max-width: 500px) {
@@ -44,10 +45,10 @@ class MediaCombinerTest < ActiveSupport::TestCase
     .test2{
       display: block;
     }
-
     @media only screen and (max-width: 100px) {
       .test {
         display: inline-block;
+        color: blue;
       }
 
       .test2 {
@@ -65,14 +66,13 @@ class MediaCombinerTest < ActiveSupport::TestCase
     file 'main.css', <<~CSS
       .test{display: block;} @media only screen and (max-width: 100px) {.test {display: inline-block;}}@media only screen and (max-width: 500px) {.test {display: inline;}}.test2{display: block;}@media only screen and (max-width: 100px) {.test2 {display: inline-block;}}
     CSS
-    
+
     assert_exported_file 'main.css', 'text/css', <<~FILE
-    .test{display: block;} .test2{display: block;}
-    @media only screen and (max-width: 100px) {.test {display: inline-block;}.test2 {display: inline-block;}}@media only screen and (max-width: 500px) {.test {display: inline;}}
+    .test{display: block;} .test2{display: block;}@media only screen and (max-width: 100px) {.test {display: inline-block;}.test2 {display: inline-block;}}@media only screen and (max-width: 500px) {.test {display: inline;}}
     FILE
   end
-  
-  
+
+
   test 'keyframes' do
     file 'main.css', <<~CSS
     .trobber {
@@ -102,6 +102,6 @@ class MediaCombinerTest < ActiveSupport::TestCase
     }
     FILE
   end
-  
+
 
 end

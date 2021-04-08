@@ -1,46 +1,83 @@
-class Condenser::CSSMediaCombinerProcessor < Condenser::NodeProcessor
+require 'condenser/helpers/parse_helpers'
+
+class Condenser::CSSMediaCombinerProcessor
   
-  def call(environment, input)
-    buffer = ""
-    query_flag = false
-    media_queries = {}
-    input[:source].split(/(@media)/).each do |result|
-      if query_flag
-        query, rules = result.split("{", 2)
-        
-        rules_buffer = ""
-        bracket_count = 1
-        rules.each_char do |char|
-          if query_flag && char == "{"
-            bracket_count += 1
-          elsif query_flag && char == "}"
-            bracket_count -= 1
-            if bracket_count == 0
-              media_queries[query.strip] ||= ""
-              media_queries[query.strip] += rules_buffer
-              rules_buffer = ""
-              query_flag = false
-              next
-            end
-          end
-          
-          rules_buffer += char
-        end
-        
-        buffer += rules_buffer
-        query_flag = false
-      elsif result == "@media"
-        query_flag = true
+  include Condenser::ParseHelpers
+  
+  def self.setup(env)
+  end
+  
+  def self.call(environment, input)
+    new.call(environment, input)
+  end
+
+  def reduce_media_query(queries)
+    output = ''
+    queries.each do |query, contents|
+      output << query if query
+      output << if contents.is_a?(Hash)
+        reduce_media_query(contents)
       else
-        buffer += result
+        contents + '}'
       end
     end
-    
-    media_queries.each do |query, query_buffer|
-      buffer += "@media #{query} {#{query_buffer}}"
+    output
+  end
+  
+  def call(environment, input)
+    seek(0)
+    @sourcefile = input[:source_file]
+    @source = input[:source]
+    @stack =  []
+    @selectors = []
+    @media_queries = {}
+
+    input[:source] = ''
+    while !eos?
+      output = if @selectors.empty?
+        input[:source]
+      else
+        (@selectors[0...-1].reduce(@media_queries) { |hash, selector| hash[selector] ||= {} }[@selectors.last] ||= '')
+      end
+      
+      case @stack.last
+      when :media_query
+        scan_until(/(@media[^\{]*{|\{|\})/)
+        case matched
+        when '{'
+          output << pre_match << matched
+          @stack << :statement
+        when '}'
+          output << pre_match
+          @stack.pop
+          @selectors.pop
+        else
+          output << pre_match
+          @selectors << matched.squish
+          @stack << :media_query
+        end
+      when :statement
+        scan_until(/(\{|\})/)
+        output << pre_match << matched
+        case matched
+        when '{'
+          @stack << :statement
+        when '}'
+          @stack.pop
+        end
+      else
+        case scan_until(/(@media[^\{]*{|\Z)/)
+        when ''
+          output << pre_match
+        else
+          output << pre_match
+          @selectors << matched.squish
+          @stack << :media_query
+        end
+      end
     end
-    
-    input[:source] = buffer
+
+    input[:source] << reduce_media_query(@media_queries)
   end
 
 end
