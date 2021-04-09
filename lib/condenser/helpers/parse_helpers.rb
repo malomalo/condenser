@@ -3,7 +3,7 @@ module Condenser::ParseHelpers
   attr_accessor :matched
 
   def eos?
-    @index >= @source.size
+    @index >= (@source.size - 1)
   end
 
   def scan_until(r)
