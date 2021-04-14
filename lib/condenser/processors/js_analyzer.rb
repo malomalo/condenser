@@ -1,5 +1,3 @@
-require 'condenser/helpers/parse_helpers'
-
 class Condenser::JSAnalyzer
 
   include Condenser::ParseHelpers
