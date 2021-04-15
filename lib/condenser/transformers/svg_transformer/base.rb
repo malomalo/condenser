@@ -10,8 +10,15 @@ class Condenser::SVGTransformer::Base
     var_generator = Condenser::SVGTransformer::VarGenerator.new
 
     <<~JS
-      export default function () {
+      export default function (svgAttributes) {
       #{@children.last.to_js(var_generator: var_generator)}
+          if (svgAttributes) {
+              Object.keys(svgAttributes).forEach(function (key) {
+                  __a.setAttribute(key, svgAttributes[key]);
+              });
+          }
+
+          return __a;
       }
     JS
   end

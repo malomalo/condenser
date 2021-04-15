@@ -8,22 +8,9 @@ class Condenser::SVGTransformer::Template
   CLOSE_TAGS = ['/>', '>']
   VOID_ELEMENTS = ['!DOCTYPE', '?xml']
   
-  def initialize(source, svg_attributes={})
+  def initialize(source)
     @source = source.strip
     process
-
-    new_attrs = svg_attributes.map { |k,v| [k.to_s, v] }.to_h
-    @tree.first.children.last.attrs.reverse_each do |attrs|
-      (attrs.keys & new_attrs.keys.map(&:to_s)).each do |key|
-        attrs[key] = Condenser::SVGTransformer::Value.new(new_attrs[key])
-      end
-    end
-
-    nattrs = {}
-    (new_attrs.keys - @tree.first.children.last.attrs.map(&:keys).flatten).each do |nk|
-      nattrs[nk] = Condenser::SVGTransformer::Value.new(new_attrs[nk])
-    end
-    @tree.first.children.last.attrs << nattrs
   end
 
   def process

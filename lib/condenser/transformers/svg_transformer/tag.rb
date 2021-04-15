@@ -45,11 +45,8 @@ class Condenser::SVGTransformer::Tag
       end
     end
 
-    js << if append
-      "#{' '*indentation}#{append}.append(#{output_var});\n"
-    else
-      "#{' '*indentation}return #{output_var};"
-    end
+    js << "#{' '*indentation}#{append}.append(#{output_var});\n" if append
+
     js
   end
   

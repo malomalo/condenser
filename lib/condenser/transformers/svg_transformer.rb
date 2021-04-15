@@ -1,6 +1,4 @@
 class Condenser::SVGTransformer
-
-  attr_reader :options
   
   autoload :Base, File.expand_path('../svg_transformer/base', __FILE__)
   autoload :Tag, File.expand_path('../svg_transformer/tag', __FILE__)
@@ -13,17 +11,9 @@ class Condenser::SVGTransformer
   end
 
   def self.call(environment, input)
-    new.call(environment, input)
+    input[:source] = Condenser::SVGTransformer::Template.new(input[:source]).to_module
   end
 
-  def initialize(attributes = {})
-    @options = attributes
-  end
-
-  def call(environment, input)
-    input[:source] = Condenser::SVGTransformer::Template.new(input[:source], @options).to_module()
-  end
-  
 end
 
 
