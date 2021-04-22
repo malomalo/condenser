@@ -1,5 +1,3 @@
-require 'condenser/helpers/parse_helpers'
-
 class Condenser::CSSMediaCombinerProcessor
   
   include Condenser::ParseHelpers

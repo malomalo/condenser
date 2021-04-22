@@ -29,10 +29,12 @@ class Condenser
   autoload :ScssTransformer,  'condenser/transformers/sass_transformer'
   autoload :EjsTemplare,      'condenser/templating_engine/ejs'
   autoload :JstTransformer,   'condenser/transformers/jst_transformer'
+  autoload :SVGTransformer,   'condenser/transformers/svg_transformer'
   autoload :FileWriter,       'condenser/writers/file_writer'
   autoload :ZlibWriter,       'condenser/writers/zlib_writer'
   autoload :BrotliWriter,     'condenser/writers/brotli_writer'
   autoload :BuildCache,       'condenser/build_cache'
+  autoload :ParseHelpers,     'condenser/helpers/parse_helpers'
   
   def self.configure(&block)
     instance_eval(&block)
@@ -151,6 +153,9 @@ Condenser.configure do
   # JST
   register_mime_type    'application/jst', extensions: '.jst', charset: :unicode
   register_transformer  'application/jst', 'application/javascript', Condenser::JstTransformer
+  
+  # SVG
+  register_transformer  'image/svg+xml', 'application/javascript', Condenser::SVGTransformer
   
   # Writers
   register_mime_type 'application/gzip',    extensions: %w(.gz .gzip)
