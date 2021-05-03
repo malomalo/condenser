@@ -35,7 +35,7 @@ class Condenser
       end
     end
 
-    attr_reader :environment, :filename
+    attr_reader :environment, :filename, :links, :dependencies
 
     def initialize(environment)
       @environment  = environment
@@ -110,29 +110,14 @@ class Condenser
     # `depend_on` allows you to state a dependency on a file without
     # including it.
     #
-    # This is used for caching purposes. Any changes made to
-    # the dependency file will invalidate the cache of the
-    # source file.
-    def depend_on(path)
-      if environment.absolute_path?(path) && environment.stat(path)
-        @dependencies << environment.build_file_digest_uri(path)
-      else
-        resolve(path)
-      end
-      nil
-    end
-
-    # `depend_on_asset` allows you to state an asset dependency
-    # without including it.
-    #
     # This is used for caching purposes. Any changes that would
     # invalidate the dependency asset will invalidate the source
-    # file. Unlike `depend_on`, this will recursively include
-    # the target asset's dependencies.
-    def depend_on_asset(path)
-      asset = environment.find!(path)
-      @dependencies << asset.source_file
-      asset
+    # file.
+    def depend_on(path)
+      d = environment.decompose_path(path)
+      @dependencies << [File.join(*d[0], d[1]), [d[3]]]
+
+      nil
     end
 
     # `depend_on_env` allows you to state a dependency on an environment
@@ -150,9 +135,8 @@ class Condenser
     #
     # Returns an Asset or nil.
     def link_asset(path)
-      asset = depend_on_asset(path)
-      @links << asset.path
-      asset
+      depend_on(path)
+      @links << path
     end
 
     # Returns a `data:` URI with the contents of the asset at the specified

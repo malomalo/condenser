@@ -17,7 +17,7 @@ class DependencyTest < ActiveSupport::TestCase
     JS
 
     asset = @env.find('name.js')
-    assert_equal asset.instance_variable_get(:@process_dependencies), ["models/*.js","helpers/*.js"]
+    assert_equal asset.instance_variable_get(:@process_dependencies).to_a, ["models/*.js","helpers/*.js"]
 
 
     assert_file 'name.js', 'application/javascript', <<~JS

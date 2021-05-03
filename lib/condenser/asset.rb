@@ -125,7 +125,7 @@ class Condenser
     
     def all_process_dependencies
       f = [@source_file]
-      all_dependenies(process_dependencies, [], :process_dependencies) do |dep|
+      all_dependenies(process_dependencies, Set.new, :process_dependencies) do |dep|
         f << dep.source_file
       end
       f
@@ -133,7 +133,7 @@ class Condenser
     
     def all_export_dependencies
       f = [@source_file]
-      all_dependenies(export_dependencies, [], :export_dependencies) do |dep|
+      all_dependenies(export_dependencies, Set.new, :export_dependencies) do |dep|
         f << dep.source_file
       end
       f
@@ -153,7 +153,7 @@ class Condenser
       return @pcv if @pcv
 
       f = []
-      all_dependenies(process_dependencies, [], :process_dependencies) do |dep|
+      all_dependenies(process_dependencies, Set.new, :process_dependencies) do |dep|
         f << [
           @environment.base ? dep.source_file.delete_prefix(@environment.base) : dep.source_file,
           Digest::SHA256.file(dep.source_file).hexdigest
@@ -167,7 +167,7 @@ class Condenser
       return @ecv if @ecv
 
       f = []
-      all_dependenies(export_dependencies, [], :export_dependencies) do |dep|
+      all_dependenies(export_dependencies, Set.new, :export_dependencies) do |dep|
         f << [
           @environment.base ? dep.source_file.delete_prefix(@environment.base) : dep.source_file,
           Digest::SHA256.file(dep.source_file).hexdigest
@@ -206,9 +206,9 @@ class Condenser
             content_type: mime_types,
 
             map: nil,
-            linked_assets: [],
-            process_dependencies: [],
-            export_dependencies: [],
+            linked_assets: Set.new,
+            process_dependencies: Set.new,
+            export_dependencies: Set.new,
             
             processors: Set.new
           }
@@ -285,15 +285,14 @@ class Condenser
           @content_types = data[:content_type]
           @digest = data[:digest]
           @digest_name = data[:digest_name]
-          @linked_assets = data[:linked_assets]
-          @process_dependencies = data[:process_dependencies]
-          @export_dependencies = data[:export_dependencies]
+          @linked_assets = Set.new(data[:linked_assets])
+          @process_dependencies = Set.new(data[:process_dependencies])
+          @export_dependencies = Set.new(data[:export_dependencies])
           @default_export = data[:default_export]
           @exports = data[:exports]
           @processors = data[:processors]
           @processors_loaded = true
           @processed = true
-          
           data
         end
       end
@@ -304,9 +303,9 @@ class Condenser
       @content_types = result[:content_type]
       @digest = result[:digest]
       @digest_name = result[:digest_name]
-      @linked_assets = result[:linked_assets]
-      @process_dependencies = result[:process_dependencies]
-      @export_dependencies  = result[:export_dependencies]
+      @linked_assets = Set.new(result[:linked_assets])
+      @process_dependencies = Set.new(result[:process_dependencies])
+      @export_dependencies  = Set.new(result[:export_dependencies])
       @default_export = result[:default_export]
       @exports = result[:exports]
       @processors = result[:processors]

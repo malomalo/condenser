@@ -39,6 +39,7 @@ class ActiveSupport::TestCase
     @env.unregister_writer(Condenser::BrotliWriter)
     @env.context_class.class_eval do
       def asset_path(path, options = {})
+        path = environment.find!(path, options).path
         "/assets/#{path}"
       end
     end
@@ -62,6 +63,7 @@ class ActiveSupport::TestCase
       sleep(1 - stat) if stat < 1
     end
     File.write(path, source)
+    sleep 0.25 if @env.build_cache.listening
   end
   
   def rm(name)

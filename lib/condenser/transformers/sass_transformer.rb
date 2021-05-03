@@ -61,11 +61,10 @@ class Condenser
         include options[:functions] if options[:functions]
         class_eval(&block) if block_given?
       end
-      # puts @functions.method(:asset_path).source_location
     end
 
     def call(environment, input)
-      # context = input[:environment].context_class.new(input)
+      context = environment.new_context_class
       engine_options = merge_options({
         syntax:       self.class.syntax,
         filename:     input[:filename],
@@ -74,25 +73,23 @@ class Condenser
         # cache_store:  Cache.new(environment.cache),
         load_paths:   environment.path,
         importer:     @importer_class,
-        condenser: {
-          context: environment.new_context_class,
-          environment: environment
-        },
+        condenser: { context: context, environment: environment },
         asset: input
       })
-
-      engine = SassC::Engine.new(input[:source], engine_options)
       
+      engine = SassC::Engine.new(input[:source], engine_options)
+
       css = Utils.module_include(SassC::Script::Functions, @functions) do
         engine.render
       end
       css.delete_suffix!("\n/*# sourceMappingURL=#{File.basename(input[:filename])}.map */")
       # engine.source_map
       # css = css.delete_suffix!("\n/*# sourceMappingURL= */\n")
-
-
+      
       input[:source] = css
       # input[:map] = map.to_json({})
+      input[:linked_assets] += context.links
+      input[:process_dependencies] += context.dependencies
     end
 
     private
@@ -142,11 +139,9 @@ class Condenser
       # Returns a Sass::Script::String.
       def asset_path(path, options = {})
         path = path.value
-
-        path, _, query, fragment = URI.split(path)[5..8]
-        asset = condenser_environment.find!(path)
         condenser_context.link_asset(path)
-        path = condenser_context.asset_path(asset.path, options)
+
+        path = condenser_context.asset_path(path, options)
         query    = "?#{query}" if query
         fragment = "##{fragment}" if fragment
         SassC::Script::Value::String.new("#{path}#{query}#{fragment}", :string)
@@ -295,7 +290,7 @@ class Condenser
         #
         # Returns a Set.
         def condenser_dependencies
-          options[:condenser][:process_dependencies]
+          options[:asset][:process_dependencies]
         end
 
     end
