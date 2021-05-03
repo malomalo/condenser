@@ -80,6 +80,10 @@ class CondenserSCSSTest < ActiveSupport::TestCase
       url: url(/assets/foo-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.js);
       url: url(/assets/foo-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.css); }
     CSS
+    
+    asset = @env.find('test.css')
+    assert_equal ["foo.svg", "foo.png", "foo.mov", "foo.mp3", "foo.woff2", "foo.woff", "foo.js", "foo.css"], asset.process_dependencies.map(&:filename)
+    assert_equal ["foo.svg", "foo.png", "foo.mov", "foo.mp3", "foo.woff2", "foo.woff", "foo.js", "foo.css"], asset.export_dependencies.map(&:filename)
   end
   
   test "sass dependencies" do

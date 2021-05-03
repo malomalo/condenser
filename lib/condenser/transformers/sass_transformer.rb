@@ -61,7 +61,6 @@ class Condenser
         include options[:functions] if options[:functions]
         class_eval(&block) if block_given?
       end
-      # puts @functions.method(:asset_path).source_location
     end
 
     def call(environment, input)
@@ -80,9 +79,9 @@ class Condenser
         },
         asset: input
       })
-
-      engine = SassC::Engine.new(input[:source], engine_options)
       
+      engine = SassC::Engine.new(input[:source], engine_options)
+
       css = Utils.module_include(SassC::Script::Functions, @functions) do
         engine.render
       end
@@ -145,7 +144,13 @@ class Condenser
 
         path, _, query, fragment = URI.split(path)[5..8]
         asset = condenser_environment.find!(path)
+
         condenser_context.link_asset(path)
+
+        # condenser_context.depend_on_asset(path)
+        d = self.options[:condenser][:environment].decompose_path(path)
+        self.options[:asset][:process_dependencies] << [d[1], d[3]]
+        
         path = condenser_context.asset_path(asset.path, options)
         query    = "?#{query}" if query
         fragment = "##{fragment}" if fragment
@@ -295,7 +300,7 @@ class Condenser
         #
         # Returns a Set.
         def condenser_dependencies
-          options[:condenser][:process_dependencies]
+          options[:asset][:process_dependencies]
         end
 
     end
