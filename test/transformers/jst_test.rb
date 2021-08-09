@@ -103,6 +103,8 @@ class JSTTransformerTest < ActiveSupport::TestCase
           class B {
           }
           
+          models.map(m => m.name)
+          
           __ejx_append(avatarTemplate({ account: x(files), klass: B }), __output);
           return __output;
       }
@@ -118,6 +120,8 @@ class JSTTransformerTest < ActiveSupport::TestCase
         }
       
         class B {}
+      
+        locals.models.map(m => m.name);
       
         __ejx_append(locals.avatarTemplate({
           account: x(locals.files),

@@ -45,10 +45,11 @@ class Condenser::JstTransformer < Condenser::NodeProcessor
               
               if ( path.parent.type === 'ImportSpecifier' ||
                    path.parent.type === 'ImportDefaultSpecifier' ||
-                   path.parent.type === 'FunctionDeclaration') {
+                   path.parent.type === 'FunctionDeclaration' ||
+                   path.parent.type === 'FunctionExpression' ||
+                   path.parent.type === 'ArrowFunctionExpression' ) {
                 return;
               }
-
               
               if ( path.parent.type === 'ObjectProperty' && path.parent.key === path.node ) {
                 return;
@@ -70,9 +71,16 @@ class Condenser::JstTransformer < Condenser::NodeProcessor
       options['plugins'].unshift(function({ types: t }) {
           return {
             visitor: {
-              FunctionDeclaration(path, state) {
-                if (path.node.id) { scope[scope.length-1].push(path.node.id.name) }
-                scope.push(path.node.params.map((n) => n.name));
+              Function: {
+                enter(path, state) {
+                  scope.push([]);
+                  if (path.node.id) { scope[scope.length-1].push(path.node.id.name) }
+                  scope.push(path.node.params.map((n) => n.name));
+                },
+                exit(path, state) {
+                  scope.pop();
+                }
+                
               },
               ImportDeclaration(path, state) {
                 path.node.specifiers.forEach((s) => scope[scope.length-1].push(s.local.name));
@@ -82,16 +90,6 @@ class Condenser::JstTransformer < Condenser::NodeProcessor
               },
               VariableDeclaration(path, state) {
                 path.node.declarations.forEach((s) => scope[scope.length-1].push(s.id.name));
-              },
-              BlockStatement: {
-                enter(path, state) {
-                  if (path.parent.type !== 'FunctionDeclaration') {
-                    scope.push([]);
-                  }
-                },
-                exit(path, state) {
-                  scope.pop();
-                }
               }
             }
           };
