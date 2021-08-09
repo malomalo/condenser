@@ -33,6 +33,8 @@ class Condenser::JstTransformer < Condenser::NodeProcessor
         }
       }
 
+      let scope = [['document', 'window']];
+      
       options['plugins'].unshift(function({ types: t }) {
         return {
           visitor: {
@@ -41,19 +43,19 @@ class Condenser::JstTransformer < Condenser::NodeProcessor
                 return;
               }
               
-              if ( path.parent.type === 'ImportSpecifier' || path.parent.type === 'ImportDefaultSpecifier' || path.parent.type === 'FunctionDeclaration') {
+              if ( path.parent.type === 'ImportSpecifier' ||
+                   path.parent.type === 'ImportDefaultSpecifier' ||
+                   path.parent.type === 'FunctionDeclaration') {
                 return;
               }
+
               
               if ( path.parent.type === 'ObjectProperty' && path.parent.key === path.node ) {
                 return;
               }
 
-              if (
-                path.node.name !== 'document' &&
-                path.node.name !== 'window' &&
-                !(path.node.name in global) &&
-                globalVar(path.scope, path.node.name)
+              if ( !(path.node.name in global) &&
+                   !scope.find((s) => s.find(v => v === path.node.name))
               ) {
                 path.replaceWith(
                   t.memberExpression(t.identifier("locals"), path.node)
@@ -63,6 +65,38 @@ class Condenser::JstTransformer < Condenser::NodeProcessor
           }
         };
       });
+      
+
+      options['plugins'].unshift(function({ types: t }) {
+          return {
+            visitor: {
+              FunctionDeclaration(path, state) {
+                if (path.node.id) { scope[scope.length-1].push(path.node.id.name) }
+                scope.push(path.node.params.map((n) => n.name));
+              },
+              ImportDeclaration(path, state) {
+                path.node.specifiers.forEach((s) => scope[scope.length-1].push(s.local.name));
+              },
+              ClassDeclaration(path, state) {
+                if (path.node.id) { scope[scope.length-1].push(path.node.id.name) }
+              },
+              VariableDeclaration(path, state) {
+                path.node.declarations.forEach((s) => scope[scope.length-1].push(s.id.name));
+              },
+              BlockStatement: {
+                enter(path, state) {
+                  if (path.parent.type !== 'FunctionDeclaration') {
+                    scope.push([]);
+                  }
+                },
+                exit(path, state) {
+                  scope.pop();
+                }
+              }
+            }
+          };
+      });
+
 
       try {
         const result = babel.transform(source, options);

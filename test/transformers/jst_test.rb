@@ -2,23 +2,28 @@ require 'test_helper'
 
 class JSTTransformerTest < ActiveSupport::TestCase
 
+  def setup
+    super
+    @env.unregister_preprocessor 'application/javascript', Condenser::BabelProcessor
+  end
+  
   test 'jst transoformation' do
     file 'test.jst', <<~SCSS
       import {escape} from 'ejs';
       export default function (locals) {
           var __output = [], __append = __output.push.bind(__output);
               __append("<div class=\\"uniformLoader\\n");
-               if(typeof transparent != "undefined") { 
+               if(typeof transparent != "undefined") {
               __append(" -transparent");
-               } 
+               }
               __append("\\n");
-               if(typeof cover != "undefined") { 
+               if(typeof cover != "undefined") {
               __append(" -cover");
-               } 
+               }
               __append("\\n");
-               if(typeof light != "undefined") { 
+               if(typeof light != "undefined") {
               __append(" -light");
-               } 
+               }
               __append(" ");
               __append( klass );
               __append("\\">\\n    <div class=\\"uniformLoader-container\\">\\n        <span></span>\\n        <span></span>\\n        <span></span>\\n    </div>\\n</div>");
@@ -27,13 +32,10 @@ class JSTTransformerTest < ActiveSupport::TestCase
     SCSS
 
     assert_file 'test.js', 'application/javascript', <<~JS
-    import _bindInstanceProperty from "@babel/runtime-corejs3/core-js-stable/instance/bind";
     import { escape } from 'ejs';
     export default function (locals) {
-      var _context;
-
       var __output = [],
-          __append = _bindInstanceProperty(_context = __output.push).call(_context, __output);
+          __append = __output.push.bind(__output);
 
       __append("<div class=\\"uniformLoader\\n");
 
@@ -78,9 +80,48 @@ class JSTTransformerTest < ActiveSupport::TestCase
       import { append as __ejx_append } from 'ejx';
       export default function (locals) {
         var __output = [];
-      
+
         __ejx_append(locals.avatarTemplate({
           account: locals.account
+        }), __output);
+
+        return __output;
+      }
+    JS
+  end
+
+  test 'jst with transoformation with object' do
+    file 'test.jst', <<~SCSS
+      import {append as __ejx_append} from 'ejx';
+      export default function (locals) {
+          var __output = [];
+          
+          function x(files) {
+            return files.test();
+          }
+          
+          class B {
+          }
+          
+          __ejx_append(avatarTemplate({ account: x(files), klass: B }), __output);
+          return __output;
+      }
+    SCSS
+
+    assert_file 'test.js', 'application/javascript', <<~JS
+      import { append as __ejx_append } from 'ejx';
+      export default function (locals) {
+        var __output = [];
+
+        function x(files) {
+          return files.test();
+        }
+      
+        class B {}
+      
+        __ejx_append(locals.avatarTemplate({
+          account: x(locals.files),
+          klass: B
         }), __output);
       
         return __output;
