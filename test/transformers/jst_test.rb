@@ -7,7 +7,7 @@ class JSTTransformerTest < ActiveSupport::TestCase
     @env.unregister_preprocessor 'application/javascript', Condenser::BabelProcessor
   end
   
-  test 'jst transoformation' do
+  test 'jst transformation' do
     file 'test.jst', <<~SCSS
       import {escape} from 'ejs';
       export default function (locals) {
@@ -66,7 +66,7 @@ class JSTTransformerTest < ActiveSupport::TestCase
     JS
   end
 
-  test 'jst transoformation with object' do
+  test 'jst transformation with object' do
     file 'test.jst', <<~SCSS
       import {append as __ejx_append} from 'ejx';
       export default function (locals) {
@@ -90,7 +90,7 @@ class JSTTransformerTest < ActiveSupport::TestCase
     JS
   end
 
-  test 'jst with transoformation with object' do
+  test 'jst with transformation scope test of a defined function' do
     file 'test.jst', <<~SCSS
       import {append as __ejx_append} from 'ejx';
       export default function (locals) {
@@ -130,6 +130,49 @@ class JSTTransformerTest < ActiveSupport::TestCase
       
         return __output;
       }
+    JS
+  end
+
+  test 'jst with transformation shadow variable example' do
+    file 'test.jst', <<~JS
+    import {append as __ejx_append} from 'ejx';
+    export default async function (locals) {
+        function f (items, template) {
+                return items.map((file) => {
+                    const row = template(file);
+                    const bar = row.querySelector('.progress-bar');
+                    file.onprogress = (n) => { row.style.width = "" + n + "%"; }
+            
+                    return row;
+                });
+            }
+        __ejx_append(f(items, (f) => { return __v; }));
+        return __output;
+    }
+    JS
+
+    assert_file 'test.js', 'application/javascript', <<~JS
+    import { append as __ejx_append } from 'ejx';
+    export default async function (locals) {
+      function f(items, template) {
+        return items.map(file => {
+          const row = template(file);
+          const bar = row.querySelector('.progress-bar');
+
+          file.onprogress = n => {
+            row.style.width = "" + n + "%";
+          };
+
+          return row;
+        });
+      }
+
+      __ejx_append(f(locals.items, f => {
+        return locals.__v;
+      }));
+
+      return locals.__output;
+    }
     JS
   end
 

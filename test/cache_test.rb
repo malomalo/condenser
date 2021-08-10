@@ -142,7 +142,7 @@ class CacheTest < ActiveSupport::TestCase
 
   end
 
-  test 'a dependency is supurceeded by a new file' do
+  test 'a dependency is superceeded by a new file' do
     Dir.mkdir(File.join(@path, 'a'))
     Dir.mkdir(File.join(@path, 'b'))
     @env.clear_path

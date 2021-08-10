@@ -23,16 +23,6 @@ class Condenser::JstTransformer < Condenser::NodeProcessor
       const source = #{JSON.generate(input[:source])};
       const options = #{JSON.generate(opts).gsub(/"@?babel[\/-][^"]+"/) { |m| "require(#{m})"}};
 
-      function globalVar(scope, name) {
-        if (name in scope.globals) {
-          return true;
-        } else if (scope.parent === null || scope.parent === undefined) {
-          return false;
-        } else {
-          return globalVar(scope.parent, name);
-        }
-      }
-
       let scope = [['document', 'window']];
       
       options['plugins'].unshift(function({ types: t }) {
@@ -71,22 +61,36 @@ class Condenser::JstTransformer < Condenser::NodeProcessor
       options['plugins'].unshift(function({ types: t }) {
           return {
             visitor: {
-              Function: {
+              "FunctionDeclaration|FunctionExpression|ArrowFunctionExpression": {
                 enter(path, state) {
-                  scope.push([]);
                   if (path.node.id) { scope[scope.length-1].push(path.node.id.name) }
                   scope.push(path.node.params.map((n) => n.name));
+                }
+              },
+              Scopable: {
+                enter(path, state) {
+                  if (path.node.type !== 'Program' &&
+                      path.parent.type !== 'FunctionDeclaration' &&
+                      path.parent.type !== 'FunctionExpression' &&
+                      path.parent.type !== 'ArrowFunctionExpression' &&
+                      path.parent.type !== 'ExportDefaultDeclaration') {
+                    scope.push([]);
+                  }
                 },
                 exit(path, state) {
-                  scope.pop();
+                  if (path.node.type !== 'Program' &&
+                      path.parent.type !== 'ExportDefaultDeclaration') {
+                    scope.pop();
+                  }
                 }
-                
               },
               ImportDeclaration(path, state) {
                 path.node.specifiers.forEach((s) => scope[scope.length-1].push(s.local.name));
               },
               ClassDeclaration(path, state) {
-                if (path.node.id) { scope[scope.length-1].push(path.node.id.name) }
+                if (path.node.id) {
+                  scope[scope.length-1].push(path.node.id.name)
+                }
               },
               VariableDeclaration(path, state) {
                 path.node.declarations.forEach((s) => scope[scope.length-1].push(s.id.name));
