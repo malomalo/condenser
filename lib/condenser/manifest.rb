@@ -71,7 +71,9 @@ class Condenser
 
       @data[asset.filename] = export.to_json
       outputs = export.write(@dir)
-      asset.linked_assets.each { |a| outputs += add_asset(a) }
+      asset.linked_assets.each do |la|
+        @environment.resolve(la).each { |a| outputs += add_asset(a) }
+      end
       outputs
     end
     

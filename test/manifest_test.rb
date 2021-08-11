@@ -66,6 +66,41 @@ class ManifestTest < ActiveSupport::TestCase
     assert_equal asset.path, data['application.js']['path']
   end
 
+  test "compile asset dependencies includes the dependencies" do
+    file 'foo.svg', <<-SVG
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path d="M6 18L18 6M6 6l12 12" />
+      </svg>
+    SVG
+    
+    file 'test.scss', <<-SCSS
+      body {
+        background: asset-url("foo.svg");
+      }
+    SCSS
+    
+    manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
+
+    main_digest_path = @env['test.css'].path
+    dep_digest_path = @env['foo.svg'].path
+
+    assert !File.exist?("#{@dir}/#{main_digest_path}")
+    assert !File.exist?("#{@dir}/#{dep_digest_path}")
+
+    manifest.compile('test.css')
+    assert File.directory?(manifest.dir)
+    assert File.file?(manifest.filename)
+
+    assert File.exist?("#{@dir}/manifest.json")
+    assert File.exist?("#{@dir}/#{main_digest_path}")
+    assert File.exist?("#{@dir}/#{dep_digest_path}")
+
+    data = JSON.parse(File.read(manifest.filename))
+    puts data.inspect
+    assert_equal main_digest_path, data['test.css']['path']
+    assert_equal dep_digest_path, data['foo.svg']['path']
+  end
+  
   # TODO:
   # test "compile asset with aliased index links" do
   #   manifest = Sprockets::Manifest.new(@env, File.join(@dir, 'manifest.json'))
