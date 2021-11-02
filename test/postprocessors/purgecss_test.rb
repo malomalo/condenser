@@ -100,7 +100,7 @@ class PurgeCSSTest < ActiveSupport::TestCase
     FILE
   end
   
-  test 'purge from html with nested tags' do
+  test 'purge from html with nested tag' do
     file 'main.css', <<~CSS
       .test pre{
         display: block;
@@ -115,6 +115,29 @@ class PurgeCSSTest < ActiveSupport::TestCase
     assert_exported_file 'main.css', 'text/css', <<~FILE
     .test pre{
       display: block;
+    }
+    FILE
+  end
+  
+  test 'purge from html with nested tags' do
+    file 'main.css', <<~CSS
+      code { 
+        background: gray;
+      }
+      pre code{
+        background: none;
+      }
+    CSS
+    file 'index.html', <<~HTML
+      <pre><code>Test</code></pre>
+    HTML
+
+    assert_exported_file 'main.css', 'text/css', <<~FILE
+    code { 
+      background: gray;
+    }
+    pre code{
+      background: none;
     }
     FILE
   end
