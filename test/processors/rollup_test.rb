@@ -39,7 +39,7 @@ class RollupTest < ActiveSupport::TestCase
 
         console.log(cube(5)); // 125
 
-      }());
+      })();
     FILE
   end
   
@@ -65,7 +65,7 @@ class RollupTest < ActiveSupport::TestCase
 
         console.log(cube(5)); // 125
 
-      }());
+      })();
     FILE
   end
 
@@ -99,7 +99,7 @@ class RollupTest < ActiveSupport::TestCase
 
         console.log(cube(5)); // 125
 
-      }());
+      })();
     FILE
   end
 
@@ -136,7 +136,7 @@ class RollupTest < ActiveSupport::TestCase
 
         console.log(square(cube(5)));
 
-      }());
+      })();
     FILE
   end
 
@@ -186,9 +186,43 @@ class RollupTest < ActiveSupport::TestCase
 
         console.log(x);
 
-      }());
+      })();
     FILE
     $d = false
+  end
+
+  test 'import the same file via relative require and full path' do
+    @env.unregister_preprocessor 'application/javascript', Condenser::BabelProcessor
+    file "#{@npm_path}/module/base.js", <<~JS
+      export default class Base { };
+    JS
+    
+    file "#{@npm_path}/module/base/other.js", <<~JS
+      import Base from '../base';
+      
+      export default class Lower extends Base { };
+    JS
+    
+    file 'main.js', <<~JS
+      import Other from 'module/base/other';
+      import Base from 'module/base';
+
+      console.log( Base, Other );
+    JS
+
+
+    assert_exported_file 'main.js', 'application/javascript', <<~FILE
+      (function () {
+      	'use strict';
+
+      	class Base { }
+
+      	class Lower extends Base { }
+
+      	console.log( Base, Lower );
+
+      })();
+    FILE
   end
 
 end

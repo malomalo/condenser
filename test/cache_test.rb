@@ -221,6 +221,21 @@ class CacheTest < ActiveSupport::TestCase
     CSS
   end
 
+  test '2a new dependency for a glob call is reflected in the next call' do
+    file "dir/a.svg", "<svg>test</svg>"
+    file 'test.scss', 'body { background: image-url("dir/a.svg") }'
+
+    assert_exported_file 'test.css', 'text/css', <<~CSS
+      body{background:url(/assets/dir/a-01a4bd3cb9faa518c5df2d2fcc8e6cd0ba24cfc3e9438dd01455ab1e59a39068.svg)}
+    CSS
+
+    file "dir/a.svg", "<svg>tests</svg>"
+
+    assert_exported_file 'test.css', 'text/css', <<~CSS
+      body{background:url(/assets/dir/a-1d7d038c7ace080963e116cbb962075a38d5e5dc68c6ff688e42d213dd432256.svg)}
+    CSS
+  end
+  
   test 'a dependency is removed for a glob call when one of it dependencies is delted' do
     file "css/a.scss", "body { color: blue; }"
     file "css/b.scss", "body { color: green; }"
@@ -237,7 +252,7 @@ class CacheTest < ActiveSupport::TestCase
     CSS
   end
 
-  test 'a dependency is added then changed should flush the parent' do
+  test 'a dependency is added then changed should flush the parent (JS)' do
     file 'a.js', "console.log('a');\n"
     file 'b.js', <<~JS
       export default function b () { console.log('b'); }
@@ -265,4 +280,33 @@ class CacheTest < ActiveSupport::TestCase
       !function(){"use strict";console.log("a"),console.log("c")}();
     JS
   end
+
+  test 'a dependency is added then changed should flush the parent (CSS)' do
+    file 'a.scss', "body { background: aqua; }"
+    file 'b.scss', <<~JS
+      body { background: blue; }
+    JS
+
+    assert_exported_file 'a.css', 'text/css', <<~JS
+      body{background:aqua}
+    JS
+
+    file 'a.scss', <<~JS
+      @import "b";
+      body { background: aqua; }
+    JS
+
+    assert_exported_file 'a.css', 'text/css', <<~JS
+      body{background:blue}body{background:aqua}
+    JS
+
+    file 'b.scss', <<~JS
+      body { background: green; }
+    JS
+
+    assert_exported_file 'a.css', 'text/css', <<~JS
+      body{background:green}body{background:aqua}
+    JS
+  end
+
 end

@@ -78,22 +78,22 @@ class CondenserBabelTest < ActiveSupport::TestCase
           }
         }
 
-        var _default = function _default(height, width) {
+        var _default$1 = function _default(height, width) {
           _classCallCheck(this, _default);
 
           console.log('A');
         };
 
-        var _default$1 = function _default(height, width) {
+        var _default = function _default(height, width) {
           _classCallCheck(this, _default);
 
           console.log('B');
         };
 
-        new _default();
         new _default$1();
+        new _default();
 
-      }());
+      })();
     JS
   end
 
@@ -150,20 +150,20 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	});
 
       	var nativePropertyIsEnumerable = {}.propertyIsEnumerable;
-      	var getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+      	var getOwnPropertyDescriptor$1 = Object.getOwnPropertyDescriptor;
 
       	// Nashorn ~ JDK8 bug
-      	var NASHORN_BUG = getOwnPropertyDescriptor && !nativePropertyIsEnumerable.call({ 1: 2 }, 1);
+      	var NASHORN_BUG = getOwnPropertyDescriptor$1 && !nativePropertyIsEnumerable.call({ 1: 2 }, 1);
 
       	// `Object.prototype.propertyIsEnumerable` method implementation
       	// https://tc39.github.io/ecma262/#sec-object.prototype.propertyisenumerable
-      	var f = NASHORN_BUG ? function propertyIsEnumerable(V) {
-      	  var descriptor = getOwnPropertyDescriptor(this, V);
+      	var f$3 = NASHORN_BUG ? function propertyIsEnumerable(V) {
+      	  var descriptor = getOwnPropertyDescriptor$1(this, V);
       	  return !!descriptor && descriptor.enumerable;
       	} : nativePropertyIsEnumerable;
 
       	var objectPropertyIsEnumerable = {
-      		f: f
+      		f: f$3
       	};
 
       	var createPropertyDescriptor = function (bitmap, value) {
@@ -249,7 +249,7 @@ class CondenserBabelTest < ActiveSupport::TestCase
 
       	// `Object.getOwnPropertyDescriptor` method
       	// https://tc39.github.io/ecma262/#sec-object.getownpropertydescriptor
-      	var f$1 = descriptors ? nativeGetOwnPropertyDescriptor : function getOwnPropertyDescriptor(O, P) {
+      	var f$2 = descriptors ? nativeGetOwnPropertyDescriptor : function getOwnPropertyDescriptor(O, P) {
       	  O = toIndexedObject(O);
       	  P = toPrimitive(P, true);
       	  if (ie8DomDefine) try {
@@ -259,7 +259,7 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	};
 
       	var objectGetOwnPropertyDescriptor = {
-      		f: f$1
+      		f: f$2
       	};
 
       	var replacement = /#|\\.prototype\\./;
@@ -323,7 +323,7 @@ class CondenserBabelTest < ActiveSupport::TestCase
 
       	// `Object.defineProperty` method
       	// https://tc39.github.io/ecma262/#sec-object.defineproperty
-      	var f$2 = descriptors ? nativeDefineProperty : function defineProperty(O, P, Attributes) {
+      	var f$1 = descriptors ? nativeDefineProperty : function defineProperty(O, P, Attributes) {
       	  anObject(O);
       	  P = toPrimitive(P, true);
       	  anObject(Attributes);
@@ -336,7 +336,7 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	};
 
       	var objectDefineProperty = {
-      		f: f$2
+      		f: f$1
       	};
 
       	var createNonEnumerableProperty = descriptors ? function (object, key, value) {
@@ -346,7 +346,7 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	  return object;
       	};
 
-      	var getOwnPropertyDescriptor$1 = objectGetOwnPropertyDescriptor.f;
+      	var getOwnPropertyDescriptor = objectGetOwnPropertyDescriptor.f;
 
 
 
@@ -403,7 +403,7 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	    targetProperty = target[key];
 
       	    if (USE_NATIVE) if (options.noTargetGet) {
-      	      descriptor = getOwnPropertyDescriptor$1(nativeSource, key);
+      	      descriptor = getOwnPropertyDescriptor(nativeSource, key);
       	      nativeProperty = descriptor && descriptor.value;
       	    } else nativeProperty = nativeSource[key];
 
@@ -452,23 +452,23 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	  return isNaN(argument = +argument) ? 0 : (argument > 0 ? floor : ceil)(argument);
       	};
 
-      	var min = Math.min;
+      	var min$1 = Math.min;
 
       	// `ToLength` abstract operation
       	// https://tc39.github.io/ecma262/#sec-tolength
       	var toLength = function (argument) {
-      	  return argument > 0 ? min(toInteger(argument), 0x1FFFFFFFFFFFFF) : 0; // 2 ** 53 - 1 == 9007199254740991
+      	  return argument > 0 ? min$1(toInteger(argument), 0x1FFFFFFFFFFFFF) : 0; // 2 ** 53 - 1 == 9007199254740991
       	};
 
       	var max = Math.max;
-      	var min$1 = Math.min;
+      	var min = Math.min;
 
       	// Helper for a popular repeating case of the spec:
       	// Let integer be ? ToInteger(index).
       	// If integer < 0, let result be max((length + integer), 0); else let result be min(integer, length).
       	var toAbsoluteIndex = function (index, length) {
       	  var integer = toInteger(index);
-      	  return integer < 0 ? max(integer + length, 0) : min$1(integer, length);
+      	  return integer < 0 ? max(integer + length, 0) : min(integer, length);
       	};
 
       	// `Array.prototype.{ indexOf, includes }` methods implementation
@@ -535,10 +535,10 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	  return objectKeysInternal(O, enumBugKeys);
       	};
 
-      	var f$3 = Object.getOwnPropertySymbols;
+      	var f = Object.getOwnPropertySymbols;
 
       	var objectGetOwnPropertySymbols = {
-      		f: f$3
+      		f: f
       	};
 
       	// `ToObject` abstract operation
@@ -597,20 +597,20 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	  assign: objectAssign
       	});
 
-      	var assign = path.Object.assign;
+      	var assign$2 = path.Object.assign;
 
-      	var assign$1 = assign;
+      	var assign$1 = assign$2;
 
-      	var assign$2 = assign$1;
+      	var assign = assign$1;
 
       	function a () {
-      	  console.log(assign$2({}, {
+      	  console.log(assign({}, {
       	    a: 1
       	  }));
       	}
 
       	function b () {
-      	  console.log(assign$2({}, {
+      	  console.log(assign({}, {
       	    b: 1
       	  }));
       	}
@@ -618,7 +618,7 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	a();
       	b();
 
-      }());
+      })();
     JS
   end
   

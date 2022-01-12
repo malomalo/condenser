@@ -7,7 +7,7 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
   
   def initialize(dir = nil, options = {})
     super(dir)
-    npm_install('rollup', 'rollup-plugin-commonjs', 'rollup-plugin-node-resolve')
+    npm_install('rollup', '@rollup/plugin-commonjs', '@rollup/plugin-node-resolve')
     
     @options = options.freeze
   end

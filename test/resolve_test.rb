@@ -94,7 +94,7 @@ class ResolveTest < ActiveSupport::TestCase
 
         console.log( cube( 5 ) ); // 125
 
-      }());
+      })();
     JS
   end
   

@@ -92,8 +92,8 @@ class CondenserSCSSTest < ActiveSupport::TestCase
     CSS
     
     asset = @env.find('test.css')
-    assert_equal ["foo.svg", "foo.png", "foo.mov", "foo.mp3", "foo.woff2", "foo.woff", "foo.js", "foo.css"], asset.process_dependencies.map(&:filename)
-    assert_equal ["foo.svg", "foo.png", "foo.mov", "foo.mp3", "foo.woff2", "foo.woff", "foo.js", "foo.css"], asset.export_dependencies.map(&:filename)
+    assert_equal ["a.scss", "foo.svg", "foo.png", "foo.mov", "foo.mp3", "foo.woff2", "foo.woff", "foo.js", "foo.css"], asset.process_dependencies.map(&:filename)
+    assert_equal ["a.scss", "foo.svg", "foo.png", "foo.mov", "foo.mp3", "foo.woff2", "foo.woff", "foo.js", "foo.css"], asset.export_dependencies.map(&:filename)
   end
   
   test "sass dependencies" do
