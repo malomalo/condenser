@@ -224,7 +224,12 @@ class ServerTest < ActiveSupport::TestCase
     assert_equal "pass", last_response.headers['X-Cascade']
   end
 
-  test "re-throw JS exceptions in the browser" do
+  test "re-throw JS exceptions in the browser when using babel" do
+    @env.unregister_preprocessor('application/javascript', Condenser::JSAnalyzer)
+    @env.register_preprocessor 'application/javascript', Condenser::BabelProcessor.new(@path,
+      presets: [ ['@babel/preset-env', { modules: false, targets: { browsers: 'firefox > 41' } }] ]
+    )
+    
     file 'error.js', "var error = {;"
 
     get "/assets/error.js"

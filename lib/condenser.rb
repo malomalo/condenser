@@ -59,8 +59,8 @@ class Condenser
       configure(&block)
     elsif pipeline != false
       self.configure do
-        # register_preprocessor 'application/javascript', Condenser::JSAnalyzer
-        register_preprocessor 'application/javascript', Condenser::BabelProcessor
+        register_preprocessor 'application/javascript', Condenser::JSAnalyzer
+        # register_preprocessor 'application/javascript', Condenser::BabelProcessor
         register_exporter     'application/javascript', Condenser::RollupProcessor
         register_minifier     'application/javascript', Condenser::UglifyMinifier
         

@@ -88,8 +88,8 @@ class Condenser
       
       input[:source] = css
       # input[:map] = map.to_json({})
-      input[:linked_assets] += context.links
-      input[:process_dependencies] += context.dependencies
+      input[:linked_assets]         += context.links
+      input[:process_dependencies]  += context.dependencies
     end
 
     private

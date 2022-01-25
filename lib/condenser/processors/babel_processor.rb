@@ -4,7 +4,7 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
   
   attr_accessor :options
   
-  def initialize(dir = nil, options = {})
+  def initialize(dir = nil, **options)
     super(dir)
     
     options[:plugins] ||= [

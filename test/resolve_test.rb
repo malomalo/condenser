@@ -83,7 +83,6 @@ class ResolveTest < ActiveSupport::TestCase
     @env.append_path File.join(@path, 'b')
     @env.append_path File.join(@path, 'a')
 
-    
     assert_exported_file('main.js', 'application/javascript', <<~JS)
       (function () {
         'use strict';
@@ -111,15 +110,15 @@ class ResolveTest < ActiveSupport::TestCase
   end
   
   test 'resolve a file.*' do
-    file 'file.js', 'console.log(1);'
-    file 'file.scss', 'body { background: red; }'
-    file 'test/file.scss', 'body { background: green; }'
+    file 'foo.js', 'console.log(1);'
+    file 'foo.scss', 'body { background: red; }'
+    file 'test/foo.scss', 'body { background: green; }'
 
-    assert_equal %w(file.js file.scss), @env.resolve('file.*').map(&:filename)
-    assert_equal %w(file.css file.js),  @env.resolve('file.*', accept: ['text/css', 'application/javascript']).map(&:filename)
+    assert_equal %w(foo.js foo.scss), @env.resolve('foo.*').map(&:filename)
+    assert_equal %w(foo.css foo.js),  @env.resolve('foo.*', accept: ['text/css', 'application/javascript']).map(&:filename)
 
-    assert_equal %w(file.js file.scss test/file.scss), @env.resolve('**/file.*').map(&:filename)
-    assert_equal %w(file.css file.js test/file.css), @env.resolve('**/file.*', accept: ['text/css', 'application/javascript']).map(&:filename)
+    assert_equal %w(foo.js foo.scss test/foo.scss), @env.resolve('**/foo.*').map(&:filename)
+    assert_equal %w(foo.css foo.js test/foo.css), @env.resolve('**/foo.*', accept: ['text/css', 'application/javascript']).map(&:filename)
   end
   
 end

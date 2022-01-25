@@ -54,7 +54,7 @@ class ActiveSupport::TestCase
   end
   
   def file(name, source)
-    dir = File.join(@path, File.dirname(name))
+    dir = name.include?('/') ? File.join(@path, File.dirname(name)) : @path
     path = File.join(@path, name)
     
     FileUtils.mkdir_p(dir)

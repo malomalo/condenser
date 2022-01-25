@@ -4,8 +4,6 @@ class JSAnalyzerTest < ActiveSupport::TestCase
   
   def setup
     super
-    @env.unregister_preprocessor 'application/javascript', Condenser::BabelProcessor
-    @env.register_preprocessor 'application/javascript', Condenser::JSAnalyzer
     @env.unregister_minifier('application/javascript')
   end
   

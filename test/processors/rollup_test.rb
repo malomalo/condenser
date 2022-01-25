@@ -31,13 +31,12 @@ class RollupTest < ActiveSupport::TestCase
       (function () {
         'use strict';
 
-        // This function isn't used anywhere, so
-
-        function cube(x) {
+        // This function gets included
+        function cube ( x ) {
           return x * x * x;
         }
 
-        console.log(cube(5)); // 125
+        console.log( cube( 5 ) ); // 125
 
       })();
     FILE
@@ -59,11 +58,11 @@ class RollupTest < ActiveSupport::TestCase
       (function () {
         'use strict';
 
-        function cube(x) {
+        function cube ( x ) {
           return 2 * x * x;
         }
 
-        console.log(cube(5)); // 125
+        console.log( cube( 5 ) ); // 125
 
       })();
     FILE
@@ -93,11 +92,11 @@ class RollupTest < ActiveSupport::TestCase
       (function () {
         'use strict';
 
-        function cube(x) {
+        function cube ( x ) {
           return x * x * x;
         }
 
-        console.log(cube(5)); // 125
+        console.log( cube( 5 ) ); // 125
 
       })();
     FILE
@@ -126,15 +125,15 @@ class RollupTest < ActiveSupport::TestCase
       (function () {
         'use strict';
 
-        window.cube = function (x) {
+        window.cube = function ( x ) {
           return x * x * x;
         };
 
-        window.square = function (x) {
+        window.square = function ( x ) {
           return x * x;
         };
 
-        console.log(square(cube(5)));
+        console.log( square(cube( 5 )) );
 
       })();
     FILE
@@ -168,22 +167,20 @@ class RollupTest < ActiveSupport::TestCase
       (function () {
         'use strict';
 
-        function cube(x) {
+        function cube ( x ) {
           return x * x * x;
         }
 
-        function square(x) {
+        function square ( x ) {
           return x * x;
         }
 
         var maths = [cube, square];
 
         var x = 1;
-
         for (var i = 0; i < maths.length; i++) {
           x = maths[i](x);
         }
-
         console.log(x);
 
       })();
@@ -192,7 +189,6 @@ class RollupTest < ActiveSupport::TestCase
   end
 
   test 'import the same file via relative require and full path' do
-    @env.unregister_preprocessor 'application/javascript', Condenser::BabelProcessor
     file "#{@npm_path}/module/base.js", <<~JS
       export default class Base { };
     JS

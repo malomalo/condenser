@@ -70,8 +70,8 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
         });
         
         const rollup = require("#{npm_module_path('rollup')}");
-        const commonjs = require("#{npm_module_path('rollup-plugin-commonjs')}");
-        const nodeResolve = require("#{npm_module_path('rollup-plugin-node-resolve')}");
+        const commonjs = require("#{npm_module_path('@rollup/plugin-commonjs')}");
+        const nodeResolve = require("#{npm_module_path('@rollup/plugin-node-resolve')}").nodeResolve;
         var rid = 0;
         var renderStack = {};
         var nodeResolver = null;
@@ -95,9 +95,7 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
             mainFields: ['module', 'main'],
             // modulesOnly: true,
             // preferBuiltins: false,
-            customResolveOptions: {
-              moduleDirectory: '#{npm_module_path}'
-            }
+            moduleDirectories: ['#{npm_module_path}']
           });
         }
 
@@ -105,9 +103,9 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
         inputOptions.plugins = [];
         inputOptions.plugins.push({
           name: 'condenser',
-          resolveId: function (importee, importer) {
+          resolveId: function (importee, importer, options) {
             if (importee.startsWith('\\0') || (importer && importer.startsWith('\\0'))) {
-              return;
+              return null;
             }
 
             if (!(importer in renderStack)) {
@@ -115,24 +113,15 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
             }
 
             return request('resolve', [importee, importer]).then((value) => {
-              if (nodeResolver && (value === null || value === undefined)) {
-                return nodeResolver.resolveId.call(this, importee, importer).then((value) => {
-                  if (!(value === null || value === undefined) && !renderStack[importer].includes(value.id)) {
-                    renderStack[importer].push(value.id);
-                  }
-                  return value;
-                });
-              }
-
-              if (!(value === null || value === undefined) && !renderStack[importer].includes(value)) {
-                renderStack[importer].push(value);
-              }
-              return value;
+                if (!(value === null || value === undefined) && !renderStack[importer].includes(value)) {
+                  renderStack[importer].push(value);
+                }
+                return value;
             });
           },
           load: function(id) {
             if (id.startsWith('\\0')) {
-              return;
+              return null;
             }
 
             return request('load', [id]).then(function(value) {
@@ -140,6 +129,7 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
             });
           }
         });
+        
         inputOptions.plugins.push(nodeResolver);
         inputOptions.plugins.push(commonjs());
         
@@ -206,8 +196,10 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
               x = File.join(npm_module_path, importee.gsub(/^\.\//, File.dirname(importer) + '/')).sub('/node_modules/regenerator-runtime', '/node_modules/regenerator-runtime/runtime.js')
               x = "#{x}.js" if !x.end_with?('.js')
               File.file?(x) ? x : (x.delete_suffix('.js') + "/index.js")
-            elsif npm_module_path && importer.start_with?(npm_module_path)
-              nil
+            elsif npm_module_path && importee&.start_with?(npm_module_path)
+              x = importee.end_with?('.js') ? importee : "#{importee}.js"
+              x = (x.delete_suffix('.js') + "/index.js") if !File.file?(x)
+              x
             elsif importee.end_with?('*')
               File.join(File.dirname(importee), '*')
             else

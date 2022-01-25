@@ -96,7 +96,6 @@ class ManifestTest < ActiveSupport::TestCase
     assert File.exist?("#{@dir}/#{dep_digest_path}")
 
     data = JSON.parse(File.read(manifest.filename))
-    puts data.inspect
     assert_equal main_digest_path, data['test.css']['path']
     assert_equal dep_digest_path, data['foo.svg']['path']
   end

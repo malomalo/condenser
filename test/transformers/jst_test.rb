@@ -2,11 +2,6 @@ require 'test_helper'
 
 class JSTTransformerTest < ActiveSupport::TestCase
 
-  def setup
-    super
-    @env.unregister_preprocessor 'application/javascript', Condenser::BabelProcessor
-  end
-  
   test 'jst transformation' do
     file 'test.jst', <<~SCSS
       import {escape} from 'ejs';

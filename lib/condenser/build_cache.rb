@@ -33,7 +33,7 @@ class Condenser
             end
 
             globs = []
-            (added + removed).each do |file|
+            (added + removed + modified).each do |file|
               globs << file.match(/([^\.]+)(\.|$)/).to_a[1]
               if path_match = @path.find { |p| file.start_with?(p) }
                 a = file.delete_prefix(path_match).match(/([^\.]+)(\.|$)/).to_a[1]
