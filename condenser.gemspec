@@ -37,9 +37,8 @@ Gem::Specification.new do |s|
   s.add_development_dependency 'byebug'
   s.add_development_dependency "rack-test"
   
-  
   s.add_development_dependency 'activesupport'
-  s.add_development_dependency "zopfli", "~> 0.0.7"
+  s.add_development_dependency "zopfli", "~> 0.1.0"
   
 end
 

@@ -95,7 +95,8 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
             mainFields: ['module', 'main'],
             // modulesOnly: true,
             // preferBuiltins: false,
-            moduleDirectories: ['#{npm_module_path}']
+            moduleDirectories: [],
+            modulePaths: ['#{npm_module_path}']
           });
         }
 
@@ -200,6 +201,10 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
               x = importee.end_with?('.js') ? importee : "#{importee}.js"
               x = (x.delete_suffix('.js') + "/index.js") if !File.file?(x)
               x
+            elsif importee.start_with?('.') && importer.start_with?(npm_module_path)
+              x = File.expand_path(importee, File.dirname(importer))
+              x = "#{x}.js" if !x.end_with?('.js')
+              File.file?(x) ? x : (x.delete_suffix('.js') + "/index.js")
             elsif importee.end_with?('*')
               File.join(File.dirname(importee), '*')
             else
