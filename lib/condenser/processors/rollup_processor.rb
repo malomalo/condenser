@@ -50,7 +50,12 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
             return '';
           } catch(e) {
             if (e.name === "SyntaxError") {
-              if (e.message.startsWith('Unexpected token { in JSON at position ')) {
+              if (e.message.startsWith('Unexpected non-whitespace character after JSON at position ')) {
+                var pos = parseInt(e.message.slice(59));
+                emitMessages(buffer.slice(0,pos));
+                return emitMessages(buffer.slice(pos));
+              } else if (e.message.startsWith('Unexpected token { in JSON at position ')) {
+                // This can be removed, once dropping support for node <= v18
                 var pos = parseInt(e.message.slice(39));
                 emitMessages(buffer.slice(0,pos));
                 return emitMessages(buffer.slice(pos));
