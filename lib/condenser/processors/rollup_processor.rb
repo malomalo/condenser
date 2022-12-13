@@ -139,14 +139,15 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
         inputOptions.plugins.push(nodeResolver);
         inputOptions.plugins.push(commonjs());
         
-        inputOptions.plugins.push({
-          name: 'nullHanlder',
-          resolveId: function (importee, importer) {
-            request('error', ["AssetNotFound", importee, importer, renderStack]).then(function(value) {
-              process.exit(1);
-            });
-          }
-        });
+        // inputOptions.plugins.push({
+        //   name: 'nullHanlder',
+        //   resolveId: function (importee, importer, options) {
+        //     request('log', [importee, importer, options])
+        //     // request('error', ["AssetNotFound", importee, importer, renderStack]).then(function(value) {
+        //     //   process.exit(1);
+        //     // });
+        //   }
+        // });
 
         const outputOptions = #{JSON.generate(output_options)};
 
@@ -191,7 +192,6 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
         
         messages.each do |message|
           message = JSON.parse(message)
-          
           ret = case message['method']
           when 'resolve'
             importee, importer = message['args']
@@ -200,15 +200,15 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
               @entry
             elsif importee.start_with?('@babel/runtime') || importee.start_with?('core-js-pure') || importee.start_with?('regenerator-runtime')
               x = File.join(npm_module_path, importee.gsub(/^\.\//, File.dirname(importer) + '/')).sub('/node_modules/regenerator-runtime', '/node_modules/regenerator-runtime/runtime.js')
-              x = "#{x}.js" if !x.end_with?('.js')
+              x = "#{x}.js" if !x.end_with?('.js', '.mjs')
               File.file?(x) ? x : (x.delete_suffix('.js') + "/index.js")
             elsif npm_module_path && importee&.start_with?(npm_module_path)
-              x = importee.end_with?('.js') ? importee : "#{importee}.js"
+              x = importee.end_with?('.js', '.mjs') ? importee : "#{importee}.js"
               x = (x.delete_suffix('.js') + "/index.js") if !File.file?(x)
               x
             elsif importee.start_with?('.') && importer.start_with?(npm_module_path)
               x = File.expand_path(importee, File.dirname(importer))
-              x = "#{x}.js" if !x.end_with?('.js')
+              x = "#{x}.js" if !x.end_with?('.js', '.mjs')
               File.file?(x) ? x : (x.delete_suffix('.js') + "/index.js")
             elsif importee.end_with?('*')
               File.join(File.dirname(importee), '*')
