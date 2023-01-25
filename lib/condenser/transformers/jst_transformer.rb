@@ -37,7 +37,8 @@ class Condenser::JstTransformer < Condenser::NodeProcessor
                    path.parent.type === 'ImportDefaultSpecifier' ||
                    path.parent.type === 'FunctionDeclaration' ||
                    path.parent.type === 'FunctionExpression' ||
-                   path.parent.type === 'ArrowFunctionExpression' ) {
+                   path.parent.type === 'ArrowFunctionExpression' ||
+                   path.parent.type === 'CatchClause' ) {
                 return;
               }
               
@@ -63,13 +64,20 @@ class Condenser::JstTransformer < Condenser::NodeProcessor
             visitor: {
               "FunctionDeclaration|FunctionExpression|ArrowFunctionExpression": {
                 enter(path, state) {
-                  if (path.node.id) { scope[scope.length-1].push(path.node.id.name) }
+                  if (path.node.id) { scope[scope.length-1].push(path.node.id.name); }
                   scope.push(path.node.params.map((n) => n.name));
+                }
+              },
+              CatchClause: {
+                enter(path, state) {
+                  scope.push([]);
+                  if (path.node.param.name) { scope[scope.length-1].push(path.node.param.name); }
                 }
               },
               Scopable: {
                 enter(path, state) {
                   if (path.node.type !== 'Program' &&
+                      path.node.type !== 'CatchClause' &&
                       path.parent.type !== 'FunctionDeclaration' &&
                       path.parent.type !== 'FunctionExpression' &&
                       path.parent.type !== 'ArrowFunctionExpression' &&

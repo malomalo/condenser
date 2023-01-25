@@ -192,6 +192,7 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
         
         messages.each do |message|
           message = JSON.parse(message)
+          
           ret = case message['method']
           when 'resolve'
             importee, importer = message['args']
@@ -263,7 +264,6 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
           # when 'get_cache'
           #   io.write(JSON.generate({rid: message['rid'], return: [(@environment.cache.get('rollup') || '{}')] }))
           end
-
           io.write(JSON.generate({rid: message['rid'], return: ret}))
         end
       end
