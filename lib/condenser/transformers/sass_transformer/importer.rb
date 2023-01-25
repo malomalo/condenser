@@ -18,7 +18,7 @@ class Condenser::SassTransformer
 
       if imports.empty? && env.npm_path
         package = File.join(env.npm_path, name, 'package.json')
-        if File.exists?(package)
+        if File.exist?(package)
           package = JSON.parse(File.read(package))
           if package['style']
             imports << Import.new(name, source: File.read(File.join(env.npm_path, name, package['style'])), source_map_path: nil)
