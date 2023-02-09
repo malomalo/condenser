@@ -135,6 +135,9 @@ Condenser.configure do
   # CSS
   register_mime_type 'text/css', extension: '.css', charset: :css
   
+  # PDF
+  register_mime_type 'application/pdf', extensions: %w(.pdf)
+  
   # SASS
   register_mime_type 'text/sass', extensions: %w(.sass .css.sass)
   # register_transformer  'text/sass', 'text/css', SassProcessor
