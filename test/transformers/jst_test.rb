@@ -206,5 +206,29 @@ class JSTTransformerTest < ActiveSupport::TestCase
       }
     JS
   end
+  
+  test 'splats' do
+    file 'test.jst', <<~JS
+      import {append as __ejx_append} from 'ejx';
+      export default function (locals) {
+          var __output = [];
+          
+          var x = ((...args) => { return y(...args); })(z, y);
+          
+          return __output;
+      }
+    JS
+
+    assert_file 'test.js', 'application/javascript', <<~JS
+      import { append as __ejx_append } from 'ejx';
+      export default function (locals) {
+        var __output = [];
+        var x = ((...args) => {
+          return locals.y(...args);
+        })(locals.z, locals.y);
+        return __output;
+      }
+    JS
+  end
 
 end

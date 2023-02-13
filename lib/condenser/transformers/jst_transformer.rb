@@ -38,6 +38,7 @@ class Condenser::JstTransformer < Condenser::NodeProcessor
                    path.parent.type === 'FunctionDeclaration' ||
                    path.parent.type === 'FunctionExpression' ||
                    path.parent.type === 'ArrowFunctionExpression' ||
+                   path.parent.type === 'SpreadElement' ||
                    path.parent.type === 'CatchClause' ) {
                 return;
               }
@@ -65,7 +66,7 @@ class Condenser::JstTransformer < Condenser::NodeProcessor
               "FunctionDeclaration|FunctionExpression|ArrowFunctionExpression": {
                 enter(path, state) {
                   if (path.node.id) { scope[scope.length-1].push(path.node.id.name); }
-                  scope.push(path.node.params.map((n) => n.name));
+                  scope.push(path.node.params.map((n) => n.type === 'RestElement' ? n.argument.name : n.name));
                 }
               },
               CatchClause: {
