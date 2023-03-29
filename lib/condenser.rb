@@ -27,7 +27,7 @@ class Condenser
   autoload :SassMinifier,     'condenser/minifiers/sass_minifier'
   autoload :SassTransformer,  'condenser/transformers/sass_transformer'
   autoload :ScssTransformer,  'condenser/transformers/sass_transformer'
-  autoload :EjsTemplare,      'condenser/templating_engine/ejs'
+  autoload :EjsTemplate,      'condenser/templating_engine/ejs'
   autoload :JstTransformer,   'condenser/transformers/jst_transformer'
   autoload :SVGTransformer,   'condenser/transformers/svg_transformer'
   autoload :FileWriter,       'condenser/writers/file_writer'
@@ -151,7 +151,7 @@ Condenser.configure do
   
   # EJS
   register_mime_type 'application/ejs', extensions: '.ejs', charset: :unicode
-  register_template  'application/ejs', Condenser::EjsTemplare
+  register_template  'application/ejs', Condenser::EjsTemplate
   
   # JST
   register_mime_type    'application/jst', extensions: '.jst', charset: :unicode
