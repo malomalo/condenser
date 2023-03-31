@@ -334,11 +334,15 @@ class Condenser
             export_dependencies: []
           }
         
-          if exporter = @environment.exporters[content_type]
-            exporter.call(@environment, data)
+          if @environment.exporters.has_key?(content_type)
+            @environment.exporters[content_type].each do |exporter|
+              @environment.logger.info { "Exporting #{self.filename} with #{exporter.name}" }
+              exporter.call(@environment, data)
+            end
           end
 
           if minifier = @environment.minifier_for(content_type)
+            @environment.logger.info { "Minifing #{self.filename} with #{minifier.name}" }
             minifier.call(@environment, data)
           end
         

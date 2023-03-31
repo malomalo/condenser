@@ -98,11 +98,16 @@ class Condenser
     end
     
     def register_exporter(mime_type, engine)
-      @exporters[mime_type] = engine
+      @exporters[mime_type] ||= []
+      @exporters[mime_type] << engine
     end
     
-    def unregister_exporter(mime_type, engine)
-      @exporters[mime_type] = nil
+    def unregister_exporter(mime_type, engine=nil)
+      if engine.nil?
+        @exporters[mime_type].clear
+      else
+        @exporters[mime_type]&.reject! { |e| e == engine || e.is_a?(engine) }
+      end
     end
     
     def register_minifier(mime_type, engine)

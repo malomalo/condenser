@@ -38,9 +38,7 @@ class Condenser
           end
         
           paths.each do |path|
-            glob = path
-            glob = File.join(glob, dirname) if dirname
-            glob = File.join(glob, basename)
+            glob = File.join(*[path, dirname, basename].compact)
             glob << '.*' unless glob.end_with?('*')
           
             Dir.glob(glob).sort.each do |f|

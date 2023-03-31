@@ -34,7 +34,7 @@ class Condenser::PurgeCSSProcessor < Condenser::NodeProcessor
       const { PurgeCSS } = require("#{File.join(npm_module_path('purgecss'))}")
       const options = #{@options.to_json}
       options.css = [{
-        raw: #{input[:source].inspect}
+        raw: #{JSON.dump(input[:source])}
       }]
       if(options.safelist) {
         options.safelist = options.safelist.map(s => {
@@ -69,5 +69,4 @@ class Condenser::PurgeCSSProcessor < Condenser::NodeProcessor
       input[:source] = result["success"]["css"]
     end
   end
-
 end
