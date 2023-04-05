@@ -33,7 +33,11 @@ class Condenser::DartSassTransformer < Condenser::NodeProcessor
       const stdin = process.stdin;
       stdin.resume();
       stdin.setEncoding('utf8');
-
+      
+      // SET STDOUT to sync so that we don't get in an infinte looping waiting
+      // for Ruby to response when we haven't even sent the entire request.
+      if (process.stdout._handle) process.stdout._handle.setBlocking(true)
+        
       const source = #{JSON.generate(input[:source])};
       const options = #{JSON.generate(options)};
 
@@ -42,15 +46,17 @@ class Condenser::DartSassTransformer < Condenser::NodeProcessor
         var trid = rid;
         rid += 1;
         console.log(JSON.stringify({ rid: trid, method: method, args: args }) + "\\n");
+        
 
         var readBuffer = '';
-        var response = undefined;
+        var response = null;
         let chunk = new Buffer(1024);
         let bytesRead;
         
-        while (response === undefined) {
+        while (response === null) {
           try {
             bytesRead = fs.readSync(stdin.fd, chunk, 0, 1024);
+            if (bytesRead === null) { exit(1); }
             readBuffer += chunk.toString('utf8', 0, bytesRead);
             [readBuffer, response] = readResponse(readBuffer);
           } catch (e) {
@@ -69,13 +75,11 @@ class Condenser::DartSassTransformer < Condenser::NodeProcessor
             if (e.message.startsWith('Unexpected non-whitespace character after JSON at position ')) {
               let pos = parseInt(e.message.slice(59));
               let [b, r] = readResponse(buffer.slice(0,pos));
-              console.error('1')
               return [b + buffer.slice(pos), r];
             } else if (e.message.startsWith('Unexpected token { in JSON at position ')) {
               // This can be removed, once dropping support for node <= v18
               var pos = parseInt(e.message.slice(39));
               let [b, r] = readResponse(buffer.slice(0,pos));
-              console.error('2')
               return [b + buffer.slice(pos), r];
             } else {
               return [buffer, null];
@@ -177,7 +181,7 @@ class Condenser::DartSassTransformer < Condenser::NodeProcessor
               @context.depend_on(importee)
               code = ""
               resolve(importee, importer).each do |f, i|
-                code << "@import '#{f.source_file}';\n"
+                code << "@import '#{f.filename}';\n"
               end
               { contents: code, map: nil }
             else
