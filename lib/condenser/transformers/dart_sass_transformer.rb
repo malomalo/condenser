@@ -168,6 +168,7 @@ class Condenser::DartSassTransformer < Condenser::NodeProcessor
           ret = case message['method']
           when 'result'
             result = message['args'][0]
+            nil
           when 'load'
             importee = message['args'][0]
             importer = message['args'][1]
