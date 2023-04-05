@@ -3,6 +3,8 @@ class Condenser::DartSassTransformer < Condenser::NodeProcessor
   include Condenser::Sass::Functions
   
   ACCEPT = ['text/css', 'text/scss', 'text/sass']
+
+  attr_accessor :options
   
   def self.syntax
     :sass
@@ -116,7 +118,7 @@ class Condenser::DartSassTransformer < Condenser::NodeProcessor
         "stylesheet-url($url)", 
         "asset_data-url($url)"
       ].forEach( (f) => {
-          let name = f.replace(/-/g, '_').replace(/\\(\\$url\\)/, '');
+          let name = f.replace(/-/g, '_').replace(/\\([^\\)]*\\)/, '');
           options.functions[f] = (a) => call_fn(name, a);
         }
       )
