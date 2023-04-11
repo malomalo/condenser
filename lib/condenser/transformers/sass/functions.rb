@@ -22,7 +22,14 @@ module Condenser::Sass
       fragment = "##{fragment}" if fragment
       "#{path}#{query}#{fragment}"
     end
-
+    
+    def asset_path_signature
+      {
+        "$path" => "String",
+        "$options: ()" => 'Map'
+      }
+    end
+    
     # Public: Generate a asset url() link.
     #
     # path - String
@@ -30,6 +37,13 @@ module Condenser::Sass
       "url(#{asset_path(path, options)})"
     end
 
+    def asset_url_signature
+      {
+        "$path" => "String",
+        "$options: ()" => 'Map'
+      }
+    end
+    
     # Public: Generate url for image path.
     def image_path(path)
       asset_path(path, type: :image)

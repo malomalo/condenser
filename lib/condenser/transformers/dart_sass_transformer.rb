@@ -1,10 +1,23 @@
 class Condenser::DartSassTransformer < Condenser::NodeProcessor
 
-  include Condenser::Sass::Functions
+  @@helper_methods = Set.new
   
   ACCEPT = ['text/css', 'text/scss', 'text/sass']
 
   attr_accessor :options
+  
+  # Use this function to append Modules that contain functions to expose
+  # to dart-sass
+  def self.add_helper_methods(module_to_add = nil, &block)
+    old_methods = self.instance_methods
+    
+    self.include(module_to_add) if module_to_add
+    self.class_eval(&block) if block_given?
+    
+    @@helper_methods.merge(self.instance_methods - old_methods)
+  end
+  
+  add_helper_methods(Condenser::Sass::Functions)
   
   def self.syntax
     :sass
@@ -19,6 +32,28 @@ class Condenser::DartSassTransformer < Condenser::NodeProcessor
     }).freeze
   end
 
+  def helper_method_signatures
+    x = @@helper_methods.map do |name|
+      arity = self.method(name).arity
+      signature = []
+      types = []
+      if respond_to?(:"#{name}_signature")
+        send(:"#{name}_signature").each do |arg, type|
+          signature << arg
+          types << type
+        end
+      elsif arity >= 0
+        arity.times.with_index do |a|
+          signature << "$arg#{a}"
+          types << 'String'
+        end
+      end
+      
+      ["#{name}(#{signature.join(', ')})", types]
+    end
+    x
+  end
+  
   def call(environment, input)
     @context = environment.new_context_class#.new(environment)
     
@@ -96,32 +131,33 @@ class Condenser::DartSassTransformer < Condenser::NodeProcessor
       
       options.importer = function(url, prev) { return request('load', url, prev); };
       
-      const call_fn = function(name, url) {
-        if (!(url instanceof sass.types.String)) { throw "$url: Expected a string."; }
-        return new sass.types.String(request('call', name, url.getValue()));
+      const call_fn = function(name, types, args) {
+        const transformedArgs = [];
+        request('log', '==================')
+        args.forEach((a, i) => {
+          if (types[i] === 'Map') {
+            // Don't know how to go from SassMap to hash yet
+            transformedArgs.push({});
+          } else if (types[i] === 'List') {
+            // Don't know how to go from SassList to hash yet
+            transformedArgs.push([]);
+          } else if (!(a instanceof sass.types[types[i]])) {
+            throw "$url: Expected a string."; 
+          } else {
+            transformedArgs.push(a.getValue());
+          }
+           
+
+          // if (types[i] === 'List') { a = a.contents(); }
+        });
+        request('log', name, transformedArgs, types)
+        return new sass.types.String(request('call', name, transformedArgs));
       }
       options.functions = {};
-      [
-        "asset-path($url)", 
-        "asset-url($url)", 
-        "image-path($url)", 
-        "image-url($url)", 
-        "video-path($url)", 
-        "video-url($url)", 
-        "audio-path($url)", 
-        "audio-url($url)", 
-        "font-path($url)", 
-        "font-url($url)", 
-        "javascript-path($url)", 
-        "javascript-url($url)", 
-        "stylesheet-path($url)", 
-        "stylesheet-url($url)", 
-        "asset_data-url($url)"
-      ].forEach( (f) => {
-          let name = f.replace(/-/g, '_').replace(/\\([^\\)]*\\)/, '');
-          options.functions[f] = (a) => call_fn(name, a);
-        }
-      )
+      #{JSON.generate(helper_method_signatures)}.forEach( (f) => {
+        let name = f[0].replace(/-/g, '_').replace(/(^[^\\(]+)\\(.*\\)$/, '$1');
+        options.functions[f[0]] = (...a) => call_fn(name, f[1], a);
+      })
       
       try {
         options.data = source;
@@ -171,6 +207,7 @@ class Condenser::DartSassTransformer < Condenser::NodeProcessor
         
         messages.each do |message|
           message = JSON.parse(message)
+
           ret = case message['method']
           when 'result'
             result = message['args'][0]
@@ -208,7 +245,9 @@ class Condenser::DartSassTransformer < Condenser::NodeProcessor
             end
           when 'call'
             if respond_to?(message['args'][0])
-              send(message['args'][0], message['args'][1])
+              send(message['args'][0], *message['args'][1])
+            else
+              puts '!!!'
             end
           end
 
