@@ -14,14 +14,10 @@ class CondenserEJSTest < ActiveSupport::TestCase
       import { escape } from 'ejs';
       export default function (locals) {
         var __output = [],
-            __append = __output.push.bind(__output);
-      
+          __append = __output.push.bind(__output);
         __append("1");
-      
         __append(escape(1 + 1));
-      
         __append("3\\n");
-      
         return __output.join("");
       }
     JS
@@ -34,14 +30,10 @@ class CondenserEJSTest < ActiveSupport::TestCase
       import { escape } from 'ejs';
       export default function (locals) {
         var __output = [],
-            __append = __output.push.bind(__output);
-      
+          __append = __output.push.bind(__output);
         __append("1");
-      
         __append(escape(locals.input));
-      
         __append("3\\n");
-      
         return __output.join("");
       }
     JS
