@@ -105,6 +105,8 @@ class Condenser::JSAnalyzer
       end
 
       if last_postion == @index
+        syntax_error = Condenser::SyntaxError.new("Error parsing JS file with JSAnalyzer")
+        syntax_error.instance_variable_set(:@path, @sourcefile)
         raise Condenser::SyntaxError, "Error parsing JS file with JSAnalyzer"
       else
         last_postion = @index
@@ -121,7 +123,10 @@ class Condenser::JSAnalyzer
     message << "\n#{lineno.to_s.rjust(4)}: " << @source[start..uptop]
     message << "\n      #{'-'* (@index-1-start)}#{'^'*(@matched.length)}"
     message << "\n"
-    Condenser::SyntaxError.new(message)
+    
+    syntax_error = Condenser::SyntaxError.new(message)
+    syntax_error.instance_variable_set(:@path, @sourcefile)
+    syntax_error
   end
   
   def double_quoted_value

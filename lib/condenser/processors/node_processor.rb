@@ -60,6 +60,7 @@ class Condenser
       lineno = lines[0][/\((\d+):\d+\)$/, 1] if lines[0]
       lineno ||= 1
       error.set_backtrace(["#{source_file}:#{lineno}"] + caller)
+      error.instance_variable_set(:@path, source_file)
       error
     end
     
