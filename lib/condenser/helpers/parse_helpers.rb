@@ -55,4 +55,11 @@ module Condenser::ParseHelpers
     "#{lineno.to_s.rjust(4)}: " + @source[start..uptop] + "\n      #{'-'* (@index-1-start)}#{'^'*(@matched.length)}"
   end
 
+  def gobble(r)
+    m = @source.match(r, @index)
+    if m&.begin(0) == @index
+      scan_until(r)
+    end
+  end
+
 end

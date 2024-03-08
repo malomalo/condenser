@@ -28,6 +28,28 @@ class CondenserBabelTest < ActiveSupport::TestCase
     JS
   end
 
+  test "dependency tracking for a export from" do
+    file 'c.js', <<~JS
+    function c() { return 'ok'; }
+    
+    export {c}
+    JS
+    
+    file 'b.js', <<~JS
+    export {c} from 'c';
+    
+    JS
+    
+    file 'a.js', <<~JS
+    import {c} from 'b'
+    
+    console.log(c());
+    JS
+
+    asset = assert_file 'a.js', 'application/javascript'
+    assert_equal ['/a.js', '/b.js', '/c.js'], asset.all_export_dependencies.map { |path| path.delete_prefix(@path) }
+  end
+
   test "error" do
     file 'error.js', <<~JS
       console.log('this file has an error');
@@ -47,6 +69,7 @@ class CondenserBabelTest < ActiveSupport::TestCase
           |              ^
         4 |
     ERROR
+    assert_equal '/assets/error.js', e.path
   end
 
   test 'not duplicating polyfills' do

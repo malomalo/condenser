@@ -53,6 +53,27 @@ class Condenser::JSAnalyzer
         scan_until(/(;|\n)/)
         @stack.pop
 
+      when :export
+        input[:exports] = true;
+        input[:default_export] = true if gobble(/\s+default/)
+        gobble(/\s+/)
+
+        if gobble(/(\{|\*)/)
+          scan_until(/\}/) if matched.strip == "{"
+          if gobble(/\s+from\s+/)
+            scan_until(/\"|\'/)
+            input[:export_dependencies] <<  case matched
+            when '"'
+              puts 3
+              double_quoted_value
+            when "'"
+              puts 4
+              single_quoted_value
+            end
+          end
+        end
+        
+        @stack.pop
       else
         scan_until(/(\/\/|\/\*|\/|\(|\)|\{|\}|\"|\'|\`|export|import|\z)/)
 
@@ -92,8 +113,7 @@ class Condenser::JSAnalyzer
           end
         when 'export'
           if @stack.last == :main
-            input[:exports] = true;
-            input[:default_export] = true if next_word == 'default'
+            @stack << :export
           end
         when 'import'
           if @stack.last == :main
@@ -107,6 +127,7 @@ class Condenser::JSAnalyzer
       if last_postion == @index
         syntax_error = Condenser::SyntaxError.new("Error parsing JS file with JSAnalyzer")
         syntax_error.instance_variable_set(:@path, @sourcefile)
+        puts @source
         raise Condenser::SyntaxError, "Error parsing JS file with JSAnalyzer"
       else
         last_postion = @index

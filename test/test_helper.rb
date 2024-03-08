@@ -78,6 +78,7 @@ class ActiveSupport::TestCase
     assert_equal path.delete_prefix('/'),     asset.filename
     assert_equal Array(mime_types),           asset.content_types
     assert_equal(source.rstrip, asset.source.rstrip) if !source.nil?
+    asset
   end
   
   def assert_exported_file(path, mime_types, source=nil)
@@ -88,6 +89,7 @@ class ActiveSupport::TestCase
     assert_equal path,                        asset.filename
     assert_equal Array(mime_types),           asset.content_types
     assert_equal(source.rstrip, asset.source.rstrip) if !source.nil?
+    asset
   end
 
 end

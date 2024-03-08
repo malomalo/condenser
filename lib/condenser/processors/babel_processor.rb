@@ -95,23 +95,17 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
             ImportDeclaration(path, state) {
               imports.push(path.node.source.value);
             },
+
+            ExportDeclaration(path, state) {
+              hasExports = true;
+              if (path.node.source) {
+                imports.push(path.node.source.value);
+              }
+            },
+
             ExportDefaultDeclaration(path, state) {
-              hasExports = true;
               defaultExport = true;
-            },
-            ExportDefaultSpecifier(path, state) {
-              hasExports = true;
-              defaultExport = true;
-            },
-            ExportAllDeclaration(path, state) {
-              hasExports = true;
-            },
-            ExportNamedDeclaration(path, state) {
-              hasExports = true;
-            },
-            ExportSpecifier(path, state) {
-              hasExports = true;
-            },
+            }
           }
         };
       });
