@@ -15,7 +15,7 @@ class Condenser::JSAnalyzer
     @source = input[:source]
     @stack =  [:main]
 
-    input[:export_dependencies] ||= []
+    input[:export_dependencies] ||= Set.new
 
     scan_until(/\A(\/\/[^\n]*(\n|\z))*/)
     if matched
