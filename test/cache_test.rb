@@ -60,6 +60,19 @@ class CacheTest < ActiveSupport::TestCase
     CSS
   end
 
+  test 'changing a source file on calls needs_reprocessing! and needs_reexporting! once' do
+    file 'test.txt.erb', "1<%= 1 + 1 %>3\n"
+    assert_file 'test.txt', 'text/plain', <<~CSS
+    123
+    CSS
+
+    asset = @env.find('test.txt')
+
+    asset.expects(:needs_reprocessing!).once
+    asset.expects(:needs_reexporting!).once
+    file 'test.txt.erb', "1<%= 1 + 2 %>5\n"
+  end
+
   test 'changing a js dependency reflects in the next call' do
     file 'main.js', <<-JS
       import { cube } from 'math';

@@ -22,6 +22,10 @@ class Condenser
       else
         @semaphore = Mutex.new
         @listener = Listen.to(*path) do |modified, added, removed|
+          modified = Set.new(modified)
+          added = Set.new(added)
+          removed = Set.new(removed)
+          
           @semaphore.synchronize do
             @logger.debug { "build cache semaphore locked by #{Thread.current.object_id}" }
             @logger.debug do

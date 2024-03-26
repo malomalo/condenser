@@ -64,10 +64,8 @@ class Condenser::JSAnalyzer
             scan_until(/\"|\'/)
             input[:export_dependencies] <<  case matched
             when '"'
-              puts 3
               double_quoted_value
             when "'"
-              puts 4
               single_quoted_value
             end
           end
@@ -127,7 +125,6 @@ class Condenser::JSAnalyzer
       if last_postion == @index
         syntax_error = Condenser::SyntaxError.new("Error parsing JS file with JSAnalyzer")
         syntax_error.instance_variable_set(:@path, @sourcefile)
-        puts @source
         raise Condenser::SyntaxError, "Error parsing JS file with JSAnalyzer"
       else
         last_postion = @index
