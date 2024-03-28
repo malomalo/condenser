@@ -35,6 +35,16 @@ class ResolveTest < ActiveSupport::TestCase
     assert_equal ['test', '*', ['.js'], ['application/javascript']], @env.decompose_path('test/*.js')
     assert_equal ['test/*', '*', ['.js'], ['application/javascript']], @env.decompose_path('test/*/*.js')
     assert_equal ['test/**', '*', ['.js'], ['application/javascript']], @env.decompose_path('test/**/*.js')
+    
+    assert_equal ['a', 'test', ['.js'], ['application/javascript']], @env.decompose_path('./test.js', 'a/b.js')
+    assert_equal [nil, 'test', ['.js'], ['application/javascript']], @env.decompose_path('./test.js', 'b.js')
+    assert_equal ['a/folder', 'test', ['.js'], ['application/javascript']], @env.decompose_path('./folder/test.js', 'a/b.js')
+    assert_equal ['folder', 'test', ['.js'], ['application/javascript']], @env.decompose_path('./folder/test.js', 'b.js')
+    
+    assert_equal [nil, 'test', ['.js'], ['application/javascript']], @env.decompose_path('../test.js', 'a/b.js')
+    assert_equal ["/", 'test', ['.js'], ['application/javascript']], @env.decompose_path('../test.js', '/a/b.js')
+    assert_equal ["folder", 'test', ['.js'], ['application/javascript']], @env.decompose_path('../folder/test.js', 'a/b.js')
+    assert_equal ["/folder", 'test', ['.js'], ['application/javascript']], @env.decompose_path('../folder/test.js', '/a/b.js')
   end
   
   test 'resolve' do

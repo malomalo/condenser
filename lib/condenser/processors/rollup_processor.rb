@@ -214,7 +214,7 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
             elsif importee.end_with?('*')
               File.join(File.dirname(importee), '*')
             else
-              @environment.find(importee, importer ? File.dirname(@entry == importer ? @input[:source_file] : importer) : nil, accept: @input[:content_types].last)&.source_file
+              @environment.find(importee, importer ? (@entry == importer ? @input[:source_file] : importer) : nil, accept: @input[:content_types].last)&.source_file
             end
           when 'load'
             importee = message['args'].first

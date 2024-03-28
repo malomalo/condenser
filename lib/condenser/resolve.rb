@@ -146,13 +146,35 @@ class Condenser
           build_cache.semaphore.unlock
         end
       end
+    
+    def has_dir?(path)
+      path.count('/') > (path.start_with?('/') ? 1 : 0)
+    end
+    
+    def expand_path(path)
+      dir = if path.start_with?('/')
+        File.expand_path(path)
+      else
+        File.expand_path("/#{path}").delete_prefix('/')
+      end
+      dir.empty? ? nil : dir
     end
     
     def decompose_path(path, base=nil)
-      dirname = path.index('/') ? File.dirname(path) : nil
-      if base && path&.start_with?('.')
-        dirname = File.expand_path(dirname, base)
+      dirname = if base && path.start_with?('.')
+        if has_dir?(base)
+          if has_dir?(path)
+            expand_path(File.join(File.dirname(base), File.dirname(path)))
+          else
+            expand_path(File.dirname(base))
+          end
+        else
+          expand_path(File.dirname(path))
+        end
+      else
+        path.index('/') ? File.dirname(path) : nil
       end
+
       
       _, star, basename, extensions = path.match(/(([^\.\/]+)(\.[^\/]+)|\*|[^\/]+)$/).to_a
       if extensions == '.*'

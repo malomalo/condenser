@@ -276,6 +276,8 @@ class Condenser
       
           data[:digest] = @environment.digestor.digest(data[:source])
           data[:digest_name] = @environment.digestor.name.sub(/^.*::/, '').downcase
+          data[:process_dependencies] = normialize_dependency_names(data[:process_dependencies])
+          data[:export_dependencies] = normialize_dependency_names(data[:export_dependencies])
 
           # Do this here and at the end so cache_key can be calculated if we
           # run this block
@@ -312,6 +314,17 @@ class Condenser
       load_processors
 
       @processed = true
+    end
+    
+    def normialize_dependency_names(deps)
+      deps.map do |fn|
+        if fn.is_a?(String)
+          dirname, basename, extensions, mime_types = @environment.decompose_path(fn, source_file)
+          [File.join(dirname || "/", basename), mime_types.empty? ? @content_types : mime_types]
+        else
+          fn
+        end
+      end
     end
     
     def export
