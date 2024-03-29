@@ -123,17 +123,27 @@ class Condenser
       end
     end
     
-    def all_process_dependencies
-      f = [@source_file]
-      all_dependenies(process_dependencies, Set.new, :process_dependencies) do |dep|
+    def all_process_dependencies(visited = Set.new)
+      f = []
+      if !visited.include?(@source_file)
+        f << @source_file
+        visited << self.source_file
+      end
+      
+      all_dependenies(process_dependencies, visited, :process_dependencies) do |dep|
         f << dep.source_file
       end
       f
     end
     
-    def all_export_dependencies
-      f = [@source_file]
-      all_dependenies(export_dependencies, Set.new, :export_dependencies) do |dep|
+    def all_export_dependencies(visited = Set.new)
+      f = []
+      if !visited.include?(@source_file)
+        f << @source_file
+        visited << self.source_file
+      end
+      
+      all_dependenies(export_dependencies, visited, :export_dependencies) do |dep|
         f << dep.source_file
       end
       f

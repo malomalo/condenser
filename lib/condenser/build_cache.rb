@@ -126,16 +126,25 @@ class Condenser
     
     def []=(value, assets)
       @lookup_cache[value] = assets
+      
+      if @fetching.nil?
+        begin
+          assets.each do |asset|
+            @fetching = Set.new
+            asset.all_process_dependencies(@fetching).each do |pd|
+              @process_dependencies[pd] ||= Set.new
+              @process_dependencies[pd] << asset
+            end
 
-      assets.each do |asset|
-        asset.all_process_dependencies.each do |pd|
-          @process_dependencies[pd] ||= Set.new
-          @process_dependencies[pd] << asset
-        end
+            @fetching = Set.new
+            asset.all_export_dependencies(@fetching).each do |pd|
+              @export_dependencies[pd] ||= Set.new
 
-        asset.all_export_dependencies.each do |pd|
-          @export_dependencies[pd] ||= Set.new
-          @export_dependencies[pd] << asset
+              @export_dependencies[pd] << asset
+            end
+          end
+        ensure
+          @fetching = nil
         end
       end
     end

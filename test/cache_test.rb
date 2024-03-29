@@ -321,5 +321,46 @@ class CacheTest < ActiveSupport::TestCase
       body{background:green}body{background:aqua}
     JS
   end
+  
+  test 'ensure the build cache only walks the dependency tree once' do
+    # a
+    # | |
+    # b c
+    #   |
+    #   d
+      
+    file 'd.js', "export default function d () { console.log('d'); }\n"
+    file 'b.js', "export default function b () { console.log('b'); }\n"
+    file 'c.js', <<~JS
+      import d from 'd';
 
+      export default function c () { console.log('c'); d(); }
+    JS
+    file 'a.js', <<~JS
+      import b from 'b';
+      import c from 'c';
+      
+      console.log('a'); b(); c();
+    JS
+
+    assert_exported_file 'a.js', 'application/javascript', <<~JS
+      !function(){"use strict";console.log("a"),console.log("b"),console.log("c"),console.log("d")}();
+    JS
+
+    file 'd.js', "export default function e () { console.log('e'); }\n"
+
+    pd = @env.build_cache.instance_variable_get(:@process_dependencies)
+    pd["#{@path}/a.js"] ||= Set.new
+    pd["#{@path}/b.js"] ||= Set.new
+    pd["#{@path}/c.js"] ||= Set.new
+    pd["#{@path}/d.js"] ||= Set.new
+    pd["#{@path}/a.js"].expects(:<<).with { |a| a.source_file == "#{@path}/a.js" }.once
+    pd["#{@path}/b.js"].expects(:<<).with { |a| a.source_file == "#{@path}/b.js" }.never
+    pd["#{@path}/c.js"].expects(:<<).with { |a| a.source_file == "#{@path}/c.js" }.never
+    pd["#{@path}/d.js"].expects(:<<).with { |a| a.source_file == "#{@path}/d.js" }.once
+
+    assert_exported_file 'a.js', 'application/javascript', <<~JS
+      !function(){"use strict";console.log("a"),console.log("b"),console.log("c"),console.log("e")}();
+    JS
+  end
 end

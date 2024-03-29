@@ -146,6 +146,7 @@ class Condenser
           build_cache.semaphore.unlock
         end
       end
+    end
     
     def has_dir?(path)
       path.count('/') > (path.start_with?('/') ? 1 : 0)
