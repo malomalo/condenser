@@ -269,5 +269,18 @@ class JSAnalyzerTest < ActiveSupport::TestCase
     asset = assert_file 'a.js', 'application/javascript'
     assert_equal ['/a.js', '/b.js', '/c.js'], asset.all_export_dependencies.map { |path| path.delete_prefix(@path) }
   end
+  
+  test 'exporting a nested object' do
+    file 't.js', <<~JS
+      export default {
+          registry: {
+              boolean: true,
+              integer: 1
+          }
+      };
+    JS
+    
+    asset = assert_file 't.js', 'application/javascript'
+  end
 
 end

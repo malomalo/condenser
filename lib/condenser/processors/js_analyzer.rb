@@ -28,6 +28,7 @@ class Condenser::JSAnalyzer
     end
     
     last_postion = nil
+    last_stack = nil
     while !eos?
       case @stack.last
 
@@ -58,20 +59,27 @@ class Condenser::JSAnalyzer
         input[:default_export] = true if gobble(/\s+default/)
         gobble(/\s+/)
 
-        if gobble(/(\{|\*)/)
-          scan_until(/\}/) if matched.strip == "{"
-          if gobble(/\s+from\s+/)
-            scan_until(/\"|\'/)
-            input[:export_dependencies] <<  case matched
-            when '"'
-              double_quoted_value
-            when "'"
-              single_quoted_value
-            end
+        if gobble(/\{/)
+          @stack << :brackets
+        elsif gobble(/\*/)
+          @stack << :export_from
+        else
+          @stack.pop
+        end
+
+      when :export_from
+        if gobble(/\s+from\s+/)
+          scan_until(/\"|\'/)
+          input[:export_dependencies] <<  case matched
+          when '"'
+            double_quoted_value
+          when "'"
+            single_quoted_value
           end
         end
-        
         @stack.pop
+        @stack.pop
+        
       else
         scan_until(/(\/\/|\/\*|\/|\(|\)|\{|\}|\"|\'|\`|export|import|\z)/)
 
@@ -104,8 +112,11 @@ class Condenser::JSAnalyzer
           @stack.push :brackets
         when '}'
           case @stack.last
-          when :brackets, :tick_statment
+          when :tick_statment
             @stack.pop
+          when :brackets
+            @stack.pop
+            @stack << :export_from if @stack.last == :export
           else
             raise unexptected_token("}")
           end
@@ -122,12 +133,13 @@ class Condenser::JSAnalyzer
         end
       end
 
-      if last_postion == @index
+      if last_postion == @index && last_stack == @stack.last
         syntax_error = Condenser::SyntaxError.new("Error parsing JS file with JSAnalyzer")
         syntax_error.instance_variable_set(:@path, @sourcefile)
         raise Condenser::SyntaxError, "Error parsing JS file with JSAnalyzer"
       else
         last_postion = @index
+        last_stack = @stack.last
       end
     end
   end
