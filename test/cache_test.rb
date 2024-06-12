@@ -87,11 +87,11 @@ class CacheTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'main.js', 'application/javascript', <<~CSS
-      !function(){"use strict";var o;console.log((o=5)*o)}();
+      !function(){var o;console.log((o=5)*o)}();
     CSS
 
     assert_exported_file 'main.js', 'application/javascript', <<~CSS
-      !function(){"use strict";var o;console.log((o=5)*o)}();
+      !function(){var o;console.log((o=5)*o)}();
     CSS
 
     file 'math.js', <<-JS
@@ -101,7 +101,7 @@ class CacheTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'main.js', 'application/javascript', <<~CSS
-      !function(){"use strict";var o;console.log((o=5)*o*o)}();
+      !function(){var o;console.log((o=5)*o*o)}();
     CSS
   end
 
@@ -136,10 +136,10 @@ class CacheTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'a.js', 'application/javascript', <<~JS
-      !function(){"use strict";console.log(5)}();
+      console.log(5);
     JS
     assert_exported_file 'b.js', 'application/javascript', <<~JS
-      !function(){"use strict";console.log(5)}();
+      console.log(5);
     JS
 
     file 'dep.js', <<-JS
@@ -147,12 +147,11 @@ class CacheTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'a.js', 'application/javascript', <<~JS
-      !function(){"use strict";console.log(10)}();
+      console.log(10);
     JS
     assert_exported_file 'b.js', 'application/javascript', <<~JS
-      !function(){"use strict";console.log(10)}();
+      console.log(10);
     JS
-
   end
 
   test 'a dependency is superceeded by a new file' do
@@ -171,7 +170,7 @@ class CacheTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'a.js', 'application/javascript', <<~JS
-      !function(){"use strict";console.log(5)}();
+      console.log(5);
     JS
 
     file 'a/dep.js', <<-JS
@@ -179,7 +178,7 @@ class CacheTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'a.js', 'application/javascript', <<~JS
-      !function(){"use strict";console.log(10)}();
+      console.log(10);
     JS
   end
 
@@ -199,7 +198,7 @@ class CacheTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'a.js', 'application/javascript', <<~JS
-      !function(){"use strict";console.log(5)}();
+      console.log(5);
     JS
 
     file 'a/deps/dep.js', <<-JS
@@ -207,7 +206,7 @@ class CacheTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'a.js', 'application/javascript', <<~JS
-      !function(){"use strict";console.log(10)}();
+      console.log(10);
     JS
 
     file 'a/deps/dep.js', <<-JS
@@ -215,7 +214,7 @@ class CacheTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'a.js', 'application/javascript', <<~JS
-      !function(){"use strict";console.log(20)}();
+      console.log(20);
     JS
   end
   
@@ -272,7 +271,7 @@ class CacheTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'a.js', 'application/javascript', <<~JS
-      !function(){"use strict";console.log("a")}();
+    console.log("a");
     JS
 
     file 'a.js', <<~JS
@@ -282,7 +281,7 @@ class CacheTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'a.js', 'application/javascript', <<~JS
-      !function(){"use strict";console.log("a"),console.log("b")}();
+      console.log("a"),console.log("b");
     JS
 
     file 'b.js', <<~JS
@@ -290,7 +289,7 @@ class CacheTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'a.js', 'application/javascript', <<~JS
-      !function(){"use strict";console.log("a"),console.log("c")}();
+      console.log("a"),console.log("c");
     JS
   end
 
@@ -344,7 +343,7 @@ class CacheTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'a.js', 'application/javascript', <<~JS
-      !function(){"use strict";console.log("a"),console.log("b"),console.log("c"),console.log("d")}();
+      console.log("a"),console.log("b"),console.log("c"),console.log("d");
     JS
 
     file 'd.js', "export default function e () { console.log('e'); }\n"
@@ -360,7 +359,49 @@ class CacheTest < ActiveSupport::TestCase
     pd["#{@path}/d.js"].expects(:<<).with { |a| a.source_file == "#{@path}/d.js" }.once
 
     assert_exported_file 'a.js', 'application/javascript', <<~JS
-      !function(){"use strict";console.log("a"),console.log("b"),console.log("c"),console.log("e")}();
+      console.log("a"),console.log("b"),console.log("c"),console.log("e");
     JS
+  end
+  
+  test 'same files in diffrent dirs sharing a cache doesnt poison the cache (ie capistrano deploys)' do
+    cachepath = Dir.mktmpdir
+    
+    dir = File.realpath(Dir.mktmpdir)
+    base1 = File.join(dir, 'a')
+    base2 = File.join(dir, 'b')
+    base3 = File.join(dir, 'c')
+    Dir.mkdir(base1)
+    Dir.mkdir(base2)
+
+    [base1, base2, base3].each do |b|
+      file 'test.js', "export default function c () { console.log('t'); }\n", base: b
+      file 'test/b.js', <<~JS, base: b
+        import c from './c';
+        export default function b () { console.log('b'); c(); }
+      JS
+      file 'test/a.js', <<~JS, base: b
+        import t from 'test';
+        import b from './b';
+
+        console.log('a');
+        b();
+      JS
+    end
+
+    file 'test/c.js', "export default function c () { console.log('c'); }\n", base: base1
+    file 'test/c.js', "export default function c () { console.log('d'); }\n", base: base2
+    file 'test/c.js', "export default function c () { console.log('e'); }\n", base: base3
+
+    # Set the cache
+    env1 = Condenser.new(base1, logger: Logger.new(STDOUT, level: :debug), base: base1, npm_path: @npm_dir, cache: Condenser::Cache::FileStore.new(cachepath))
+    assert_equal 'console.log("a"),console.log("b"),console.log("c");', env1.find('test/a.js').export.source
+
+    # Poison the cache
+    env2 = Condenser.new(base2, logger: Logger.new(STDOUT, level: :debug), base: base2, npm_path: @npm_dir, cache: Condenser::Cache::FileStore.new(cachepath))
+    assert_equal 'console.log("a"),console.log("b"),console.log("d");', env2.find('test/a.js').export.source
+
+    # Fails to find dependency change because cache is missing the dependency
+    env3 = Condenser.new(base3, logger: Logger.new(STDOUT, level: :debug), base: base3, npm_path: @npm_dir, cache: Condenser::Cache::FileStore.new(cachepath))
+    assert_equal 'console.log("a"),console.log("b"),console.log("e");', env3.find('test/a.js').export.source
   end
 end

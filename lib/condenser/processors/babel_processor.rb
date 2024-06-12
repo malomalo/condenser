@@ -16,6 +16,7 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
         targets: { browsers: '> 1% and not dead' }
       }]
     ]
+    options[:highlightCode] = false if !options.has_key?(:highlightCode)
 
     packages = options.slice(:plugins, :presets).values.reduce(&:+).map { |p| p.is_a?(Array) ? p[0] : p}
     packages.unshift('@babel/core')

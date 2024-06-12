@@ -53,9 +53,10 @@ class ActiveSupport::TestCase
     assert_equal json, jbuild(&block)
   end
   
-  def file(name, source)
-    dir = name.include?('/') ? File.join(@path, File.dirname(name)) : @path
-    path = File.join(@path, name)
+  def file(name, source, base: nil)
+    base ||= @path
+    dir = name.include?('/') ? File.join(base, File.dirname(name)) : base
+    path = File.join(base, name)
     
     FileUtils.mkdir_p(dir)
     if File.exist?(path)

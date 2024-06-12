@@ -65,33 +65,31 @@ class Condenser
     def process_dependencies
       deps = @environment.cache.fetch "direct-deps/#{cache_key}" do
         process
-        @process_dependencies
+        @process_dependencies.map { |fn| [normalize_filename_base(fn[0]), fn[1]] }
       end
     
-      d = []
-      deps.each do |i|
-        i = [i, @content_types] if i.is_a?(String)
+      deps.inject([]) do |memo, i|
+        i[0] = File.join(@environment.base, i[0].delete_prefix('!')) if i[0].start_with?('!') && @environment.base
         @environment.resolve(i[0], File.dirname(@source_file), accept: i[1]).each do |asset|
-          d << asset
+          memo << asset
         end
+        memo
       end
-      d
     end
     
     def export_dependencies
       deps = @environment.cache.fetch "export-deps/#{cache_key}" do
         process
-        @export_dependencies + @process_dependencies
+        (@export_dependencies + @process_dependencies).map { |fn| [normalize_filename_base(fn[0]), fn[1]] }
       end
       
-      d = []
-      deps.each do |i|
-        i = [i, @content_types] if i.is_a?(String)
+      deps.inject([]) do |memo, i|
+        i[0] = File.join(@environment.base, i[0].delete_prefix('!')) if i[0].start_with?('!') && @environment.base
         @environment.resolve(i[0], File.dirname(@source_file), accept: i[1]).each do |asset|
-          d << asset
+          memo << asset
         end
+        memo
       end
-      d
     end
     
     def has_default_export?
@@ -153,10 +151,20 @@ class Condenser
       @cache_key ||= Digest::SHA1.base64digest(JSON.generate([
         Condenser::VERSION,
         @environment.pipline_digest,
-        @environment.base ? @source_file.delete_prefix(@environment.base) : @source_file,
+        normalize_filename_base(@source_file),
         Digest::SHA256.file(@source_file).hexdigest,
         @content_types_digest
       ]))
+    end
+    
+    # Remove Enviroment base if it exists. This allows two of the same repos
+    # in a different location to use the same cache (like capistrano deploys)
+    def normalize_filename_base(source_filename)
+      if @environment.base && source_filename.start_with?(@environment.base)
+        '!'+source_filename.delete_prefix(@environment.base).delete_prefix(File::SEPARATOR)
+      else
+        source_filename
+      end
     end
     
     def process_cache_version
@@ -165,7 +173,7 @@ class Condenser
       f = []
       all_dependenies(process_dependencies, Set.new, :process_dependencies) do |dep|
         f << [
-          @environment.base ? dep.source_file.delete_prefix(@environment.base) : dep.source_file,
+          normalize_filename_base(dep.source_file),
           Digest::SHA256.file(dep.source_file).hexdigest
         ]
       end
@@ -179,7 +187,7 @@ class Condenser
       f = []
       all_dependenies(export_dependencies, Set.new, :export_dependencies) do |dep|
         f << [
-          @environment.base ? dep.source_file.delete_prefix(@environment.base) : dep.source_file,
+          normalize_filename_base(dep.source_file),
           Digest::SHA256.file(dep.source_file).hexdigest
         ]
       end
@@ -330,7 +338,7 @@ class Condenser
       deps.map do |fn|
         if fn.is_a?(String)
           dirname, basename, extensions, mime_types = @environment.decompose_path(fn, source_file)
-          [File.join(dirname || "/", basename), mime_types.empty? ? @content_types : mime_types]
+          [dirname ? File.join(dirname, basename) : basename, mime_types.empty? ? @content_types : mime_types]
         else
           fn
         end

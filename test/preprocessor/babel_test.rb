@@ -106,7 +106,7 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	};
 
       	// https://github.com/zloirock/core-js/issues/86#issuecomment-115759028
-      	var global$9 =
+      	var global$8 =
       	  // eslint-disable-next-line es/no-global-this -- safe
       	  check(typeof globalThis == 'object' && globalThis) ||
       	  check(typeof window == 'object' && window) ||
@@ -176,25 +176,14 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	  if (classofRaw(fn) === 'Function') return uncurryThis$8(fn);
       	};
 
-      	var documentAll$2 = typeof document == 'object' && document.all;
-
       	// https://tc39.es/ecma262/#sec-IsHTMLDDA-internal-slot
-      	// eslint-disable-next-line unicorn/no-typeof-undefined -- required for testing
-      	var IS_HTMLDDA = typeof documentAll$2 == 'undefined' && documentAll$2 !== undefined;
-
-      	var documentAll_1 = {
-      	  all: documentAll$2,
-      	  IS_HTMLDDA: IS_HTMLDDA
-      	};
-
-      	var $documentAll$1 = documentAll_1;
-
-      	var documentAll$1 = $documentAll$1.all;
+      	var documentAll = typeof document == 'object' && document.all;
 
       	// `IsCallable` abstract operation
       	// https://tc39.es/ecma262/#sec-iscallable
-      	var isCallable$7 = $documentAll$1.IS_HTMLDDA ? function (argument) {
-      	  return typeof argument == 'function' || argument === documentAll$1;
+      	// eslint-disable-next-line unicorn/no-typeof-undefined -- required for testing
+      	var isCallable$7 = typeof documentAll == 'undefined' && documentAll !== undefined ? function (argument) {
+      	  return typeof argument == 'function' || argument === documentAll;
       	} : function (argument) {
       	  return typeof argument == 'function';
       	};
@@ -284,20 +273,15 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	};
 
       	var isCallable$6 = isCallable$7;
-      	var $documentAll = documentAll_1;
 
-      	var documentAll = $documentAll.all;
-
-      	var isObject$4 = $documentAll.IS_HTMLDDA ? function (it) {
-      	  return typeof it == 'object' ? it !== null : isCallable$6(it) || it === documentAll;
-      	} : function (it) {
+      	var isObject$4 = function (it) {
       	  return typeof it == 'object' ? it !== null : isCallable$6(it);
       	};
 
       	var path$3 = {};
 
       	var path$2 = path$3;
-      	var global$8 = global$9;
+      	var global$7 = global$8;
       	var isCallable$5 = isCallable$7;
 
       	var aFunction = function (variable) {
@@ -305,8 +289,8 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	};
 
       	var getBuiltIn$1 = function (namespace, method) {
-      	  return arguments.length < 2 ? aFunction(path$2[namespace]) || aFunction(global$8[namespace])
-      	    : path$2[namespace] && path$2[namespace][method] || global$8[namespace] && global$8[namespace][method];
+      	  return arguments.length < 2 ? aFunction(path$2[namespace]) || aFunction(global$7[namespace])
+      	    : path$2[namespace] && path$2[namespace][method] || global$7[namespace] && global$7[namespace][method];
       	};
 
       	var uncurryThis$6 = functionUncurryThis;
@@ -315,11 +299,11 @@ class CondenserBabelTest < ActiveSupport::TestCase
 
       	var engineUserAgent = typeof navigator != 'undefined' && String(navigator.userAgent) || '';
 
-      	var global$7 = global$9;
+      	var global$6 = global$8;
       	var userAgent = engineUserAgent;
 
-      	var process = global$7.process;
-      	var Deno = global$7.Deno;
+      	var process = global$6.process;
+      	var Deno = global$6.Deno;
       	var versions = process && process.versions || Deno && Deno.version;
       	var v8 = versions && versions.v8;
       	var match, version;
@@ -346,9 +330,9 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	/* eslint-disable es/no-symbol -- required for testing */
       	var V8_VERSION = engineV8Version;
       	var fails$4 = fails$8;
-      	var global$6 = global$9;
+      	var global$5 = global$8;
 
-      	var $String$2 = global$6.String;
+      	var $String$2 = global$5.String;
 
       	// eslint-disable-next-line es/no-object-getownpropertysymbols -- required for testing
       	var symbolConstructorDetection = !!Object.getOwnPropertySymbols && !fails$4(function () {
@@ -430,42 +414,42 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	  throw new $TypeError$3("Can't convert object to primitive value");
       	};
 
-      	var shared$1 = {exports: {}};
+      	var sharedStore = {exports: {}};
 
-      	var global$5 = global$9;
+      	var global$4 = global$8;
 
       	// eslint-disable-next-line es/no-object-defineproperty -- safe
       	var defineProperty$1 = Object.defineProperty;
 
       	var defineGlobalProperty$1 = function (key, value) {
       	  try {
-      	    defineProperty$1(global$5, key, { value: value, configurable: true, writable: true });
+      	    defineProperty$1(global$4, key, { value: value, configurable: true, writable: true });
       	  } catch (error) {
-      	    global$5[key] = value;
+      	    global$4[key] = value;
       	  } return value;
       	};
 
-      	var global$4 = global$9;
+      	var globalThis$1 = global$8;
       	var defineGlobalProperty = defineGlobalProperty$1;
 
       	var SHARED = '__core-js_shared__';
-      	var store$1 = global$4[SHARED] || defineGlobalProperty(SHARED, {});
+      	var store$1 = sharedStore.exports = globalThis$1[SHARED] || defineGlobalProperty(SHARED, {});
 
-      	var sharedStore = store$1;
-
-      	var store = sharedStore;
-
-      	(shared$1.exports = function (key, value) {
-      	  return store[key] || (store[key] = value !== undefined ? value : {});
-      	})('versions', []).push({
-      	  version: '3.34.0',
+      	(store$1.versions || (store$1.versions = [])).push({
+      	  version: '3.37.1',
       	  mode: 'pure' ,
-      	  copyright: '© 2014-2023 Denis Pushkarev (zloirock.ru)',
-      	  license: 'https://github.com/zloirock/core-js/blob/v3.34.0/LICENSE',
+      	  copyright: '© 2014-2024 Denis Pushkarev (zloirock.ru)',
+      	  license: 'https://github.com/zloirock/core-js/blob/v3.37.1/LICENSE',
       	  source: 'https://github.com/zloirock/core-js'
       	});
 
-      	var sharedExports = shared$1.exports;
+      	var sharedStoreExports = sharedStore.exports;
+
+      	var store = sharedStoreExports;
+
+      	var shared$1 = function (key, value) {
+      	  return store[key] || (store[key] = value || {});
+      	};
 
       	var requireObjectCoercible = requireObjectCoercible$2;
 
@@ -499,8 +483,8 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	  return 'Symbol(' + (key === undefined ? '' : key) + ')_' + toString(++id + postfix, 36);
       	};
 
-      	var global$3 = global$9;
-      	var shared = sharedExports;
+      	var global$3 = global$8;
+      	var shared = shared$1;
       	var hasOwn$3 = hasOwnProperty_1;
       	var uid = uid$1;
       	var NATIVE_SYMBOL = symbolConstructorDetection;
@@ -554,7 +538,7 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	  return isSymbol(key) ? key : key + '';
       	};
 
-      	var global$2 = global$9;
+      	var global$2 = global$8;
       	var isObject$1 = isObject$4;
 
       	var document$1 = global$2.document;
@@ -718,7 +702,7 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	  return object;
       	};
 
-      	var global$1 = global$9;
+      	var global$1 = global$8;
       	var apply = functionApply;
       	var uncurryThis$2 = functionUncurryThisClause;
       	var isCallable = isCallable$7;
@@ -728,6 +712,8 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	var bind = functionBindContext;
       	var createNonEnumerableProperty = createNonEnumerableProperty$1;
       	var hasOwn$1 = hasOwnProperty_1;
+      	// add debugging info
+
 
       	var wrapConstructor = function (NativeConstructor) {
       	  var Wrapper = function (a, b, c) {
@@ -764,7 +750,7 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	  var STATIC = options.stat;
       	  var PROTO = options.proto;
 
-      	  var nativeSource = GLOBAL ? global$1 : STATIC ? global$1[TARGET] : (global$1[TARGET] || {}).prototype;
+      	  var nativeSource = GLOBAL ? global$1 : STATIC ? global$1[TARGET] : global$1[TARGET] && global$1[TARGET].prototype;
 
       	  var target = GLOBAL ? path$1 : path$1[TARGET] || createNonEnumerableProperty(path$1, TARGET, {})[TARGET];
       	  var targetPrototype = target.prototype;
@@ -787,7 +773,7 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	    // export native or implementation
       	    sourceProperty = (USE_NATIVE && nativeProperty) ? nativeProperty : source[key];
 
-      	    if (USE_NATIVE && typeof targetProperty == typeof sourceProperty) continue;
+      	    if (!FORCED && !PROTO && typeof targetProperty == typeof sourceProperty) continue;
 
       	    // bind methods to global for calling from export context
       	    if (options.bind && USE_NATIVE) resultProperty = bind(sourceProperty, global$1);
@@ -861,7 +847,8 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	// `ToLength` abstract operation
       	// https://tc39.es/ecma262/#sec-tolength
       	var toLength$1 = function (argument) {
-      	  return argument > 0 ? min(toIntegerOrInfinity(argument), 0x1FFFFFFFFFFFFF) : 0; // 2 ** 53 - 1 == 9007199254740991
+      	  var len = toIntegerOrInfinity(argument);
+      	  return len > 0 ? min(len, 0x1FFFFFFFFFFFFF) : 0; // 2 ** 53 - 1 == 9007199254740991
       	};
 
       	var toLength = toLength$1;
@@ -881,6 +868,7 @@ class CondenserBabelTest < ActiveSupport::TestCase
       	  return function ($this, el, fromIndex) {
       	    var O = toIndexedObject$1($this);
       	    var length = lengthOfArrayLike(O);
+      	    if (length === 0) return !IS_INCLUDES && -1;
       	    var index = toAbsoluteIndex(fromIndex, length);
       	    var value;
       	    // Array#includes uses SameValueZero equality algorithm

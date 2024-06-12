@@ -62,7 +62,7 @@ class ManifestTest < ActiveSupport::TestCase
 
     data = JSON.parse(File.read(manifest.filename))
     assert data['application.js']
-    assert data['application.js']['size'] > 16
+    assert_equal 15, data['application.js']['size']
     assert_equal asset.path, data['application.js']['path']
   end
 
