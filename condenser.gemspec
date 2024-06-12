@@ -18,7 +18,7 @@ Gem::Specification.new do |s|
   s.executables   = `git ls-files -- bin/*`.split("\n").map{ |f| File.basename(f) }
   s.require_paths = %w(lib)
   
-  s.required_ruby_version = '>= 2.4.0'
+  s.required_ruby_version = '>= 3.2.0'
 
   s.add_runtime_dependency  "erubi", '~> 1.0'
   s.add_runtime_dependency  "rack",  '> 1', '< 3'
