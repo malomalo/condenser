@@ -87,11 +87,11 @@ class CacheTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'main.js', 'application/javascript', <<~CSS
-      !function(){var o;console.log((o=5)*o)}();
+      (()=>{var o;console.log((o=5)*o)})();
     CSS
 
     assert_exported_file 'main.js', 'application/javascript', <<~CSS
-      !function(){var o;console.log((o=5)*o)}();
+      (()=>{var o;console.log((o=5)*o)})();
     CSS
 
     file 'math.js', <<-JS
@@ -101,7 +101,7 @@ class CacheTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'main.js', 'application/javascript', <<~CSS
-      !function(){var o;console.log((o=5)*o*o)}();
+      (()=>{var o;console.log((o=5)*o*o)})();
     CSS
   end
 

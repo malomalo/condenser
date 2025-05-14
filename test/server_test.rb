@@ -54,7 +54,7 @@ class ServerTest < ActiveSupport::TestCase
 
     get "/assets/main.js"
     assert_equal <<~JS.strip, last_response.body
-      !function(){var o;console.log((o=5)*o*o)}();
+      (()=>{var o;console.log((o=5)*o*o)})();
     JS
   end
 
