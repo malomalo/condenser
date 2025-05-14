@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Condenser::JSAnalyzer
 
   include Condenser::ParseHelpers
@@ -160,7 +162,7 @@ class Condenser::JSAnalyzer
   end
   
   def double_quoted_value
-    ret_value = ""
+    ret_value = String.new
 
     while scan_until(/[\"\n]/)
       if matched == "\n"
@@ -181,7 +183,7 @@ class Condenser::JSAnalyzer
   end
   
   def single_quoted_value
-    ret_value = ""
+    ret_value = String.new
 
     while scan_until(/[\'\n]/)
       if matched == "\n"
@@ -196,7 +198,7 @@ class Condenser::JSAnalyzer
   end
 
   def tick_quoted_value
-    ret_value = ""
+    ret_value = String.new
 
     while scan_until(/[\`]/)
       if matched == "\`" && pre_match[-1] != "\\"
@@ -209,7 +211,7 @@ class Condenser::JSAnalyzer
   end
   
   def regex_value
-    ret_value = ""
+    ret_value = String.new
 
     while scan_until(/\//)
       if matched == "/" && pre_match[-1] != "\\"
