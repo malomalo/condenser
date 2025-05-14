@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Transformer engine class for the SASS/SCSS compiler. Depends on the `sass`
 # gem.
 #

@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 class Condenser::Cache
   class FileStore < Condenser::CacheStore
     GITKEEP_FILES = ['.gitkeep', '.keep'].freeze

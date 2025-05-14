@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Condenser::JstTransformer < Condenser::NodeProcessor
   
   def initialize(dir = nil)

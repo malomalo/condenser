@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Public: Functions injected into Sass context during Condenser evaluation.
 #
 # This module may be extended to add global functionality to all Condenser

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Condenser::DartSassTransformer < Condenser::NodeProcessor
 
   @@helper_methods = Set.new
@@ -196,14 +198,14 @@ class Condenser::DartSassTransformer < Condenser::NodeProcessor
   
   def exec_runtime(script)
     io = IO.popen([binary, '-e', script], 'r+')
-    buffer = ''
+    buffer = String.new
     result = nil
     
     begin
       while IO.select([io]) && io_read = io.read_nonblock(1_024)
         buffer << io_read
         messages = buffer.split("\n\n")
-        buffer = buffer.end_with?("\n\n") ? '' : messages.pop
+        buffer = buffer.end_with?("\n\n") ? String.new : messages.pop
         
         messages.each do |message|
           message = JSON.parse(message)
@@ -218,7 +220,7 @@ class Condenser::DartSassTransformer < Condenser::NodeProcessor
             
             if importee.end_with?('*')
               @context.depend_on(importee)
-              code = ""
+              code = String.new
               resolve(importee, importer).each do |f, i|
                 code << "@import '#{f.filename}';\n"
               end

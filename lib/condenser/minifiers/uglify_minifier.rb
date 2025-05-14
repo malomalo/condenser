@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Condenser::UglifyMinifier < Condenser::NodeProcessor
 
   class Error < StandardError

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Condenser::SVGTransformer::VarGenerator
   def initialize
     @current = nil

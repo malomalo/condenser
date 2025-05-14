@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Condenser::SVGTransformer::Template
   
   include Condenser::ParseHelpers
@@ -107,7 +109,7 @@ class Condenser::SVGTransformer::Template
           @tree.last.attrs << { key => matched }
         end
       when :tag_attr_value_double_quoted
-        quoted_value = ''
+        quoted_value = String.new
         scan_until(/"/)
         quoted_value << pre_match if !pre_match.strip.empty?
         rewind(1)

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Condenser::SVGTransformer::Base
   
   attr_accessor :children

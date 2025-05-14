@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Condenser::TerserMinifier < Condenser::NodeProcessor
 
   def initialize(dir, options = {})

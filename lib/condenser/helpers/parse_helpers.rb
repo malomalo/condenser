@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Condenser::ParseHelpers
 
   attr_accessor :matched

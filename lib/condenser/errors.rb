@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Basic Condenser error classes
 class Condenser
   class Error < StandardError; end

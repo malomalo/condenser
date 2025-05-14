@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'digest/sha2'
 require 'condenser/context'
 require 'condenser/cache_store'

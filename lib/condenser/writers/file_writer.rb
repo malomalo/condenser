@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'condenser/utils'
 
 # Writes an asset file to disk

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Condenser::Erubi
 
   def self.setup(environment)

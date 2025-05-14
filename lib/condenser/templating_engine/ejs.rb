@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Condenser::EjsTemplate
 
   def self.setup(environment)

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Condenser::CSSMediaCombinerProcessor
   
   include Condenser::ParseHelpers
@@ -10,7 +12,7 @@ class Condenser::CSSMediaCombinerProcessor
   end
 
   def reduce_media_query(queries)
-    output = ''
+    output = String.new
     queries.each do |query, contents|
       output << query if query
       output << if contents.is_a?(Hash)
@@ -30,12 +32,12 @@ class Condenser::CSSMediaCombinerProcessor
     @selectors = []
     @media_queries = {}
 
-    input[:source] = ''
+    input[:source] = String.new
     while !eos?
       output = if @selectors.empty?
         input[:source]
       else
-        (@selectors[0...-1].reduce(@media_queries) { |hash, selector| hash[selector] ||= {} }[@selectors.last] ||= '')
+        (@selectors[0...-1].reduce(@media_queries) { |hash, selector| hash[selector] ||= {} }[@selectors.last] ||= String.new)
       end
       
       case @stack.last

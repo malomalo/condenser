@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Condenser::SVGTransformer::Tag
 
   attr_accessor :tag_name, :attrs, :children, :namespace

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "sassc"
 
 class Condenser::Sass::Importer < SassC::Importer

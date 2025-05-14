@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'json'
 require 'tmpdir'
 
@@ -176,7 +178,7 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
   
   def exec_runtime(script, input)
     io = IO.popen([binary, '-e', script], 'r+')
-    buffer = ''
+    buffer = String.new
     
     begin
       
@@ -185,7 +187,7 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
         messages = buffer.split("\n\n")
         
         buffer = if buffer.end_with?("\n\n")
-          ''
+          String.new
         else
           messages.pop
         end
@@ -222,7 +224,7 @@ class Condenser::RollupProcessor < Condenser::NodeProcessor
               { code: @input[:source], map: @input[:map] }
             elsif importee.end_with?('*')
               importees = @environment.resolve(importee, importer ? File.dirname(@entry == importer ? @input[:source_file] : importer) : nil, accept: @input[:content_types].last)
-              code = ""
+              code = String.new
               code_imports = [];
               importees.each_with_index.map do |f, i|
                 if f.has_default_export?

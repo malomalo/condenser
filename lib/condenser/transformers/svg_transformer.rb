@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Condenser::SVGTransformer
   
   autoload :Base, File.expand_path('../svg_transformer/base', __FILE__)

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'set'
 require 'digest/md5'
 require 'digest/sha1'
