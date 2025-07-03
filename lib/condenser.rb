@@ -21,6 +21,7 @@ class Condenser
   autoload :RollupProcessor,  'condenser/processors/rollup_processor'
   autoload :JSAnalyzer,       'condenser/processors/js_analyzer'
   autoload :PurgeCSSProcessor,'condenser/processors/purgecss_processor'
+  autoload :TailwindProcessor,'condenser/processors/tailwind_processor'
   autoload :CSSMediaCombinerProcessor,'condenser/processors/css_media_combiner_processor'
   autoload :NodeProcessor,    'condenser/processors/node_processor'
   autoload :UglifyMinifier,   'condenser/minifiers/uglify_minifier'
