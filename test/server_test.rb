@@ -1,6 +1,7 @@
 require 'test_helper'
 require 'rack/builder'
 require 'rack/test'
+require 'rack/lint'
 
 class ServerTest < ActiveSupport::TestCase
   include Rack::Test::Methods
