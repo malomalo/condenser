@@ -49,7 +49,7 @@ class JSAnalyzerTest < ActiveSupport::TestCase
       ')': '&#41;',
     };
 
-    var resc = /[<>&\(\)\[\]"']/g;
+    var resc = /[<>&\(\)\\[\\]"']/g;
 
     JS
 
@@ -279,8 +279,38 @@ class JSAnalyzerTest < ActiveSupport::TestCase
           }
       };
     JS
-    
+  end
+
+  test 'regex chars that dont need escaping' do
+    file 'a.js', 'this._agsAdmin=/(https?:\/\/[^/]+\/[^/]+)\/admin\/?(\/.*)?$/i'
+    asset = assert_file 'a.js', 'application/javascript'
+
+    file 'b.js', 'function T(e){return e.replaceAll(/[|\\{}()[\]^$+*?.]/g,"\\$&")}'
+    asset = assert_file 'b.js', 'application/javascript'
+
+    file 'c.js', 'f=/(?:LENGTH)?UNIT\[([^\]]+)]]$/i'
+    asset = assert_file 'c.js', 'application/javascript'
+
+    file 'd.js', 'function o(t,e){return t.replaceAll(/([.$?*|{}()[\]\\\\/+\-^])/g,(t=>e?.includes(t)?t:`\\${t}`))}'
+    asset = assert_file 'd.js', 'application/javascript'
+  end
+
+  test 'a regex after a function call or for loop' do
+    file 't.js', <<~JS
+      for(const s in r)/^(request|service)$/i.test(s)&&delete r[s];
+    JS
+
     asset = assert_file 't.js', 'application/javascript'
+    file 'b.js', <<~JS
+      e=>Math.round(1e4*e)/1e4;
+    JS
+
+    asset = assert_file 'b.js', 'application/javascript'
+    file 'c.js', <<~JS
+      {const e=this._timings.entries,t=e.length;let s=0;for(const r of e)s+=r;r=s/t}
+    JS
+
+    asset = assert_file 'c.js', 'application/javascript'
   end
 
 end

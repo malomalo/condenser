@@ -24,7 +24,7 @@ class MediaCombinerTest < ActiveSupport::TestCase
           display: inline;
         }
       }
-      
+
       .test2{
         display: block;
       }
@@ -35,17 +35,14 @@ class MediaCombinerTest < ActiveSupport::TestCase
       }
     CSS
 
-    assert_exported_file 'main.css', 'text/css', <<~FILE
+    assert_exported_file 'main.css', 'text/css', <<~CSS
     .test{
       display: block;
     }
 
-
-
     .test2{
       display: block;
-    }
-    @media only screen and (max-width: 100px) {
+    }@media only screen and (max-width: 100px) {
       .test {
         display: inline-block;
         color: blue;
@@ -59,7 +56,7 @@ class MediaCombinerTest < ActiveSupport::TestCase
         display: inline;
       }
     }
-    FILE
+    CSS
   end
   
   test 'single line css' do
@@ -67,9 +64,9 @@ class MediaCombinerTest < ActiveSupport::TestCase
       .test{display: block;} @media only screen and (max-width: 100px) {.test {display: inline-block;}}@media only screen and (max-width: 500px) {.test {display: inline;}}.test2{display: block;}@media only screen and (max-width: 100px) {.test2 {display: inline-block;}}
     CSS
 
-    assert_exported_file 'main.css', 'text/css', <<~FILE
-    .test{display: block;} .test2{display: block;}@media only screen and (max-width: 100px) {.test {display: inline-block;}.test2 {display: inline-block;}}@media only screen and (max-width: 500px) {.test {display: inline;}}
-    FILE
+    assert_exported_file 'main.css', 'text/css', <<~CSS
+    .test{display: block;}.test2{display: block;}@media only screen and (max-width: 100px) {.test {display: inline-block;}.test2 {display: inline-block;}}@media only screen and (max-width: 500px) {.test {display: inline;}}
+    CSS
   end
 
 
@@ -88,7 +85,7 @@ class MediaCombinerTest < ActiveSupport::TestCase
     }
     CSS
 
-    assert_exported_file 'main.css', 'text/css', <<~FILE
+    assert_exported_file 'main.css', 'text/css', <<~CSS
     .trobber {
     animation: throb 1s infinite;
     }
@@ -100,7 +97,7 @@ class MediaCombinerTest < ActiveSupport::TestCase
             opacity: 0;
         }
     }
-    FILE
+    CSS
   end
 
 

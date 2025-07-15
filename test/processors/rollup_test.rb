@@ -28,17 +28,12 @@ class RollupTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'main.js', 'application/javascript', <<~FILE
-      (function () {
-        'use strict';
-
         // This function gets included
         function cube ( x ) {
           return x * x * x;
         }
 
         console.log( cube( 5 ) ); // 125
-
-      })();
     FILE
   end
   
@@ -55,16 +50,11 @@ class RollupTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'main.js', 'application/javascript', <<~FILE
-      (function () {
-        'use strict';
+      function cube ( x ) {
+        return 2 * x * x;
+      }
 
-        function cube ( x ) {
-          return 2 * x * x;
-        }
-
-        console.log( cube( 5 ) ); // 125
-
-      })();
+      console.log( cube( 5 ) ); // 125
     FILE
   end
 
@@ -89,16 +79,11 @@ class RollupTest < ActiveSupport::TestCase
     @env.append_path File.join(@path, 'a')
 
     assert_exported_file 'main.js', 'application/javascript', <<~FILE
-      (function () {
-        'use strict';
-
         function cube ( x ) {
           return x * x * x;
         }
 
         console.log( cube( 5 ) ); // 125
-
-      })();
     FILE
   end
 
@@ -122,20 +107,15 @@ class RollupTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'main.js', 'application/javascript', <<~FILE
-      (function () {
-        'use strict';
+      window.cube = function ( x ) {
+        return x * x * x;
+      };
 
-        window.cube = function ( x ) {
-          return x * x * x;
-        };
+      window.square = function ( x ) {
+        return x * x;
+      };
 
-        window.square = function ( x ) {
-          return x * x;
-        };
-
-        console.log( square(cube( 5 )) );
-
-      })();
+      console.log( square(cube( 5 )) );
     FILE
   end
 
@@ -164,26 +144,21 @@ class RollupTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'main.js', 'application/javascript', <<~FILE
-      (function () {
-        'use strict';
+      function cube ( x ) {
+        return x * x * x;
+      }
 
-        function cube ( x ) {
-          return x * x * x;
-        }
+      function square ( x ) {
+        return x * x;
+      }
 
-        function square ( x ) {
-          return x * x;
-        }
+      const maths = [cube, square];
 
-        var maths = [cube, square];
-
-        var x = 1;
-        for (var i = 0; i < maths.length; i++) {
-          x = maths[i](x);
-        }
-        console.log(x);
-
-      })();
+      var x = 1;
+      for (var i = 0; i < maths.length; i++) {
+        x = maths[i](x);
+      }
+      console.log(x);
     FILE
     $d = false
   end
@@ -208,16 +183,11 @@ class RollupTest < ActiveSupport::TestCase
 
 
     assert_exported_file 'main.js', 'application/javascript', <<~FILE
-      (function () {
-      	'use strict';
+      class Base { }
 
-      	class Base { }
+      class Lower extends Base { }
 
-      	class Lower extends Base { }
-
-      	console.log( Base, Lower );
-
-      })();
+      console.log( Base, Lower );
     FILE
   end
 

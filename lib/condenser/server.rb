@@ -69,7 +69,7 @@ class Condenser
       end
 
       # Look up the asset.
-      asset = @condenser.find_export(path)
+      asset = @condenser.find_export(path, npm: true)
       if asset.nil?
         status = :not_found
       elsif fingerprint && asset.etag != fingerprint

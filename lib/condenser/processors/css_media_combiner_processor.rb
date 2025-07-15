@@ -66,11 +66,11 @@ class Condenser::CSSMediaCombinerProcessor
           @stack.pop
         end
       else
-        case scan_until(/(@media[^\{]*{|\Z)/)
+        case scan_until(/(@media[^\{]*{|\z)/)
         when ''
           output << pre_match
         else
-          output << pre_match
+          output << pre_match.rstrip
           @selectors << matched.squish
           @stack << :media_query
         end

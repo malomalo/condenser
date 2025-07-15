@@ -86,13 +86,13 @@ class CacheTest < ActiveSupport::TestCase
       }
     JS
 
-    assert_exported_file 'main.js', 'application/javascript', <<~CSS
-      (()=>{var o;console.log((o=5)*o)})();
-    CSS
+    assert_exported_file 'main.js', 'application/javascript', <<~JS
+      function cube(c){return c*c}console.log(cube(5));
+    JS
 
-    assert_exported_file 'main.js', 'application/javascript', <<~CSS
-      (()=>{var o;console.log((o=5)*o)})();
-    CSS
+    assert_exported_file 'main.js', 'application/javascript', <<~JS
+      function cube(c){return c*c}console.log(cube(5));
+    JS
 
     file 'math.js', <<-JS
       export function cube ( x ) {
@@ -101,7 +101,7 @@ class CacheTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'main.js', 'application/javascript', <<~CSS
-      (()=>{var o;console.log((o=5)*o*o)})();
+      function cube(c){return c*c*c}console.log(cube(5));
     CSS
   end
 
@@ -281,7 +281,7 @@ class CacheTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'a.js', 'application/javascript', <<~JS
-      console.log("a"),console.log("b");
+      function b(){console.log("b")}console.log("a"),b();
     JS
 
     file 'b.js', <<~JS
@@ -289,7 +289,7 @@ class CacheTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'a.js', 'application/javascript', <<~JS
-      console.log("a"),console.log("c");
+      function b(){console.log("c")}console.log("a"),b();
     JS
   end
 
@@ -343,7 +343,7 @@ class CacheTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'a.js', 'application/javascript', <<~JS
-      console.log("a"),console.log("b"),console.log("c"),console.log("d");
+      function b(){console.log("b")}function d(){console.log("d")}function c(){console.log("c"),d()}console.log("a"),b(),c();
     JS
 
     file 'd.js', "export default function e () { console.log('e'); }\n"
@@ -359,7 +359,7 @@ class CacheTest < ActiveSupport::TestCase
     pd["#{@path}/d.js"].expects(:<<).with { |a| a.source_file == "#{@path}/d.js" }.once
 
     assert_exported_file 'a.js', 'application/javascript', <<~JS
-      console.log("a"),console.log("b"),console.log("c"),console.log("e");
+      function b(){console.log("b")}function e(){console.log("e")}function c(){console.log("c"),e()}console.log("a"),b(),c();
     JS
   end
   
@@ -394,14 +394,14 @@ class CacheTest < ActiveSupport::TestCase
 
     # Set the cache
     env1 = Condenser.new(base1, logger: Logger.new(STDOUT, level: :debug), base: base1, npm_path: @npm_dir, cache: Condenser::Cache::FileStore.new(cachepath))
-    assert_equal 'console.log("a"),console.log("b"),console.log("c");', env1.find('test/a.js').export.source
+    assert_equal 'function c(){console.log("c")}function b(){console.log("b"),c()}console.log("a"),b();', env1.find('test/a.js').export.source
 
     # Poison the cache
     env2 = Condenser.new(base2, logger: Logger.new(STDOUT, level: :debug), base: base2, npm_path: @npm_dir, cache: Condenser::Cache::FileStore.new(cachepath))
-    assert_equal 'console.log("a"),console.log("b"),console.log("d");', env2.find('test/a.js').export.source
+    assert_equal 'function c(){console.log("d")}function b(){console.log("b"),c()}console.log("a"),b();', env2.find('test/a.js').export.source
 
     # Fails to find dependency change because cache is missing the dependency
     env3 = Condenser.new(base3, logger: Logger.new(STDOUT, level: :debug), base: base3, npm_path: @npm_dir, cache: Condenser::Cache::FileStore.new(cachepath))
-    assert_equal 'console.log("a"),console.log("b"),console.log("e");', env3.find('test/a.js').export.source
+    assert_equal 'function c(){console.log("e")}function b(){console.log("b"),c()}console.log("a"),b();', env3.find('test/a.js').export.source
   end
 end

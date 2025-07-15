@@ -94,16 +94,11 @@ class ResolveTest < ActiveSupport::TestCase
     @env.append_path File.join(@path, 'a')
 
     assert_exported_file('main.js', 'application/javascript', <<~JS)
-      (function () {
-        'use strict';
+      function cube ( x ) {
+        return x * x * x;
+      }
 
-        function cube ( x ) {
-          return x * x * x;
-        }
-
-        console.log( cube( 5 ) ); // 125
-
-      })();
+      console.log( cube( 5 ) ); // 125
     JS
   end
   

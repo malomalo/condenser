@@ -14,8 +14,14 @@ class Condenser
       @build_cache = BuildCache.new(path, logger: logger)
     end
     
-    def resolve(filename, base=nil, accept: nil)
-      filename = filename.delete_prefix("/") if path.none? { |p| filename.start_with?(p) }
+    def resolve(filename, base=nil, accept: nil, npm: false)
+      search_path = if npm
+        path + [File.join(npm_path, 'node_modules')]
+      else
+        path
+      end
+      
+      filename = filename.delete_prefix("/") if search_path.none? { |p| filename.start_with?(p) }
       dirname, basename, extensions, mime_types = decompose_path(filename, base)
       accept ||= mime_types.empty? ? ['*/*'] : mime_types
       accept = Array(accept)
@@ -28,7 +34,7 @@ class Condenser
           results = []
 
           paths = if dirname&.start_with?('/')
-            if pat = path.find { |pa| dirname.start_with?(pa) }
+            if pat = search_path.find { |pa| dirname.start_with?(pa) }
               dirname.delete_prefix!(pat)
               dirname.delete_prefix!('/')
               [pat]
@@ -36,7 +42,7 @@ class Condenser
               []
             end
           else
-            path
+            search_path
           end
         
           paths.each do |path|
@@ -50,7 +56,7 @@ class Condenser
               if (basename == '*' || basename == f_basename)
                 if accept == ['*/*'] || mime_type_match_accept?(f_mime_types, accept)
                   asset_dir = f_dirname.delete_prefix(path).delete_prefix('/')
-                  asset_basename = f_basename + f_extensions.join('')
+                  asset_basename = f_basename + f_extensions&.join('').to_s
                   asset_filename = asset_dir.empty? ? asset_basename : File.join(asset_dir, asset_basename)
                   results << build_cache.map("#{asset_filename}@#{f_mime_types.join('')}") do
                     Asset.new(self, {
@@ -107,9 +113,9 @@ class Condenser
       end
     end
 
-    def find(filename, base=nil, accept: nil)
+    def find(filename, base=nil, **kargs)
       build do
-        resolve(filename, base, accept: accept).first
+        resolve(filename, base, **kargs).first
       end
     end
     

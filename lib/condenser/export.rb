@@ -3,9 +3,9 @@
 class Condenser
   class Export
 
-    attr_reader :filename, :source, :sourcemap, :content_types, :digest, :digest_name
+    attr_reader :filename, :source, :sourcemap, :content_types, :digest, :digest_name, :etag
 
-    def initialize(env, input={})
+    def initialize(env, input={}, etag: nil)
       @environment = env
       
       @source = input[:source]
@@ -14,6 +14,7 @@ class Condenser
       @content_types = input[:content_types]
       @digest = input[:digest]
       @digest_name = input[:digest_name]
+      @etag = etag
     end
     
     def path
@@ -45,7 +46,6 @@ class Condenser
     def hexdigest
       @digest.unpack('H*'.freeze).first
     end
-    alias_method :etag, :hexdigest
     
     def integrity
       "#{@digest_name}-#{[@digest].pack('m0')}"
@@ -55,6 +55,7 @@ class Condenser
       {
         'path' => path,
         'size' => size,
+        'etag' => etag,
         'digest' => hexdigest,
         'integrity' => integrity
       }

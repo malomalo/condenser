@@ -54,7 +54,7 @@ class ServerTest < ActiveSupport::TestCase
 
     get "/assets/main.js"
     assert_equal <<~JS.strip, last_response.body
-      (()=>{var o;console.log((o=5)*o*o)})();
+      function cube(c){return c*c*c}console.log(cube(5));
     JS
   end
 
@@ -73,7 +73,7 @@ class ServerTest < ActiveSupport::TestCase
   test "serve source with etag headers" do
     get "/assets/foo.js"
 
-    digest = '35c146f76e129477c64061bc84511e1090f3d4d8059713e6663dd4b35b1f7642'
+    digest = 'b603d946eb2b396ca4ecf65c223daff659dbe6f1cfeac235b7c61d3ba6964cae'
     assert_equal "\"#{digest}\"", last_response.headers['ETag']
   end
 
@@ -107,7 +107,7 @@ class ServerTest < ActiveSupport::TestCase
       'HTTP_IF_NONE_MATCH' => "nope"
 
     assert_equal 200, last_response.status
-    assert_equal '"35c146f76e129477c64061bc84511e1090f3d4d8059713e6663dd4b35b1f7642"', last_response.headers['ETag']
+    assert_equal '"b603d946eb2b396ca4ecf65c223daff659dbe6f1cfeac235b7c61d3ba6964cae"', last_response.headers['ETag']
     assert_equal '15', last_response.headers['Content-Length']
   end
 
@@ -167,7 +167,7 @@ class ServerTest < ActiveSupport::TestCase
       'HTTP_IF_MATCH' => etag
 
     assert_equal 200, last_response.status
-    assert_equal '"35c146f76e129477c64061bc84511e1090f3d4d8059713e6663dd4b35b1f7642"', last_response.headers['ETag']
+    assert_equal '"b603d946eb2b396ca4ecf65c223daff659dbe6f1cfeac235b7c61d3ba6964cae"', last_response.headers['ETag']
     assert_equal '15', last_response.headers['Content-Length']
   end
 
@@ -253,7 +253,7 @@ class ServerTest < ActiveSupport::TestCase
     JS
     get "/assets/%E6%97%A5%E6%9C%AC%E8%AA%9E.js"
     assert_equal <<~JS.strip, last_response.body
-      console.log("日本語");
+      var japanese="日本語";console.log(japanese);
     JS
   end
 
