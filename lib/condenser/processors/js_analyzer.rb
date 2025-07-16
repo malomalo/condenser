@@ -118,15 +118,28 @@ class Condenser::JSAnalyzer
         when '/'
           if pre_match.match(/(\W|\A)(void|typeof|return|export)\z/)
             regex_value
-          elsif match_index = @source.rindex(/(\w+|\)|\])\s*\//, @index)
-            match = @source.match(/(\w+|\)|\])\s*\//, match_index)
-            if match[1] =~ /\)\z/ && @previous.last.last == :loop
+          elsif match_index = @source.rindex(/(\w+|\)|\])(\s*)\//m, @index)
+            match = @source.match(/(\w+|\)|\])(\s*)\//, match_index)
+            
+            x = @previous.last.dup
+            while match[2]&.index("\n") && [:single_line_comment, :multi_line_comment].include?(x.last)
+              case x.last
+              when :single_line_comment
+                match_index = @source.rindex(/[^\n]*\/\/[^\n]*\s*/m, match.begin(2))
+                match = @source.match(/(\w+|\)|\])\s*\//, match_index)
+              when :multi_line_comment
+                match_index = @source.rindex(/\/\*/m, match.begin(2))
+                match = @source.match(/(\w+|\)|\])\s*\//, match_index)
+              end
+            end
+
+            if @previous.last.last == :loop && match[1] =~ /\)\z/
               regex_value
             elsif %w(void typeof return export).include?(match[1])
               regex_value
             elsif match[0].length + match_index != @index
               regex_value
-            elsif [:single_line_comment, :multi_line_comment].include?(@previous.last.last)
+            elsif match[1].strip.empty?
               regex_value
             end
           else
