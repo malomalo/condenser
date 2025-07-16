@@ -12,7 +12,7 @@ class Condenser
     include EncodingUtils
     
     attr_reader :environment, :filename, :content_types, :source_file, :source_path
-    attr_reader :linked_assets, :content_types_digest, :exports
+    attr_reader :content_types_digest, :exports
     attr_writer :source, :sourcemap
 
     attr_accessor :imports, :processed
@@ -67,7 +67,9 @@ class Condenser
     def process_dependencies
       deps = @environment.cache.fetch "direct-deps/#{cache_key}" do
         process
-        @process_dependencies.map { |fn| [normalize_filename_base(fn[0]), fn[1]] }
+        # Sort so etag and cache key are same irrelevant of ordering of
+        # dependencies
+        @process_dependencies.map { |fn| [normalize_filename_base(fn[0]), fn[1]] }.sort_by { |d| d[0] }
       end
     
       deps.inject([]) do |memo, i|
@@ -82,7 +84,24 @@ class Condenser
     def export_dependencies
       deps = @environment.cache.fetch "export-deps/#{cache_key}" do
         process
-        (@export_dependencies + @process_dependencies).map { |fn| [normalize_filename_base(fn[0]), fn[1]] }
+        # Sort so etag and cache key are same irrelevant of ordering of
+        # dependencies
+        (@export_dependencies + @process_dependencies).map { |fn| [normalize_filename_base(fn[0]), fn[1]] }.sort_by { |d| d[0] }
+      end
+      
+      deps.inject([]) do |memo, i|
+        i[0] = File.join(@environment.base, i[0].delete_prefix('!')) if i[0].start_with?('!') && @environment.base
+        @environment.resolve(i[0], File.dirname(@source_file), accept: i[1], npm: true).each do |asset|
+          memo << asset
+        end
+        memo
+      end
+    end
+    
+    def linked_assets
+      deps = @environment.cache.fetch "linked-assets/#{cache_key}" do
+        process
+        @linked_assets.map { |fn| [normalize_filename_base(fn[0]), fn[1]] }
       end
       
       deps.inject([]) do |memo, i|
@@ -124,7 +143,7 @@ class Condenser
     end
     
     def all_process_dependencies(visited = Set.new)
-      f = []
+      f = Set.new
       if !visited.include?(@source_file)
         f << @source_file
         visited << self.source_file
@@ -137,7 +156,7 @@ class Condenser
     end
     
     def all_export_dependencies(visited = Set.new)
-      f = []
+      f = Set.new
       if !visited.include?(@source_file)
         f << @source_file
         visited << self.source_file
@@ -194,7 +213,7 @@ class Condenser
         ]
       end
 
-      @ecv = Digest::SHA1.base64digest(JSON.generate(f))
+      @ecv = Digest::SHA1.hexdigest(JSON.generate(f))
     end
     
     def needs_reprocessing!
@@ -298,6 +317,7 @@ class Condenser
           data[:digest_name] = @environment.digestor.name.sub(/^.*::/, '').downcase
           data[:process_dependencies] = normialize_dependency_names(data[:process_dependencies])
           data[:export_dependencies] = normialize_dependency_names(data[:export_dependencies])
+          data[:linked_assets] = normialize_dependency_names(data[:linked_assets])
 
           # Do this here and at the end so cache_key can be calculated if we
           # run this block
@@ -315,6 +335,14 @@ class Condenser
           @processors = data[:processors]
           @processors_loaded = true
           @processed = true
+          
+          digestor = @environment.digestor.new
+          digestor << data[:source]
+          all_dependenies(export_dependencies, Set.new, :export_dependencies) do |dep|
+            digestor << dep.source
+          end
+          data[:etag] = digestor.digest.unpack('H*'.freeze).first
+          @etag = data[:etag]
           data
         end
       end
@@ -331,6 +359,7 @@ class Condenser
       @default_export = result[:default_export]
       @exports = result[:exports]
       @processors = result[:processors]
+      @etag = result[:etag]
       load_processors
 
       @processed = true
@@ -355,6 +384,8 @@ class Condenser
           process
           dirname, basename, extensions, mime_types = @environment.decompose_path(@filename)
           data = {
+            etag: @etag,
+            
             source: @source.dup,
             source_file: @source_file,
         
@@ -431,7 +462,11 @@ class Condenser
       process
       @digest.unpack('H*'.freeze).first
     end
-    alias_method :etag, :hexdigest
+    
+    def etag
+      process
+      @etag
+    end
     
     def integrity
       process
@@ -439,7 +474,7 @@ class Condenser
     end
     
     def to_json
-      { path: path, digest: hexdigest, size: size, integrity: integrity }
+      { path: path, etag: etag, digest: hexdigest, size: size, integrity: integrity }
     end
     
     def write(output_directory)

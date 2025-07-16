@@ -5,7 +5,7 @@ module Condenser::ParseHelpers
   attr_accessor :matched
 
   def eos?
-    @index >= (@source.size - 1)
+    @index >= @source.size
   end
 
   def scan_until(r)
@@ -58,9 +58,22 @@ module Condenser::ParseHelpers
   end
 
   def gobble(r)
-    m = @source.match(r, @index)
-    if m&.begin(0) == @index
-      scan_until(r)
+    if r.is_a?(Regexp)
+      m = @source.match(r, @index)
+      if m&.begin(0) == @index
+        scan_until(r)
+      end
+    else
+      forward(1)
+      @source[@index-1];
+    end
+  end
+
+  def peek(n=1)
+    if n.is_a?(Regexp)
+      @source.match(n, @index)
+    else
+      @source.slice(@index, n)
     end
   end
 

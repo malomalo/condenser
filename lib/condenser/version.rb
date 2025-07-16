@@ -1,5 +1,5 @@
 # frozen_string_literal: true
 
 class Condenser
-  VERSION = '1.4'
+  VERSION = '1.5.beta1'
 end

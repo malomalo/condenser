@@ -69,7 +69,7 @@ class Condenser
       end
 
       # Look up the asset.
-      asset = @condenser.find_export(path)
+      asset = @condenser.find_export(path, npm: true)
       if asset.nil?
         status = :not_found
       elsif fingerprint && asset.etag != fingerprint
@@ -144,39 +144,39 @@ class Condenser
       # Returns a 400 Forbidden response tuple
       def bad_request_response(env)
         if head_request?(env)
-          [ 400, { "Content-Type" => "text/plain", "Content-Length" => "0" }, [] ]
+          [ 400, { "content-type" => "text/plain", "content-length" => "0" }, [] ]
         else
-          [ 400, { "Content-Type" => "text/plain", "Content-Length" => "11" }, [ "Bad Request" ] ]
+          [ 400, { "content-type" => "text/plain", "content-length" => "11" }, [ "Bad Request" ] ]
         end
       end
 
       # Returns a 403 Forbidden response tuple
       def forbidden_response(env)
         if head_request?(env)
-          [ 403, { "Content-Type" => "text/plain", "Content-Length" => "0" }, [] ]
+          [ 403, { "content-type" => "text/plain", "content-length" => "0" }, [] ]
         else
-          [ 403, { "Content-Type" => "text/plain", "Content-Length" => "9" }, [ "Forbidden" ] ]
+          [ 403, { "content-type" => "text/plain", "content-length" => "9" }, [ "Forbidden" ] ]
         end
       end
 
       # Returns a 404 Not Found response tuple
       def not_found_response(env)
         if head_request?(env)
-          [ 404, { "Content-Type" => "text/plain", "Content-Length" => "0", "X-Cascade" => "pass" }, [] ]
+          [ 404, { "content-type" => "text/plain", "content-length" => "0", "x-cascade" => "pass" }, [] ]
         else
-          [ 404, { "Content-Type" => "text/plain", "Content-Length" => "9", "X-Cascade" => "pass" }, [ "Not found" ] ]
+          [ 404, { "content-type" => "text/plain", "content-length" => "9", "x-cascade" => "pass" }, [ "Not found" ] ]
         end
       end
 
       def method_not_allowed_response
-        [ 405, { "Content-Type" => "text/plain", "Content-Length" => "18" }, [ "Method Not Allowed" ] ]
+        [ 405, { "content-type" => "text/plain", "content-length" => "18" }, [ "Method Not Allowed" ] ]
       end
 
       def precondition_failed_response(env)
         if head_request?(env)
-          [ 412, { "Content-Type" => "text/plain", "Content-Length" => "0", "X-Cascade" => "pass" }, [] ]
+          [ 412, { "content-type" => "text/plain", "content-length" => "0", "x-cascade" => "pass" }, [] ]
         else
-          [ 412, { "Content-Type" => "text/plain", "Content-Length" => "19", "X-Cascade" => "pass" }, [ "Precondition Failed" ] ]
+          [ 412, { "content-type" => "text/plain", "content-length" => "19", "x-cascade" => "pass" }, [ "Precondition Failed" ] ]
         end
       end
 
@@ -185,7 +185,7 @@ class Condenser
       def javascript_exception_response(exception)
         err  = "#{exception.class.name}: #{exception.message}\n  (in #{exception.backtrace[0]})"
         body = "throw Error(#{err.inspect})"
-        [ 200, { "Content-Type" => "application/javascript", "Content-Length" => body.bytesize.to_s }, [ body ] ]
+        [ 200, { "content-type" => "application/javascript", "content-length" => body.bytesize.to_s }, [ body ] ]
       end
 
       # Returns a CSS response that hides all elements on the page and
@@ -238,7 +238,7 @@ class Condenser
           }
         CSS
 
-        [ 200, { "Content-Type" => "text/css; charset=utf-8", "Content-Length" => body.bytesize.to_s }, [ body ] ]
+        [ 200, { "content-type" => "text/css; charset=utf-8", "content-length" => body.bytesize.to_s }, [ body ] ]
       end
 
       # Escape special characters for use inside a CSS content("...") string
@@ -254,18 +254,18 @@ class Condenser
         headers = {}
 
         # Set caching headers
-        headers["Cache-Control"] = String.new("public")
-        headers["ETag"]          = %("#{etag}")
+        headers["cache-control"] = String.new("public")
+        headers["etag"]          = %("#{etag}")
 
         # If the request url contains a fingerprint, set a long
         # expires on the response
         if path_fingerprint(env["PATH_INFO"])
-          headers["Cache-Control"] << ", max-age=31536000, immutable"
+          headers["cache-control"] << ", max-age=31536000, immutable"
 
         # Otherwise set `must-revalidate` since the asset could be modified.
         else
-          headers["Cache-Control"] << ", must-revalidate"
-          headers["Vary"] = "Accept-Encoding"
+          headers["cache-control"] << ", must-revalidate"
+          headers["vary"] = "Accept-Encoding"
         end
 
         headers
@@ -275,10 +275,10 @@ class Condenser
         headers = {}
 
         # Set content length header
-        headers["Content-Length"] = length.to_s
+        headers["content-length"] = length.to_s
 
         if asset&.sourcemap
-          headers['SourceMap'] = env['SCRIPT_NAME'] + env['PATH_INFO'] + '.map'
+          headers['sourcemap'] = env['SCRIPT_NAME'] + env['PATH_INFO'] + '.map'
         end
         
         # Set content type header
@@ -287,7 +287,7 @@ class Condenser
           if type.start_with?("text/") && asset.charset
             type += "; charset=#{asset.charset}"
           end
-          headers["Content-Type"] = type
+          headers["content-type"] = type
         end
 
         headers.merge(cache_headers(env, asset.etag))

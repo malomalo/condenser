@@ -49,7 +49,7 @@ class JSAnalyzerTest < ActiveSupport::TestCase
       ')': '&#41;',
     };
 
-    var resc = /[<>&\(\)\[\]"']/g;
+    var resc = /[<>&\(\)\\[\\]"']/g;
 
     JS
 
@@ -97,16 +97,16 @@ class JSAnalyzerTest < ActiveSupport::TestCase
     asset = @env.find('name.js')
     assert_nil asset.exports
     assert_equal [
+        "module-name/path/to/specific/un-exported/file6.js",
         "module-name1.js",
+        "module-name10.js",
         "module-name2.js",
         "module-name3.js",
         "module-name4.js",
         "module-name5.js",
-        "module-name/path/to/specific/un-exported/file6.js",
         "module-name7.js",
         "module-name8.js",
-        "module-name9.js",
-        "module-name10.js"
+        "module-name9.js"
       ], asset.export_dependencies.map(&:filename)
   end
 
@@ -279,8 +279,58 @@ class JSAnalyzerTest < ActiveSupport::TestCase
           }
       };
     JS
-    
+  end
+
+  test 'regex chars that dont need escaping' do
+    file 'a.js', 'this._agsAdmin=/(https?:\/\/[^/]+\/[^/]+)\/admin\/?(\/.*)?$/i'
+    asset = assert_file 'a.js', 'application/javascript'
+
+    file 'b.js', 'function T(e){return e.replaceAll(/[|\\{}()[\]^$+*?.]/g,"\\$&")}'
+    asset = assert_file 'b.js', 'application/javascript'
+
+    file 'c.js', 'f=/(?:LENGTH)?UNIT\[([^\]]+)]]$/i'
+    asset = assert_file 'c.js', 'application/javascript'
+
+    file 'd.js', 'function o(t,e){return t.replaceAll(/([.$?*|{}()[\]\\\\/+\-^])/g,(t=>e?.includes(t)?t:`\\${t}`))}'
+    asset = assert_file 'd.js', 'application/javascript'
+  end
+
+  test 'a regex after a function call or for loop' do
+    file 't.js', <<~JS
+      for(const s in r)/^(request|service)$/i.test(s)&&delete r[s];
+    JS
+
     asset = assert_file 't.js', 'application/javascript'
+    file 'b.js', <<~JS
+      e=>Math.round(1e4*e)/1e4;
+    JS
+
+    asset = assert_file 'b.js', 'application/javascript'
+    file 'c.js', <<~JS
+      {const e=this._timings.entries,t=e.length;let s=0;for(const r of e)s+=r;r=s/t}
+    JS
+
+    asset = assert_file 'c.js', 'application/javascript'
+  end
+
+  test 'file with a keyword as start of a function name' do
+    file 'name.js', <<~JS
+      export default class Admin extends User {
+
+          static aroundActions = ['requireAdmin']
+    
+          async imports () {
+              this.display(imports, {
+                  user: this.application.session.user
+              }, { layout })
+          }
+      }
+    JS
+
+    asset = @env.find('name.js')
+    assert asset.exports
+    assert asset.has_default_export?
+    assert_empty asset.export_dependencies
   end
 
 end
