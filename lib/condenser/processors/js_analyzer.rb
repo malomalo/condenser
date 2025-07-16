@@ -98,7 +98,7 @@ class Condenser::JSAnalyzer
         @stack.pop
         
       else
-        scan_until(/(\/\/|\/\*|\/|\(|\)|\{|\}|\"|\'|\`|export|import|\z)/)
+        scan_until(/(\/\/|\/\*|\/|\(|\)|\{|\}|\"|\'|\`|export(?![[:alnum:]])|import(?![[:alnum:]])|\z)/)
 
         case matched
         when '//'

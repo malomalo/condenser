@@ -313,4 +313,24 @@ class JSAnalyzerTest < ActiveSupport::TestCase
     asset = assert_file 'c.js', 'application/javascript'
   end
 
+  test 'file with a keyword as start of a function name' do
+    file 'name.js', <<~JS
+      export default class Admin extends User {
+
+          static aroundActions = ['requireAdmin']
+    
+          async imports () {
+              this.display(imports, {
+                  user: this.application.session.user
+              }, { layout })
+          }
+      }
+    JS
+
+    asset = @env.find('name.js')
+    assert asset.exports
+    assert asset.has_default_export?
+    assert_empty asset.export_dependencies
+  end
+
 end
