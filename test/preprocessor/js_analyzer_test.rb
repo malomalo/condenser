@@ -313,6 +313,31 @@ class JSAnalyzerTest < ActiveSupport::TestCase
     asset = assert_file 'c.js', 'application/javascript'
   end
 
+  test 'file with a single line comment in a argument list before a regex' do
+    file 'name.js', <<~JS
+      function javascript(hljs) {
+
+        regex.either(
+          // Float32Array, OutT
+          /\b[A-Z][a-z]+([A-Z][a-z]*|\d)*/,
+          // CSSFactory, CSSFactoryT
+        )
+
+        const USE_STRICT = {
+          label: "use_strict",
+          className: 'meta',
+          relevance: 10,
+          begin: /^\s*['"]use (strict|asm)['"]/
+        };
+
+      }
+
+      module.exports = javascript;
+    JS
+
+    asset = assert_file 'name.js', 'application/javascript'
+  end
+
   test 'file with a keyword as start of a function name' do
     file 'name.js', <<~JS
       export default class Admin extends User {

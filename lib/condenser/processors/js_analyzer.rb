@@ -126,6 +126,8 @@ class Condenser::JSAnalyzer
               regex_value
             elsif match[0].length + match_index != @index
               regex_value
+            elsif [:single_line_comment, :multi_line_comment].include?(@previous.last.last)
+              regex_value
             end
           else
             regex_value
