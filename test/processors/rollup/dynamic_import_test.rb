@@ -81,7 +81,7 @@ class RollupDynamicImportTestTest < ActiveSupport::TestCase
 
   test "dynamic imports don't inlined and are exported" do
     @env.unregister_exporter 'application/javascript'
-    @env.register_exporter 'application/javascript', Condenser::RollupProcessor.new(@env.npm_path, inline: false)
+    @env.register_exporter 'application/javascript', Condenser::RollupProcessor.new(@env.npm_path, dynamic_imports: false)
 
     file 'main.js', <<~JS
       cube = await import('./math/math');
@@ -174,7 +174,7 @@ class RollupDynamicImportTestTest < ActiveSupport::TestCase
 
   test "dynamic imports with a prefix" do
     @env.unregister_exporter 'application/javascript'
-    @env.register_exporter 'application/javascript', Condenser::RollupProcessor.new(@env.npm_path, prefix: "/assets", inline: false)
+    @env.register_exporter 'application/javascript', Condenser::RollupProcessor.new(@env.npm_path, prefix: "/assets", dynamic_imports: false)
 
     file 'main.js', <<~JS
       cube = await import('./math/math');
@@ -267,7 +267,7 @@ class RollupDynamicImportTestTest < ActiveSupport::TestCase
 
   test "cyclical dynamic imports don't inlined and are exported" do
     @env.unregister_exporter 'application/javascript'
-    @env.register_exporter 'application/javascript', Condenser::RollupProcessor.new(@env.npm_path, inline: false)
+    @env.register_exporter 'application/javascript', Condenser::RollupProcessor.new(@env.npm_path, dynamic_imports: false)
 
     file 'main.js', <<~JS
       const cube = await import('./math/math');

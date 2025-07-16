@@ -32,31 +32,35 @@ class Condenser::RollupProcessor
   end
   
   def options
-    {prefix: @prefix, inline: @inline}
+    {prefix: @prefix, dynamic_imports: @dynamic_imports}
   end
   
-  # @param prefix [string] string to prefix to the url of dynamic imports
-  # @param inline [symbol] :inline will inline all the imports in the 
+  # @param prefix  [string] string to prefix to the url of dynamic imports
+  # @param imports [symbol] :inline will inline all the imports in the 
   #                        output file if possible.
-  #                        false will keep all the dynamic import.
+  #                        false will keep all the imports as imports.
   #                        :local will not inline URLS.
-  def initialize(dir = nil, prefix: nil, inline: :imports)
+  # @param dynamic_imports [symbol] Default is :local
+  #    :inline - Inline dynamic imports into the output file if possible.
+  #    :local  - Same as :inline except for URLs are kept as URLs
+  #    :keep   - Keep the dynamic imports but rewrite the import as a URL
+  def initialize(dir = nil, prefix: nil, dynamic_imports: :inline)
     self.class.install_npm_packages(dir)
     @npm_dir = dir
     @prefix = prefix
-    @inline = inline
+    @dynamic_imports = dynamic_imports
   end
 
   def call(environment, input)
-    Runner.new(@npm_dir, prefix: @prefix, inline: @inline).call(environment, input)
+    Runner.new(@npm_dir, prefix: @prefix, dynamic_imports: @dynamic_imports).call(environment, input)
   end
   
   
   class Runner < Condenser::NodeProcessor
-    def initialize(dir = nil, prefix: nil, inline: :imports)
+    def initialize(dir = nil, prefix: nil, dynamic_imports: :inline)
       super(dir)
       @prefix = prefix
-      @inline = inline
+      @dynamic_imports = dynamic_imports
     end
 
     def call(environment, input)
@@ -318,7 +322,6 @@ class Condenser::RollupProcessor
             
               if asset.source_file == @input[:source_file]
                 {
-                  a: 2,
                   path: File.join("/", *[@prefix, asset.path].compact),
                   # source: File.join(@input_dir, asset.filename),
                   source: @entry,
@@ -326,9 +329,8 @@ class Condenser::RollupProcessor
                   # filename: asset.filename
                 }
               else
-                if !@inline
+                if @dynamic_imports != :inline
                   {
-                    a: 1,
                     path: File.join("/", *[@prefix, asset.path].compact),
                     source: File.join(@input_dir, asset.filename),
                     export: true,
@@ -336,7 +338,6 @@ class Condenser::RollupProcessor
                   }
                 else
                   {
-                    a: 3,
                     export: false,
                     source: asset.source_file,
                     filename: asset.filename
