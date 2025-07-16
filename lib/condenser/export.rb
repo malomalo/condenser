@@ -5,7 +5,7 @@ class Condenser
 
     attr_reader :filename, :source, :sourcemap, :content_types, :digest, :digest_name, :etag
 
-    def initialize(env, input={}, etag: nil)
+    def initialize(env, input={})
       @environment = env
       
       @source = input[:source]
@@ -14,7 +14,7 @@ class Condenser
       @content_types = input[:content_types]
       @digest = input[:digest]
       @digest_name = input[:digest_name]
-      @etag = etag
+      @etag = input[:etag]
     end
     
     def path

@@ -118,8 +118,8 @@ class CondenserSCSSTest < ActiveSupport::TestCase
     SCSS
     
     asset = @env.find('c.css')
-    assert_equal ["a.scss", "d.scss", "b.scss"], asset.process_dependencies.map(&:filename)
-    assert_equal ["a.scss", "d.scss", "b.scss"], asset.export_dependencies.map(&:filename)
+    assert_equal ["a.scss", "b.scss", "d.scss"], asset.process_dependencies.map(&:filename)
+    assert_equal ["a.scss", "b.scss", "d.scss"], asset.export_dependencies.map(&:filename)
   end
   
 end

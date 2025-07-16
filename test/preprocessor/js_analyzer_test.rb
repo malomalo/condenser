@@ -97,16 +97,16 @@ class JSAnalyzerTest < ActiveSupport::TestCase
     asset = @env.find('name.js')
     assert_nil asset.exports
     assert_equal [
+        "module-name/path/to/specific/un-exported/file6.js",
         "module-name1.js",
+        "module-name10.js",
         "module-name2.js",
         "module-name3.js",
         "module-name4.js",
         "module-name5.js",
-        "module-name/path/to/specific/un-exported/file6.js",
         "module-name7.js",
         "module-name8.js",
-        "module-name9.js",
-        "module-name10.js"
+        "module-name9.js"
       ], asset.export_dependencies.map(&:filename)
   end
 

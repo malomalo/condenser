@@ -67,7 +67,9 @@ class Condenser
     def process_dependencies
       deps = @environment.cache.fetch "direct-deps/#{cache_key}" do
         process
-        @process_dependencies.map { |fn| [normalize_filename_base(fn[0]), fn[1]] }
+        # Sort so etag and cache key are same irrelevant of ordering of
+        # dependencies
+        @process_dependencies.map { |fn| [normalize_filename_base(fn[0]), fn[1]] }.sort_by { |d| d[0] }
       end
     
       deps.inject([]) do |memo, i|
@@ -82,7 +84,9 @@ class Condenser
     def export_dependencies
       deps = @environment.cache.fetch "export-deps/#{cache_key}" do
         process
-        (@export_dependencies + @process_dependencies).map { |fn| [normalize_filename_base(fn[0]), fn[1]] }
+        # Sort so etag and cache key are same irrelevant of ordering of
+        # dependencies
+        (@export_dependencies + @process_dependencies).map { |fn| [normalize_filename_base(fn[0]), fn[1]] }.sort_by { |d| d[0] }
       end
       
       deps.inject([]) do |memo, i|
@@ -331,6 +335,14 @@ class Condenser
           @processors = data[:processors]
           @processors_loaded = true
           @processed = true
+          
+          digestor = @environment.digestor.new
+          digestor << data[:source]
+          all_dependenies(export_dependencies, Set.new, :export_dependencies) do |dep|
+            digestor << dep.source
+          end
+          data[:etag] = digestor.digest.unpack('H*'.freeze).first
+          @etag = data[:etag]
           data
         end
       end
@@ -347,6 +359,7 @@ class Condenser
       @default_export = result[:default_export]
       @exports = result[:exports]
       @processors = result[:processors]
+      @etag = result[:etag]
       load_processors
 
       @processed = true
@@ -371,6 +384,8 @@ class Condenser
           process
           dirname, basename, extensions, mime_types = @environment.decompose_path(@filename)
           data = {
+            etag: @etag,
+            
             source: @source.dup,
             source_file: @source_file,
         
@@ -408,7 +423,7 @@ class Condenser
           end
         end
 
-        Export.new(@environment, data, etag: etag)
+        Export.new(@environment, data)
       end
     end
     
@@ -449,17 +464,8 @@ class Condenser
     end
     
     def etag
-      return @etag if @etag
-
-      digestor = @environment.digestor.new
-      all_export_dependencies.each do |sf|
-        digestor << File.read(sf)
-      end
-      linked_assets.each do |la|
-        digestor << la.etag
-      end
-      
-      digestor.digest.unpack('H*'.freeze).first
+      process
+      @etag
     end
     
     def integrity
