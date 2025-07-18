@@ -12,7 +12,7 @@ class Condenser
     include EncodingUtils
     
     attr_reader :environment, :filename, :content_types, :source_file, :source_path
-    attr_reader :content_types_digest, :exports
+    attr_reader :content_types_digest, :exports, :type
     attr_writer :source, :sourcemap
 
     attr_accessor :imports, :processed
@@ -335,6 +335,7 @@ class Condenser
           @processors = data[:processors]
           @processors_loaded = true
           @processed = true
+          @type = data[:type]
           
           digestor = @environment.digestor.new
           digestor << data[:source]
@@ -360,6 +361,7 @@ class Condenser
       @exports = result[:exports]
       @processors = result[:processors]
       @etag = result[:etag]
+      @type = result[:type]
       load_processors
 
       @processed = true
@@ -385,6 +387,7 @@ class Condenser
           dirname, basename, extensions, mime_types = @environment.decompose_path(@filename)
           data = {
             etag: @etag,
+            type: @type,
             
             source: @source.dup,
             source_file: @source_file,
@@ -474,7 +477,14 @@ class Condenser
     end
     
     def to_json
-      { path: path, etag: etag, digest: hexdigest, size: size, integrity: integrity }
+      {
+        path: path,
+        etag: etag,
+        type: type,
+        size: size,
+        digest: hexdigest,
+        integrity: integrity
+      }
     end
     
     def write(output_directory)

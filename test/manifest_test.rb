@@ -62,8 +62,8 @@ class ManifestTest < ActiveSupport::TestCase
 
     data = JSON.parse(File.read(manifest.filename))
     assert data['application.js']
-    assert_equal 15, data['application.js']['size']
-    assert_equal asset.path, data['application.js']['path']
+    assert_equal asset.path,  data['application.js']['path']
+    assert_equal 15,          data['application.js']['size']
   end
 
   test "compile asset dependencies includes the dependencies" do
@@ -541,4 +541,19 @@ class ManifestTest < ActiveSupport::TestCase
   #   assert_equal %w(0 1 0 1), processor.seq
   # end
 
+  test "javascript types are in the manifest" do
+    file 'application.js', <<-JS
+      console.log(1);
+    JS
+    
+    manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
+    manifest.compile('application.js')
+    assert File.directory?(manifest.dir)
+    assert File.file?(manifest.filename)
+    assert File.exist?("#{@dir}/manifest.json")
+    
+    data = JSON.parse(File.read(manifest.filename))
+    assert data['application.js']
+    assert_equal "module",    data['application.js']['type']
+  end
 end

@@ -7,6 +7,17 @@ class RollupTest < ActiveSupport::TestCase
     @env.unregister_minifier('application/javascript')
   end
   
+  test 'file is exported as module' do
+    file 'main.js', <<~JS
+      console.log( cube( 5 ) ); // 125
+    JS
+    
+    asset = assert_exported_file 'main.js', 'application/javascript', <<~FILE
+      console.log( cube( 5 ) ); // 125
+    FILE
+    assert_equal "module", asset.type
+  end
+  
   test 'import file' do
     file 'main.js', <<~JS
       import { cube } from './math.js';

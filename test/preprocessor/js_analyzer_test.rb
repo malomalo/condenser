@@ -7,6 +7,56 @@ class JSAnalyzerTest < ActiveSupport::TestCase
     @env.unregister_minifier('application/javascript')
   end
   
+  test 'file with exports gets marked as module and exports as module' do
+    @env.clear_pipeline
+    @env.register_preprocessor 'application/javascript', Condenser::JSAnalyzer
+    
+    file 'export.js', <<~JS
+      var t = { 'var': () => { return 2; } };
+
+      export {t as name1};
+    JS
+
+    asset = assert_file 'export.js', 'application/javascript', <<~FILE
+      var t = { 'var': () => { return 2; } };
+
+      export {t as name1};
+    FILE
+    assert_equal "module", asset.type
+        
+    asset = assert_exported_file 'export.js', 'application/javascript', <<~FILE
+      var t = { 'var': () => { return 2; } };
+
+      export {t as name1};
+    FILE
+    assert_equal "module", asset.type
+  end
+
+  test 'file with imports gets marked as module and exports as module' do
+    @env.clear_pipeline
+    @env.register_preprocessor 'application/javascript', Condenser::JSAnalyzer
+    
+    file 'import.js', <<~JS
+      import name1 from 'export'
+
+      name1();
+    JS
+
+    asset = assert_file 'import.js', 'application/javascript', <<~FILE
+      import name1 from 'export'
+
+      name1();
+    FILE
+    assert_equal "module", asset.type
+        
+    asset = assert_exported_file 'import.js', 'application/javascript', <<~FILE
+      import name1 from 'export'
+
+      name1();
+    FILE
+    assert_equal "module", asset.type
+  end
+
   test 'file with a single export' do
     file 'name.js', <<~JS
     var t = { 'var': () => { return 2; } };

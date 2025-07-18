@@ -61,6 +61,7 @@ class Condenser::JSAnalyzer
           tick_quoted_value
         end
 
+        input[:type] = "module"
         if dynamic
           input[:process_dependencies] << filename
           input[:linked_assets] << filename 
@@ -71,6 +72,7 @@ class Condenser::JSAnalyzer
         @stack.pop
 
       when :export
+        input[:type] = "module"
         input[:exports] = true;
         input[:default_export] = true if gobble(/\s+default/)
         gobble(/\s+/)

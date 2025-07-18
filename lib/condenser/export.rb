@@ -3,7 +3,7 @@
 class Condenser
   class Export
 
-    attr_reader :filename, :source, :sourcemap, :content_types, :digest, :digest_name, :etag
+    attr_reader :filename, :source, :sourcemap, :content_types, :digest, :digest_name, :etag, :type
 
     def initialize(env, input={})
       @environment = env
@@ -15,6 +15,7 @@ class Condenser
       @digest = input[:digest]
       @digest_name = input[:digest_name]
       @etag = input[:etag]
+      @type = input[:type]
     end
     
     def path
@@ -53,11 +54,12 @@ class Condenser
     
     def to_json
       {
-        'path' => path,
-        'size' => size,
-        'etag' => etag,
-        'digest' => hexdigest,
-        'integrity' => integrity
+        path: path,
+        etag: etag,
+        type: type,
+        size: size,
+        digest: hexdigest,
+        integrity: integrity
       }
     end
     
