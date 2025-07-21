@@ -41,7 +41,7 @@ class Condenser
       
       if File.exist?(@filename)
         begin
-          @data = JSON.parse(File.read(@filename))
+          @data = JSON.parse(File.read(@filename), symbolize_names: true).transform_keys(&:to_s)
         rescue JSON::ParserError => e
           @data = {}
           logger.error "#{@filename} is invalid: #{e.class} #{e.message}"
@@ -81,7 +81,7 @@ class Condenser
     
     def [](key)
       add(key) if @environment
-      @data[key]
+      @data[key.delete_prefix('/')]
     end
     
     def compile(*args)
@@ -106,7 +106,7 @@ class Condenser
     # Cleanup old assets in the compile directory. By default it will keep the
     # latest version and remove any other files over 4 weeks old.
     def clean(age = 2419200)
-      clean_dir(@dir, @data.values.map{ |v| v['path'] }, Time.now - age)
+      clean_dir(@dir, @data.values.map{ |v| v[:path] }, Time.now - age)
     end
 
     def clean_dir(dir, assets, age)

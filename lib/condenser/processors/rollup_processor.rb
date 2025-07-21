@@ -5,14 +5,14 @@ require 'tmpdir'
 
 class Condenser::RollupProcessor
   
-  @@setup = false
+  @@setup = []
   
   def self.setup(environment)
     install_npm_packages(environment.npm_path)
   end
   
   def self.install_npm_packages(npm_path)
-    return if @@setup
+    return if @@setup.include?(npm_path)
     
     ::Condenser::NodeProcessor.new(npm_path).npm_install(
       'rollup',
@@ -20,7 +20,7 @@ class Condenser::RollupProcessor
       '@rollup/plugin-node-resolve',
       '@rollup/plugin-replace'
     )
-    @@setup = true
+    @@setup << npm_path
   end
   
   def self.call(environment, input)
