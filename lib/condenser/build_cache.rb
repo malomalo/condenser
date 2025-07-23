@@ -141,7 +141,6 @@ class Condenser
             @fetching = Set.new
             asset.all_export_dependencies(@fetching).each do |pd|
               @export_dependencies[pd] ||= Set.new
-
               @export_dependencies[pd] << asset
             end
           end

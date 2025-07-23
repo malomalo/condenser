@@ -220,6 +220,7 @@ class Condenser
       @processed = false
       @pcv = nil
       @cache_key = nil
+      @etag = nil
       needs_reexporting!
     end
     
@@ -227,6 +228,7 @@ class Condenser
       restat!
       @export = nil
       @ecv = nil
+      @etag = nil
     end
     
     def process
@@ -336,14 +338,6 @@ class Condenser
           @processors_loaded = true
           @processed = true
           @type = data[:type]
-          
-          digestor = @environment.digestor.new
-          digestor << data[:source]
-          all_dependenies(export_dependencies, Set.new, :export_dependencies) do |dep|
-            digestor << dep.source
-          end
-          data[:etag] = digestor.digest.unpack('H*'.freeze).first
-          @etag = data[:etag]
           data
         end
       end
@@ -360,7 +354,6 @@ class Condenser
       @default_export = result[:default_export]
       @exports = result[:exports]
       @processors = result[:processors]
-      @etag = result[:etag]
       @type = result[:type]
       load_processors
 
@@ -386,7 +379,7 @@ class Condenser
           process
           dirname, basename, extensions, mime_types = @environment.decompose_path(@filename)
           data = {
-            etag: @etag,
+            etag: etag,
             type: @type,
             
             source: @source.dup,
@@ -467,8 +460,15 @@ class Condenser
     end
     
     def etag
+      return @etag if @etag
+
       process
-      @etag
+      digestor = @environment.digestor.new
+      digestor << @source
+      all_dependenies(export_dependencies, Set.new, :export_dependencies) do |dep|
+        digestor << dep.source
+      end
+      @etag = digestor.digest.unpack('H*'.freeze).first
     end
     
     def integrity

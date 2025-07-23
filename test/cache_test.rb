@@ -49,15 +49,17 @@ class CacheTest < ActiveSupport::TestCase
   test 'changing a source file reflects in the next call' do
     file 'test.txt.erb', "1<%= 1 + 1 %>3\n"
 
-    assert_file 'test.txt', 'text/plain', <<~CSS
+    asset = assert_file 'test.txt', 'text/plain', <<~CSS
     123
     CSS
-
+    assert_equal '181210f8f9c779c26da1d9b2075bde0127302ee0e3fca38c9a83f5b1dd8e5d3b', asset.etag
+    
     file 'test.txt.erb', "1<%= 1 + 2 %>5\n"
 
-    assert_file 'test.txt', 'text/plain', <<~CSS
+    asset = assert_file 'test.txt', 'text/plain', <<~CSS
     135
     CSS
+    assert_equal '35696336da00b304d91bb78c4be84c0e975baa9ee85d1b26d4a0168203c19288', asset.etag
   end
 
   test 'changing a source file on calls needs_reprocessing! and needs_reexporting! once' do
@@ -86,23 +88,27 @@ class CacheTest < ActiveSupport::TestCase
       }
     JS
 
-    assert_exported_file 'main.js', 'application/javascript', <<~JS
+    asset = assert_exported_file 'main.js', 'application/javascript', <<~JS
       function cube(c){return c*c}console.log(cube(5));
     JS
+    assert_equal '12f823bc50c3e6246418a496eff3b1d4386d0fed801347630d81a2e46ffe90fd', asset.etag
+    
 
-    assert_exported_file 'main.js', 'application/javascript', <<~JS
+    asset = assert_exported_file 'main.js', 'application/javascript', <<~JS
       function cube(c){return c*c}console.log(cube(5));
     JS
-
+    assert_equal '12f823bc50c3e6246418a496eff3b1d4386d0fed801347630d81a2e46ffe90fd', asset.etag
+    
     file 'math.js', <<-JS
       export function cube ( x ) {
         return x * x * x;
       }
     JS
 
-    assert_exported_file 'main.js', 'application/javascript', <<~CSS
+    asset = assert_exported_file 'main.js', 'application/javascript', <<~CSS
       function cube(c){return c*c*c}console.log(cube(5));
     CSS
+    assert_equal 'b2e0f6b34545190ff0bd529270cc572bf6c9d520a63c6415d78d46ce423b331d', asset.etag
   end
 
   test 'changing a scss dependency reflects in the next call' do
