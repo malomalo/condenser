@@ -208,4 +208,32 @@ class JSTTransformerTest < ActiveSupport::TestCase
     JS
   end
 
+  test 'OptionalMemberExpression ?. test' do
+    file 'test.jst', <<~JS
+      import {append as __ejx_append} from 'ejx';
+    
+      export default async function self (locals) {
+          var __output = [], __promises = [];
+        
+          __output.push("Hello ");
+          __ejx_append(user?.name, __output, 'escape', __promises);
+
+          await Promise.all(__promises);
+          return __output;
+      }
+    JS
+
+    assert_file 'test.js', 'application/javascript', <<~JS
+      import { append as __ejx_append } from 'ejx';
+      export default async function self(locals) {
+        var __output = [],
+          __promises = [];
+        __output.push("Hello ");
+        __ejx_append(locals.user?.name, __output, 'escape', __promises);
+        await Promise.all(__promises);
+        return __output;
+      }
+    JS
+  end
+
 end

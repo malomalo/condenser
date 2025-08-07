@@ -2,10 +2,8 @@
 
 class Condenser::JstTransformer < Condenser::NodeProcessor
   
-  def initialize(dir = nil)
-    super(dir)
-    
-    npm_install('@babel/core')
+  def self.setup(environment)
+    ::Condenser::NodeProcessor.new(environment.npm_path).npm_install('@babel/core', '@babel/preset-env')
   end
 
   def call(environment, input)
@@ -17,13 +15,14 @@ class Condenser::JstTransformer < Condenser::NodeProcessor
       sourceFileName:   input[:filename],
       ast:              false,
       compact:          false,
-      plugins:          []
+      plugins:          [],
+      presets:          []
     }
 
     result = exec_runtime(<<-JS)
       const babel = require("#{npm_module_path('@babel/core')}");
       const source = #{JSON.generate(input[:source])};
-      const options = #{JSON.generate(opts).gsub(/"@?babel[\/-][^"]+"/) { |m| "require(#{m})"}};
+      const options = #{JSON.generate(opts)}
 
       let scope = [['document', 'window']];
       
@@ -31,7 +30,8 @@ class Condenser::JstTransformer < Condenser::NodeProcessor
         return {
           visitor: {
             Identifier(path, state) {
-              if ( path.parent.type === 'MemberExpression' && path.parent.object !== path.node) {
+
+              if ( (path.parent.type === 'MemberExpression' || path.parent.type === 'OptionalMemberExpression') && path.parent.object !== path.node) {
                 return;
               }
               
