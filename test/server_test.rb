@@ -227,7 +227,7 @@ class ServerTest < ActiveSupport::TestCase
 
   test "re-throw JS exceptions in the browser when using babel" do
     @env.unregister_preprocessor('application/javascript', Condenser::JSAnalyzer)
-    @env.register_preprocessor 'application/javascript', Condenser::BabelProcessor.new(@path,
+    @env.register_preprocessor 'application/javascript', Condenser::BabelProcessor.new(@npm_dir,
       presets: [ ['@babel/preset-env', { modules: false, targets: { browsers: 'firefox > 41' } }] ]
     )
     

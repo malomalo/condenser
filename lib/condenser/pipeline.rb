@@ -70,10 +70,12 @@ class Condenser
 
       @mime_types[mime_type] = { extensions: extensions, charset: charset }
       extensions.each { |ext| @extensions[ext] = mime_type }
+      @reverse_mapping = nil
     end
     
     def register_template(mime_type, engine)
       @templates[mime_type] = engine
+      @reverse_mapping = nil
     end
 
     def register_preprocessor(mime_type, engine)
@@ -92,6 +94,7 @@ class Condenser
     def register_transformer(from_mime_type, to_mime_type, engine)
       @transformers[from_mime_type] ||= {}
       @transformers[from_mime_type][to_mime_type] = engine
+      @reverse_mapping = nil
     end
     
     def register_postprocessor(mime_type, engine)

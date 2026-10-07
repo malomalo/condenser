@@ -327,7 +327,7 @@ class CacheTest < ActiveSupport::TestCase
     JS
   end
   
-  test 'ensure the build cache only walks the dependency tree once' do
+  test 'changing a file only invalidates the assets that depend on it' do
     # a
     # | |
     # b c
@@ -352,17 +352,15 @@ class CacheTest < ActiveSupport::TestCase
       function b(){console.log("b")}function d(){console.log("d")}function c(){console.log("c"),d()}console.log("a"),b(),c();
     JS
 
-    file 'd.js', "export default function e () { console.log('e'); }\n"
+    ed = @env.build_cache.instance_variable_get(:@export_dependencies)
+    assert_equal %w(a.js c.js d.js), @env.build_cache.dependents(ed, "#{@path}/d.js").map(&:filename).sort
+    assert_equal %w(a.js b.js), @env.build_cache.dependents(ed, "#{@path}/b.js").map(&:filename).sort
 
-    pd = @env.build_cache.instance_variable_get(:@process_dependencies)
-    pd["#{@path}/a.js"] ||= Set.new
-    pd["#{@path}/b.js"] ||= Set.new
-    pd["#{@path}/c.js"] ||= Set.new
-    pd["#{@path}/d.js"] ||= Set.new
-    pd["#{@path}/a.js"].expects(:<<).with { |a| a.source_file == "#{@path}/a.js" }.once
-    pd["#{@path}/b.js"].expects(:<<).with { |a| a.source_file == "#{@path}/b.js" }.never
-    pd["#{@path}/c.js"].expects(:<<).with { |a| a.source_file == "#{@path}/c.js" }.never
-    pd["#{@path}/d.js"].expects(:<<).with { |a| a.source_file == "#{@path}/d.js" }.once
+    b = @env.find('b.js')
+    b.expects(:needs_reprocessing!).never
+    b.expects(:needs_reexporting!).never
+
+    file 'd.js', "export default function e () { console.log('e'); }\n"
 
     assert_exported_file 'a.js', 'application/javascript', <<~JS
       function b(){console.log("b")}function e(){console.log("e")}function c(){console.log("c"),e()}console.log("a"),b(),c();

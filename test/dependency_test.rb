@@ -17,6 +17,7 @@ class DependencyTest < ActiveSupport::TestCase
     JS
 
     asset = @env.find('name.js')
+    asset.process
     assert_equal asset.instance_variable_get(:@process_dependencies).to_a, [["models/*", ["application/javascript"]],["helpers/*", ["application/javascript"]]]
 
 
@@ -54,6 +55,7 @@ class DependencyTest < ActiveSupport::TestCase
     JS
 
     asset = @env.find('name.js')
+    asset.process
     assert_equal asset.instance_variable_get(:@process_dependencies).to_a, [["models/*", ["application/javascript"]],["helpers/*", ["application/javascript"]]]
 
 
@@ -91,6 +93,7 @@ class DependencyTest < ActiveSupport::TestCase
     JS
 
     asset = @env.find('name.js')
+    asset.process
     assert_equal asset.instance_variable_get(:@process_dependencies).to_a, [["**/*", ["application/ruby"]]]
     assert_equal asset.process_dependencies.map(&:source_file), ["#{@path}/b.rb", "#{@path}/models/b.rb"]
   end
@@ -119,6 +122,7 @@ class DependencyTest < ActiveSupport::TestCase
     JS
     
     asset = @env.find('a/b.js')
+    asset.process
     assert_equal asset.instance_variable_get(:@export_dependencies).to_a, [["#{@path}/a/a", ["application/javascript"]]]
     assert_equal asset.export_dependencies.map(&:source_file), ["#{@path}/a/a.js"]
   end
