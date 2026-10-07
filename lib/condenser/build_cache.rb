@@ -211,13 +211,15 @@ class Condenser
     end
 
     # A digest of the lockfile entries for the packages +keys+ and everything
-    # they depend on, or nil if +keys+ is empty. A package's entry changes
-    # when it's upgraded (its version, or for git dependencies the commit in
-    # `resolved`).
+    # they depend on, or nil if +keys+ is empty or there's no lockfile. A
+    # package's entry changes when it's upgraded (its version, or for git
+    # dependencies the commit in `resolved`).
     def npm_packages_digest(npm_path, keys)
       return if keys.empty?
 
       packages = npm_packages(npm_path)
+      return if packages.empty?
+
       @npm_digests ||= {}
       @npm_digests[keys.sort] ||= begin
         seen = Set.new

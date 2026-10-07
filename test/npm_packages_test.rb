@@ -101,6 +101,16 @@ class NpmPackagesTest < ActiveSupport::TestCase
     FileUtils.remove_entry(no_lockfile, true) if no_lockfile
   end
 
+  test 'without a lockfile, importing files from a package leaves the etag unchanged' do
+    FileUtils.mkdir_p(File.join(@npm, 'node_modules', 'dolla'))
+    File.write(File.join(@npm, 'node_modules', 'dolla', 'util.js'), "export default 1;\n")
+    file 'main.js', "import u from 'dolla/util';\nconsole.log(u);\n"
+
+    asset = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: @npm, base: @path).find('main.js')
+    assert_equal ['node_modules/dolla'], asset.npm_package_keys
+    assert_nil asset.npm_digest
+  end
+
   test 'a dynamic import kept as its own bundle points at the rebuilt bundle after an upgrade' do
     # Rollup needs a real npm dir: link in the test npm dir's packages, but
     # not its lockfile
