@@ -113,7 +113,9 @@ class NpmPackagesTest < ActiveSupport::TestCase
 
   test 'a dynamic import kept as its own bundle points at the rebuilt bundle after an upgrade' do
     # Rollup needs a real npm dir: link in the test npm dir's packages, but
-    # not its lockfile
+    # not its lockfile. Install Rollup there first, or it would be installed
+    # into @npm, and npm would remove the package this test adds.
+    Condenser::RollupProcessor.install_npm_packages(@npm_dir)
     Dir.mkdir(File.join(@npm, 'node_modules'))
     Dir.children(File.join(@npm_dir, 'node_modules')).each do |name|
       next if name.start_with?('.')
