@@ -1,4 +1,5 @@
 require 'test_helper'
+require 'open3'
 
 class CacheFileStoreTest < ActiveSupport::TestCase
   
@@ -32,6 +33,19 @@ class CacheFileStoreTest < ActiveSupport::TestCase
     ensure
       @env = oldenv
     end
+  end
+
+  test "works when nothing else has loaded zlib" do
+    script = <<~SCRIPT
+      require "condenser"
+      store = Condenser::Cache::FileStore.new(ARGV[0])
+      store.set("key", { "a" => 1 })
+      print store.get("key").inspect
+    SCRIPT
+
+    output, status = Open3.capture2e(RbConfig.ruby, "-I", File.expand_path("../../lib", __dir__), "-e", script, @cachepath)
+    assert status.success?, output
+    assert_equal({ "a" => 1 }.inspect, output.lines.last)
   end
 
 end
