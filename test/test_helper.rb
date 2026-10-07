@@ -16,15 +16,10 @@ require 'condenser/cache/memory_store'
 
 require 'byebug'
 require "active_support"
-require "active_support/testing/autorun"
+require "minitest/autorun"
+require "active_support/test_case"
 require 'mocha/minitest'
 require 'minitest/reporters'
-
-# This is because Rails changed it's minitest intergration, not sure whats
-# up here
-Minitest.load_plugins
-Minitest.extensions.delete('rails')
-Minitest.extensions.unshift('rails')
 
 Minitest::Reporters.use! Minitest::Reporters::SpecReporter.new
 
