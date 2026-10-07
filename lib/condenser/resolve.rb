@@ -29,6 +29,7 @@ class Condenser
       cache_key = [dirname, basename].flatten.join('/')
       cache_key = "/#{cache_key}" if !cache_key.starts_with?('/')
       cache_key << "@#{accept.join(',')}" if accept
+      cache_key << "@npm" if npm
       build_cache.fetch(cache_key) do
         build do
           results = []
@@ -143,7 +144,8 @@ class Condenser
         build_cache.semaphore.lock 
         logger.debug { "build cache semaphore locked by #{Thread.current.object_id}" }
       end
-      
+
+      build_cache.clear_if_npm_changed(npm_path) if @build_cc == 0
       @build_cc += 1
       yield
     ensure

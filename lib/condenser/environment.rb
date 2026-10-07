@@ -33,6 +33,7 @@ class Condenser
         raise ArgumentError, "Path \"#{path}\" does not exists" if !File.directory?(path)
         @path.unshift(path)
       end
+      load_path_changed!
     end
   
     def append_path(*paths)
@@ -41,6 +42,7 @@ class Condenser
         raise ArgumentError, "Path \"#{path}\" does not exists" if !File.directory?(path)
         @path.push(path)
       end
+      load_path_changed!
     end
 
     def npm_path=(path)
@@ -51,6 +53,7 @@ class Condenser
         raise ArgumentError, "Path \"#{path}\" does not exists" if !File.directory?(path)
         @npm_path = path
       end
+      load_path_changed!
     end
   
     def append_npm_path(*paths)
@@ -61,6 +64,13 @@ class Condenser
   
     def clear_path
       @path.clear
+      load_path_changed!
+    end
+    
+    # Every cached lookup depends on the load paths, including lookups that
+    # found nothing, so they have to be redone when the paths change.
+    def load_path_changed!
+      build_cache.clear_lookups if instance_variable_defined?(:@build_cache)
     end
     
     def new_context_class

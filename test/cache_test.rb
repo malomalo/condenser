@@ -408,4 +408,58 @@ class CacheTest < ActiveSupport::TestCase
     env3 = Condenser.new(base3, logger: Logger.new(STDOUT, level: :debug), base: base3, npm_path: @npm_dir, cache: Condenser::Cache::FileStore.new(cachepath))
     assert_equal 'function c(){console.log("e")}function b(){console.log("b"),c()}console.log("a"),b();', env3.find('test/a.js').export.source
   end
+
+  test 'a file that was missing is found once it is created' do
+    assert_nil @env.find('missing.js')
+    assert_nil @env.find('lib/missing.js')
+
+    file 'missing.js', "console.log('a');\n"
+    file 'lib/missing.js', "console.log('b');\n"
+
+    assert_equal "#{@path}/missing.js", @env.find('missing.js')&.source_file
+    assert_equal "#{@path}/lib/missing.js", @env.find('lib/missing.js')&.source_file
+  end
+
+  test 'a file that was missing is found once its directory is added to the load path' do
+    other = File.realpath(Dir.mktmpdir)
+    File.write(File.join(other, 'later.js'), "console.log('later');\n")
+
+    assert_nil @env.find('later.js')
+    @env.append_path(other)
+    assert_equal File.join(other, 'later.js'), @env.find('later.js')&.source_file
+  ensure
+    FileUtils.remove_entry(other, true) if other
+  end
+
+  test 'a lookup that misses the load path does not hide an npm module' do
+    npm_file = File.join(@npm_dir, 'node_modules', 'condenser-cache-test.js')
+    FileUtils.mkdir_p(File.dirname(npm_file))
+    File.write(npm_file, "console.log('npm');\n")
+
+    assert_nil @env.find('condenser-cache-test.js')
+    assert_equal npm_file, @env.find('condenser-cache-test.js', npm: true)&.source_file
+  ensure
+    FileUtils.rm_f(npm_file)
+  end
+
+  test 'the build cache is cleared when the npm packages change' do
+    npm_dir = File.realpath(Dir.mktmpdir)
+    env = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: npm_dir, base: @path)
+    lockfile = File.join(npm_dir, 'package-lock.json')
+    npm_file = File.join(npm_dir, 'node_modules', 'pkg', 'index.js')
+    File.write(lockfile, '{}')
+
+    assert_nil env.find('pkg/index.js', npm: true)
+
+    FileUtils.mkdir_p(File.dirname(npm_file))
+    File.write(npm_file, "export default 1;\n")
+    # node_modules isn't watched, so the miss stays cached...
+    assert_nil env.find('pkg/index.js', npm: true) if env.build_cache.listening
+
+    # ...until the lockfile changes
+    File.write(lockfile, '{"packages": {}}')
+    assert_equal npm_file, env.find('pkg/index.js', npm: true)&.source_file
+  ensure
+    FileUtils.remove_entry(npm_dir, true) if npm_dir
+  end
 end
