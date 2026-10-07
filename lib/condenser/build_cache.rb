@@ -180,6 +180,10 @@ class Condenser
       @export_dependencies.clear
     end
 
+    def clear_lookups
+      @lookup_cache.clear
+    end
+    
     def [](value)
       @lookup_cache[value]
     end

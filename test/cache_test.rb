@@ -420,6 +420,17 @@ class CacheTest < ActiveSupport::TestCase
     assert_equal "#{@path}/lib/missing.js", @env.find('lib/missing.js')&.source_file
   end
 
+  test 'a file that was missing is found once its directory is added to the load path' do
+    other = File.realpath(Dir.mktmpdir)
+    File.write(File.join(other, 'later.js'), "console.log('later');\n")
+
+    assert_nil @env.find('later.js')
+    @env.append_path(other)
+    assert_equal File.join(other, 'later.js'), @env.find('later.js')&.source_file
+  ensure
+    FileUtils.remove_entry(other, true) if other
+  end
+
   test 'a lookup that misses the load path does not hide an npm module' do
     npm_file = File.join(@npm_dir, 'node_modules', 'condenser-cache-test.js')
     FileUtils.mkdir_p(File.dirname(npm_file))
