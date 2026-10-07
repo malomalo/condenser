@@ -53,7 +53,7 @@ class Condenser
             others = []
             @map_cache&.delete_if do |k,v|
               if globs.any?{ |a| k.starts_with?(a) }
-                @export_dependencies[v.source_file]&.each do |a| 
+                dependents(@export_dependencies, v.source_file).each do |a|
                   others << "/#{a.filename}".delete_suffix(File.extname(a.filename))
                 end
                 true
@@ -69,7 +69,7 @@ class Condenser
             @lookup_cache.delete_if do |key, value|
               if globs.any?{ |a| key.starts_with?(a) }
                 value.each do |v|
-                  @export_dependencies[v.source_file]&.each do |a| 
+                  dependents(@export_dependencies, v.source_file).each do |a|
                     others << "/#{a.filename}".delete_suffix(File.extname(a.filename))
                   end
                 end
@@ -86,33 +86,19 @@ class Condenser
 
             
             removed.each do |file|
-              @process_dependencies[file]&.delete_if do |asset|
-                if asset.source_file == file
-                  true
-                else
-                  asset.needs_reprocessing!
-                  false
-                end
+              dependents(@process_dependencies, file).each do |asset|
+                asset.needs_reprocessing! if asset.source_file != file
               end
-            
-              @export_dependencies[file]&.delete_if do |asset|
-                if asset.source_file == file
-                  true
-                else
-                  asset.needs_reexporting!
-                  false
-                end
+              dependents(@export_dependencies, file).each do |asset|
+                asset.needs_reexporting! if asset.source_file != file
               end
+              @process_dependencies[file]&.delete_if { |asset| asset.source_file == file }
+              @export_dependencies[file]&.delete_if { |asset| asset.source_file == file }
             end
             
             modified.each do |file|
-              @process_dependencies[file]&.each do |asset|
-                asset.needs_reprocessing!
-              end
-            
-              @export_dependencies[file]&.each do |asset|
-                asset.needs_reexporting!
-              end
+              dependents(@process_dependencies, file).each(&:needs_reprocessing!)
+              dependents(@export_dependencies, file).each(&:needs_reexporting!)
             end
 
             @logger.debug { "build cache semaphore unlocked by #{Thread.current.object_id}" }
@@ -128,26 +114,33 @@ class Condenser
     
     def []=(value, assets)
       @lookup_cache[value] = assets
-      
-      if @fetching.nil?
-        begin
-          assets.each do |asset|
-            @fetching = Set.new
-            asset.all_process_dependencies(@fetching).each do |pd|
-              @process_dependencies[pd] ||= Set.new
-              @process_dependencies[pd] << asset
-            end
-
-            @fetching = Set.new
-            asset.all_export_dependencies(@fetching).each do |pd|
-              @export_dependencies[pd] ||= Set.new
-              @export_dependencies[pd] << asset
-            end
-          end
-        ensure
-          @fetching = nil
+    end
+    
+    # Record the direct dependencies of an asset so the listener can find
+    # everything that needs to be rebuilt when a file changes. Only direct
+    # edges are stored; the transitive set is computed in #dependents when a
+    # file actually changes.
+    def record_process_dependencies(asset, deps)
+      record_dependencies(@process_dependencies, asset, deps)
+    end
+    
+    def record_export_dependencies(asset, deps)
+      record_dependencies(@export_dependencies, asset, deps)
+    end
+    
+    # Returns the assets that depend on +source_file+, either directly or
+    # through other assets, including the assets built from +source_file+.
+    def dependents(index, source_file)
+      found = Set.new
+      queue = [source_file]
+      seen = Set.new
+      while file = queue.shift
+        next unless seen.add?(file)
+        index[file]&.each do |asset|
+          queue << asset.source_file if found.add?(asset)
         end
       end
+      found
     end
     
     def [](value)
@@ -165,6 +158,19 @@ class Condenser
       end
       
       value
+    end
+    
+    private
+    
+    def record_dependencies(index, asset, deps)
+      return if !@listening
+
+      # An asset always depends on its own source file
+      (@process_dependencies[asset.source_file] ||= Set.new) << asset
+      (@export_dependencies[asset.source_file] ||= Set.new) << asset
+      deps.each do |dep|
+        (index[dep.source_file] ||= Set.new) << asset
+      end
     end
     
   end

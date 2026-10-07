@@ -240,7 +240,7 @@ class Condenser
 
         end
       end
-      $map = map
+      @reverse_mapping = map
     end
 
     def writers_for_mime_type(mime_type)

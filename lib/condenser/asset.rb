@@ -12,7 +12,7 @@ class Condenser
     include EncodingUtils
     
     attr_reader :environment, :filename, :content_types, :source_file, :source_path
-    attr_reader :content_types_digest, :exports, :type
+    attr_reader :content_types_digest
     attr_writer :source, :sourcemap
 
     attr_accessor :imports, :processed
@@ -78,7 +78,7 @@ class Condenser
           memo << asset
         end
         memo
-      end
+      end.tap { |assets| @environment.build_cache.record_process_dependencies(self, assets) }
     end
     
     def export_dependencies
@@ -95,7 +95,7 @@ class Condenser
           memo << asset
         end
         memo
-      end
+      end.tap { |assets| @environment.build_cache.record_export_dependencies(self, assets) }
     end
     
     def linked_assets
@@ -121,6 +121,12 @@ class Condenser
     def has_exports?
       process
       @exports
+    end
+    alias exports has_exports?
+
+    def type
+      process
+      @type
     end
 
     def load_processors
@@ -409,14 +415,6 @@ class Condenser
           data[:digest] = @environment.digestor.digest(data[:source])
           data[:digest_name] = @environment.digestor.name.sub(/^.*::/, '').downcase
           data
-        end
-
-        if @environment.build_cache.listening
-          # TODO we could skip file and all their depencies here if they are
-          # already in build_cache.@export_dependencies
-          all_export_dependencies.each do |sf|
-            @environment.build_cache.instance_variable_get(:@export_dependencies)[sf]&.add(self)
-          end
         end
 
         Export.new(@environment, data)
