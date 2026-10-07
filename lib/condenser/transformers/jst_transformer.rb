@@ -19,105 +19,99 @@ class Condenser::JstTransformer < Condenser::NodeProcessor
       presets:          []
     }
 
-    result = exec_runtime(<<-JS)
+    result = exec_worker(<<-JS, input[:source], opts)
       const babel = require("#{npm_module_path('@babel/core')}");
-      const source = #{JSON.generate(input[:source])};
-      const options = #{JSON.generate(opts)}
 
-      let scope = [['document', 'window']];
-      
-      options['plugins'].unshift(function({ types: t }) {
-        return {
-          visitor: {
-            Identifier(path, state) {
+      const handle = (source, options) => {
+        let scope = [['document', 'window']];
 
-              if ( (path.parent.type === 'MemberExpression' || path.parent.type === 'OptionalMemberExpression') && path.parent.object !== path.node) {
-                return;
-              }
-              
-              if ( path.parent.type === 'ImportSpecifier' ||
-                   path.parent.type === 'ImportDefaultSpecifier' ||
-                   path.parent.type === 'FunctionDeclaration' ||
-                   path.parent.type === 'FunctionExpression' ||
-                   path.parent.type === 'ArrowFunctionExpression' ||
-                   path.parent.type === 'SpreadElement' ||
-                   path.parent.type === 'CatchClause' ) {
-                return;
-              }
-              
-              if ( path.parent.type === 'ObjectProperty' && path.parent.key === path.node ) {
-                return;
-              }
-
-              if ( !(path.node.name in global) &&
-                   !scope.find((s) => s.find(v => v === path.node.name))
-              ) {
-                path.replaceWith(
-                  t.memberExpression(t.identifier("locals"), path.node)
-                );
-              }
-            }
-          }
-        };
-      });
-      
-
-      options['plugins'].unshift(function({ types: t }) {
+        options['plugins'].unshift(function({ types: t }) {
           return {
             visitor: {
-              "FunctionDeclaration|FunctionExpression|ArrowFunctionExpression": {
-                enter(path, state) {
-                  if (path.node.id) { scope[scope.length-1].push(path.node.id.name); }
-                  scope.push(path.node.params.map((n) => n.type === 'RestElement' ? n.argument.name : n.name));
+              Identifier(path, state) {
+
+                if ( (path.parent.type === 'MemberExpression' || path.parent.type === 'OptionalMemberExpression') && path.parent.object !== path.node) {
+                  return;
                 }
-              },
-              CatchClause: {
-                enter(path, state) {
-                  scope.push([]);
-                  if (path.node.param.name) { scope[scope.length-1].push(path.node.param.name); }
+              
+                if ( path.parent.type === 'ImportSpecifier' ||
+                     path.parent.type === 'ImportDefaultSpecifier' ||
+                     path.parent.type === 'FunctionDeclaration' ||
+                     path.parent.type === 'FunctionExpression' ||
+                     path.parent.type === 'ArrowFunctionExpression' ||
+                     path.parent.type === 'SpreadElement' ||
+                     path.parent.type === 'CatchClause' ) {
+                  return;
                 }
-              },
-              Scopable: {
-                enter(path, state) {
-                  if (path.node.type !== 'Program' &&
-                      path.node.type !== 'CatchClause' &&
-                      path.parent.type !== 'FunctionDeclaration' &&
-                      path.parent.type !== 'FunctionExpression' &&
-                      path.parent.type !== 'ArrowFunctionExpression' &&
-                      path.parent.type !== 'ExportDefaultDeclaration') {
-                    scope.push([]);
-                  }
-                },
-                exit(path, state) {
-                  if (path.node.type !== 'Program' &&
-                      path.parent.type !== 'ExportDefaultDeclaration') {
-                    scope.pop();
-                  }
+              
+                if ( path.parent.type === 'ObjectProperty' && path.parent.key === path.node ) {
+                  return;
                 }
-              },
-              ImportDeclaration(path, state) {
-                path.node.specifiers.forEach((s) => scope[scope.length-1].push(s.local.name));
-              },
-              ClassDeclaration(path, state) {
-                if (path.node.id) {
-                  scope[scope.length-1].push(path.node.id.name)
+
+                if ( !(path.node.name in global) &&
+                     !scope.find((s) => s.find(v => v === path.node.name))
+                ) {
+                  path.replaceWith(
+                    t.memberExpression(t.identifier("locals"), path.node)
+                  );
                 }
-              },
-              VariableDeclaration(path, state) {
-                path.node.declarations.forEach((s) => scope[scope.length-1].push(s.id.name));
               }
             }
           };
-      });
+        });
+      
+
+        options['plugins'].unshift(function({ types: t }) {
+            return {
+              visitor: {
+                "FunctionDeclaration|FunctionExpression|ArrowFunctionExpression": {
+                  enter(path, state) {
+                    if (path.node.id) { scope[scope.length-1].push(path.node.id.name); }
+                    scope.push(path.node.params.map((n) => n.type === 'RestElement' ? n.argument.name : n.name));
+                  }
+                },
+                CatchClause: {
+                  enter(path, state) {
+                    scope.push([]);
+                    if (path.node.param.name) { scope[scope.length-1].push(path.node.param.name); }
+                  }
+                },
+                Scopable: {
+                  enter(path, state) {
+                    if (path.node.type !== 'Program' &&
+                        path.node.type !== 'CatchClause' &&
+                        path.parent.type !== 'FunctionDeclaration' &&
+                        path.parent.type !== 'FunctionExpression' &&
+                        path.parent.type !== 'ArrowFunctionExpression' &&
+                        path.parent.type !== 'ExportDefaultDeclaration') {
+                      scope.push([]);
+                    }
+                  },
+                  exit(path, state) {
+                    if (path.node.type !== 'Program' &&
+                        path.parent.type !== 'ExportDefaultDeclaration') {
+                      scope.pop();
+                    }
+                  }
+                },
+                ImportDeclaration(path, state) {
+                  path.node.specifiers.forEach((s) => scope[scope.length-1].push(s.local.name));
+                },
+                ClassDeclaration(path, state) {
+                  if (path.node.id) {
+                    scope[scope.length-1].push(path.node.id.name)
+                  }
+                },
+                VariableDeclaration(path, state) {
+                  path.node.declarations.forEach((s) => scope[scope.length-1].push(s.id.name));
+                }
+              }
+            };
+        });
 
 
-      try {
-        const result = babel.transform(source, options);
-        console.log(JSON.stringify(result));
-      } catch(e) {
-        console.log(JSON.stringify({'error': [e.name, e.message, e.stack]}));
-        process.exit(0);
-      }
+        return babel.transformSync(source, options);
+      };
     JS
 
     if result['error']

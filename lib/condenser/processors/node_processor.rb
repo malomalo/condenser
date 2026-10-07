@@ -40,7 +40,67 @@ class Condenser
         end
       end
     end
-    
+
+    # Like #exec_runtime, but keeps the node process running between calls so
+    # node and the script's requires are only loaded once. +script+ must
+    # define a `handle` function with `const` (so it isn't added to `global`);
+    # each call passes +args+ to it and returns its JSON result. `handle` may
+    # return a Promise.
+    def exec_worker(script, *args)
+      @workers ||= {}
+      worker = (@workers[script] ||= Worker.new(binary, script))
+      worker.call(*args)
+    end
+
+    class Worker
+
+      LOOP = <<~JS
+        ;(() => {
+          const lines = require('readline').createInterface({ input: process.stdin, crlfDelay: Infinity });
+          lines.on('line', (line) => {
+            Promise.resolve().then(() => handle(...JSON.parse(line))).catch((e) => {
+              return { error: [e.name, e.message, e.stack] };
+            }).then((result) => {
+              process.stdout.write(JSON.stringify(result) + "\\n");
+            });
+          });
+        })();
+      JS
+
+      def initialize(binary, script)
+        @binary = binary
+        @script = script
+        @mutex = Mutex.new
+      end
+
+      def call(*args)
+        @mutex.synchronize do
+          start if @io.nil? || @pid != Process.pid
+          @io.write(JSON.generate(args), "\n")
+          if line = @io.gets
+            JSON.parse(line)
+          else
+            @io.close
+            @io = nil
+            raise RuntimeError, "node worker exited unexpectedly"
+          end
+        end
+      end
+
+      private
+
+      # Started lazily, and again after a fork, so a forked process never
+      # shares its parent's pipe.
+      def start
+        @scriptfile = Tempfile.new(['worker', '.js'])
+        @scriptfile.write(@script, "\n", LOOP)
+        @scriptfile.flush
+        @pid = Process.pid
+        @io = IO.popen([@binary, @scriptfile.path], 'r+')
+      end
+
+    end
+
     def binary(cmd='node')
       if File.executable? cmd
         cmd
