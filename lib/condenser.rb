@@ -6,6 +6,7 @@ require 'active_support/core_ext'
 
 require 'condenser/version'
 require 'condenser/errors'
+require 'condenser/utils'
 require 'condenser/environment'
 require 'condenser/pipeline'
 require 'condenser/resolve'
