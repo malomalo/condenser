@@ -178,6 +178,65 @@ class Condenser
       @lookup_cache.clear
       @process_dependencies.clear
       @export_dependencies.clear
+      @npm_packages = nil
+      @npm_digests = nil
+    end
+
+    # The packages in npm's lockfile, keyed by where they're installed
+    # (e.g. "node_modules/komps" or "node_modules/a/node_modules/b").
+    # node_modules/.package-lock.json describes what's actually installed, so
+    # it's preferred over package-lock.json.
+    def npm_packages(npm_path)
+      return {} if npm_path.nil?
+
+      @npm_packages ||= begin
+        lockfile = %w(node_modules/.package-lock.json package-lock.json)
+          .map { |f| File.join(npm_path, f) }
+          .find { |f| File.file?(f) }
+        lockfile ? (JSON.parse(File.read(lockfile))['packages'] || {}) : {}
+      end
+    end
+
+    # The lockfile key of the package +name+ as node would find it from the
+    # package installed at +from+ ("" for the app itself), or nil.
+    def resolve_npm_package(npm_path, from, name)
+      packages = npm_packages(npm_path)
+      dir = from
+      loop do
+        key = dir.empty? ? "node_modules/#{name}" : "#{dir}/node_modules/#{name}"
+        return key if packages.key?(key)
+        return if dir.empty?
+        dir = dir.sub(%r{/?node_modules/(?:@[^/]+/)?[^/]+\z}, '')
+      end
+    end
+
+    # A digest of the lockfile entries for the packages +keys+ and everything
+    # they depend on, or nil if +keys+ is empty. A package's entry changes
+    # when it's upgraded (its version, or for git dependencies the commit in
+    # `resolved`).
+    def npm_packages_digest(npm_path, keys)
+      return if keys.empty?
+
+      packages = npm_packages(npm_path)
+      @npm_digests ||= {}
+      @npm_digests[keys.sort] ||= begin
+        seen = Set.new
+        queue = keys.to_a
+        while key = queue.shift
+          next if !seen.add?(key)
+
+          %w(dependencies peerDependencies optionalDependencies).each do |field|
+            packages.dig(key, field)&.each_key do |name|
+              dep = resolve_npm_package(npm_path, key, name)
+              queue << dep if dep
+            end
+          end
+        end
+
+        Digest::SHA256.hexdigest(JSON.generate(seen.sort.map { |key|
+          [key, packages[key]&.slice('version', 'resolved', 'integrity')]
+        }))
+      end
     end
 
     def clear_lookups

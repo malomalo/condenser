@@ -82,20 +82,68 @@ class Condenser
     end
     
     def export_dependencies
-      deps = @environment.cache.fetch "export-deps/#{cache_key}" do
-        process
-        # Sort so etag and cache key are same irrelevant of ordering of
-        # dependencies
-        (@export_dependencies + @process_dependencies).map { |fn| [normalize_filename_base(fn[0]), fn[1]] }.sort_by { |d| d[0] }
-      end
-      
-      deps.inject([]) do |memo, i|
+      export_dependency_names.inject([]) do |memo, i|
         i[0] = File.join(@environment.base, i[0].delete_prefix('!')) if i[0].start_with?('!') && @environment.base
         @environment.resolve(i[0], File.dirname(@source_file), accept: i[1], npm: true).each do |asset|
           memo << asset
         end
         memo
       end.tap { |assets| @environment.build_cache.record_export_dependencies(self, assets) }
+    end
+
+    # The imports and other dependencies recorded while processing, as
+    # [name, accepted mime types] pairs.
+    def export_dependency_names
+      @environment.cache.fetch "export-deps/#{cache_key}" do
+        process
+        # Sort so etag and cache key are same irrelevant of ordering of
+        # dependencies
+        (@export_dependencies + @process_dependencies).map { |fn| [normalize_filename_base(fn[0]), fn[1]] }.sort_by { |d| d[0] }
+      end
+    end
+
+    # The npm packages this asset imports, as lockfile keys (e.g.
+    # "node_modules/dolla"). Rollup resolves and reads these itself, and bare
+    # imports like `import x from 'dolla'` don't resolve to an asset at all,
+    # so they're not tracked as export dependencies.
+    def npm_package_keys
+      return @npm_package_keys if @npm_package_keys
+      return @npm_package_keys = [] if @environment.npm_path.nil?
+
+      root = File.join(@environment.npm_path, '')
+      keys = Set.new
+      export_dependency_names.each do |name, accept|
+        next if name.start_with?('!', '/') || name.include?('*')
+
+        assets = @environment.resolve(name, File.dirname(@source_file), accept: accept, npm: true)
+        if assets.empty?
+          key = @environment.build_cache.resolve_npm_package(@environment.npm_path, '', name[%r{\A(?:@[^/]+/)?[^/]+}])
+          keys << key if key
+        else
+          assets.each do |asset|
+            next if !asset.source_file.start_with?(root)
+            key = asset.source_file.delete_prefix(root)[%r{\A(?:node_modules/(?:@[^/]+/)?[^/]+/)*node_modules/(?:@[^/]+/)?[^/]+}]
+            keys << key if key
+          end
+        end
+      end
+      @npm_package_keys = keys.to_a
+    end
+
+    # A digest of the lockfile entries for the npm packages this asset and its
+    # dependencies import, and everything those packages depend on. It's part
+    # of the export cache key and etag so upgrading a package rebuilds the
+    # bundles that use it. It only needs the lockfile, so it's known before
+    # exporting.
+    def npm_digest
+      return @npm_digest if @npm_digest_computed
+
+      keys = Set.new(npm_package_keys)
+      all_dependenies(export_dependencies, Set.new, :export_dependencies) do |dep|
+        keys.merge(dep.npm_package_keys)
+      end
+      @npm_digest_computed = true
+      @npm_digest = @environment.build_cache.npm_packages_digest(@environment.npm_path, keys)
     end
     
     def linked_assets
@@ -218,6 +266,7 @@ class Condenser
           Digest::SHA256.file(dep.source_file).hexdigest
         ]
       end
+      f << ["npm", npm_digest] if npm_digest
 
       @ecv = Digest::SHA1.hexdigest(JSON.generate(f))
     end
@@ -233,6 +282,8 @@ class Condenser
     def needs_reexporting!
       restat!
       @export = nil
+      @npm_package_keys = nil
+      @npm_digest_computed = false
       @ecv = nil
       @etag = nil
     end
@@ -466,6 +517,7 @@ class Condenser
       all_dependenies(export_dependencies, Set.new, :export_dependencies) do |dep|
         digestor << dep.source
       end
+      digestor << npm_digest if npm_digest
       @etag = digestor.digest.unpack('H*'.freeze).first
     end
     
