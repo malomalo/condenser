@@ -4,7 +4,18 @@ class Condenser
   class BuildCache
     
     attr_reader :semaphore, :listening, :logger
-    
+
+    # Files that change when npm packages are installed or updated.
+    # node_modules/.package-lock.json is rewritten by every `npm install`.
+    NPM_LOCKFILES = %w(
+      node_modules/.package-lock.json
+      package-lock.json
+      yarn.lock
+      pnpm-lock.yaml
+      bun.lock
+      bun.lockb
+    ).freeze
+
     def initialize(path, logger:, listen: {})
       @logger = logger
       @path = path
@@ -143,6 +154,32 @@ class Condenser
       found
     end
     
+    # node_modules isn't watched by the listener, so clear everything when
+    # the npm packages change (e.g. after an `npm install`) instead.
+    def clear_if_npm_changed(npm_path)
+      return if npm_path.nil?
+
+      fingerprint = NPM_LOCKFILES.filter_map do |lockfile|
+        stat = File.stat(File.join(npm_path, lockfile))
+        [lockfile, stat.mtime.to_f, stat.size]
+      rescue Errno::ENOENT
+        nil
+      end
+
+      if @npm_fingerprint && @npm_fingerprint != fingerprint
+        @logger.info { "npm packages changed, clearing the build cache" }
+        clear
+      end
+      @npm_fingerprint = fingerprint
+    end
+
+    def clear
+      @map_cache.clear
+      @lookup_cache.clear
+      @process_dependencies.clear
+      @export_dependencies.clear
+    end
+
     def [](value)
       @lookup_cache[value]
     end
@@ -152,7 +189,9 @@ class Condenser
       
       if value.nil?
         value = yield
-        if (value.is_a?(Array) ? !value.empty? : value)
+        # Lookups that find nothing are only cached while listening, since
+        # the listener is what clears them when a matching file is added.
+        if @listening || (value.is_a?(Array) ? !value.empty? : value)
           self[key] = value
         end
       end
