@@ -18,6 +18,10 @@ class Condenser::Sass::Importer < SassC::Importer
     end
 
     if imports.empty? && env.npm_path
+      # TODO: the style file and package.json read here aren't tracked as
+      # dependencies, so upgrading the package doesn't rebuild the CSS. Record
+      # them like Rollup's npm files (see Asset#npm_files), hashed into
+      # process_cache_version since this runs while processing.
       package = File.join(env.npm_path, name, 'package.json')
       if File.exist?(package)
         package = JSON.parse(File.read(package))

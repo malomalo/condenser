@@ -462,4 +462,57 @@ class CacheTest < ActiveSupport::TestCase
   ensure
     FileUtils.remove_entry(npm_dir, true) if npm_dir
   end
+
+  test 'changing an npm package rebuilds the bundles that use it' do
+    pkg = File.join(@npm_dir, 'node_modules', 'condenser-npm-files-test')
+    FileUtils.mkdir_p(pkg)
+    File.write(File.join(pkg, 'package.json'), '{"name": "condenser-npm-files-test", "main": "index.js"}')
+    File.write(File.join(pkg, 'index.js'), "export default function v() { return 'version 1'; }\n")
+    file 'main.js', "import v from 'condenser-npm-files-test';\nconsole.log(v());\n"
+
+    # A new environment sharing the cache each time, like a deploy
+    build = lambda do
+      env = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: @npm_dir, base: @path, cache: @env.cache)
+      export = env.find('main.js').export
+      [export.source[/version \d/], export.etag]
+    end
+
+    version, etag = build.call
+    assert_equal 'version 1', version
+
+    # Nothing changed, so the cached export is used
+    Condenser::RollupProcessor.expects(:call).never
+    assert_equal ['version 1', etag], build.call
+    Condenser::RollupProcessor.unstub(:call)
+
+    File.write(File.join(pkg, 'index.js'), "export default function v() { return 'version 2'; }\n")
+    version, new_etag = build.call
+    assert_equal 'version 2', version
+    assert_not_equal etag, new_etag
+
+    # The package switches its entry point; index.js itself doesn't change
+    File.write(File.join(pkg, 'next.js'), "export default function v() { return 'version 3'; }\n")
+    File.write(File.join(pkg, 'package.json'), '{"name": "condenser-npm-files-test", "main": "next.js"}')
+    assert_equal 'version 3', build.call[0]
+  ensure
+    FileUtils.rm_rf(pkg) if pkg
+  end
+
+  test 'the npm files a bundle used are stored relative to the npm path' do
+    pkg = File.join(@npm_dir, 'node_modules', 'condenser-npm-files-test')
+    FileUtils.mkdir_p(pkg)
+    File.write(File.join(pkg, 'package.json'), '{"name": "condenser-npm-files-test", "main": "index.js"}')
+    File.write(File.join(pkg, 'index.js'), "export default 1;\n")
+    file 'dep.js', "export default 2;\n"
+    file 'main.js', "import a from 'condenser-npm-files-test';\nimport b from 'dep';\nconsole.log(a, b);\n"
+
+    asset = @env.find('main.js')
+    asset.export
+    assert_equal %w(
+      node_modules/condenser-npm-files-test/index.js
+      node_modules/condenser-npm-files-test/package.json
+    ), asset.npm_files
+  ensure
+    FileUtils.rm_rf(pkg) if pkg
+  end
 end

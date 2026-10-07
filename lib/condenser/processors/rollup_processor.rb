@@ -269,6 +269,9 @@ class Condenser::RollupProcessor
           
             const bundle = await rollup.rollup(inputOptions);
             await bundle.write(outputOptions);
+            // Every file Rollup loaded, so condenser can track the npm files
+            // it read directly.
+            fs.writeFileSync(#{JSON.generate(File.join(@output_dir, 'watch-files.json'))}, JSON.stringify(bundle.watchFiles));
             // await request('set_cache', [JSON.stringify(bundle)]);
             process.exit(0);
           } catch(e) {
@@ -283,6 +286,7 @@ class Condenser::RollupProcessor
       input[:source] = File.read(File.join(@output_dir, 'entry.js'))
       input[:source].delete_suffix!("//# sourceMappingURL=result.js.map\n")
       input[:type] = 'module'
+      input[:npm_files] = npm_files_loaded
       # asset.map = File.read(File.join(output_dir, 'result.js.map'))
       input
     ensure
@@ -292,6 +296,24 @@ class Condenser::RollupProcessor
       end
     end
   
+    # The files under the environment's node_modules that Rollup loaded,
+    # relative to the npm path, with each package's package.json.
+    def npm_files_loaded
+      return [] unless @environment.npm_path
+      root = File.join(@environment.npm_path, '')
+      modules = File.join(root, 'node_modules', '')
+      files = Set.new
+      JSON.parse(File.read(File.join(@output_dir, 'watch-files.json'))).each do |id|
+        id = id.sub(/\?.*\z/, '')
+        next unless id.start_with?(modules) && File.file?(id)
+        files << id.delete_prefix(root)
+        if pkg = id.delete_prefix(root)[%r{\A(?:node_modules/(?:@[^/]+/)?[^/]+/)+}]
+          files << "#{pkg}package.json" if File.file?(File.join(root, pkg, 'package.json'))
+        end
+      end
+      files.to_a.sort
+    end
+
     def exec_runtime(script, input)
       io = IO.popen([binary, '--max_old_space_size=5120', '-e', script], 'r+')
       buffer = String.new
@@ -331,6 +353,10 @@ class Condenser::RollupProcessor
                 }
               else
                 if @dynamic_imports != :inline
+                  # TODO: asset.path uses the etag from before the imported
+                  # bundle is exported. On a cold build (or after its npm
+                  # files change) exporting it adds its npm files to the
+                  # etag, so this URL won't match the file that's written.
                   {
                     path: File.join("/", *[@prefix, asset.path].compact),
                     source: File.join(@input_dir, asset.filename),

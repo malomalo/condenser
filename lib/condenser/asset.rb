@@ -218,8 +218,33 @@ class Condenser
           Digest::SHA256.file(dep.source_file).hexdigest
         ]
       end
+      f << ['npm', npm_files_digest] if npm_files_digest
 
       @ecv = Digest::SHA1.hexdigest(JSON.generate(f))
+    end
+
+    # The npm files (relative to the npm path) that the last export of this
+    # asset read without condenser tracking them, e.g. files Rollup resolved
+    # and loaded itself. Stored separately from the export so it's known
+    # before exporting, for the export cache key and etag.
+    def npm_files
+      if @npm_files.nil?
+        v = @environment.cache.get("npm-files/#{cache_key}")
+        @npm_files = v ? Marshal.load(v) : false
+      end
+      @npm_files || nil
+    end
+
+    def npm_files_digest
+      return @npm_files_digest if @npm_files_digest
+      return if npm_files.nil? || npm_files.empty? || @environment.npm_path.nil?
+
+      digest = Digest::SHA256.new
+      npm_files.each do |fn|
+        path = File.join(@environment.npm_path, fn)
+        digest << fn << "\0" << (File.file?(path) ? Digest::SHA256.file(path).digest : 'missing') << "\0"
+      end
+      @npm_files_digest = digest.hexdigest
     end
     
     def needs_reprocessing!
@@ -233,6 +258,8 @@ class Condenser
     def needs_reexporting!
       restat!
       @export = nil
+      @npm_files = nil
+      @npm_files_digest = nil
       @ecv = nil
       @etag = nil
     end
@@ -381,7 +408,11 @@ class Condenser
       return @export if @export
       
       @export = @environment.build do
+        exported = false
+        ecv_before = nil
         data = @environment.cache.fetch_if(Proc.new {"export/#{cache_key}/#{export_cache_version}"}, "export-deps/#{cache_key}") do
+          exported = true
+          ecv_before = @ecv
           process
           dirname, basename, extensions, mime_types = @environment.decompose_path(@filename)
           data = {
@@ -411,10 +442,28 @@ class Condenser
             @environment.logger.info { "Minifing #{self.filename} with #{minifier.name}" }
             minifier.call(@environment, data)
           end
-        
+
+          # Record the npm files the exporters read, then recompute the cache
+          # version and etag to include them.
+          if loaded = data.delete(:npm_files)
+            @environment.cache.set("npm-files/#{cache_key}", Marshal.dump(loaded))
+            @npm_files = loaded
+            @npm_files_digest = nil
+            @ecv = nil
+            @etag = nil
+            data[:etag] = etag
+          end
+
           data[:digest] = @environment.digestor.digest(data[:source])
           data[:digest_name] = @environment.digestor.name.sub(/^.*::/, '').downcase
           data
+        end
+
+        # If the cache key was computed before exporting (fetch_if does that
+        # when export-deps exist) and the export changed the npm file list,
+        # also store it under the new key so the next build hits.
+        if exported && ecv_before && ecv_before != export_cache_version
+          @environment.cache.set("export/#{cache_key}/#{export_cache_version}", Marshal.dump(data))
         end
 
         Export.new(@environment, data)
@@ -466,6 +515,7 @@ class Condenser
       all_dependenies(export_dependencies, Set.new, :export_dependencies) do |dep|
         digestor << dep.source
       end
+      digestor << npm_files_digest if npm_files_digest
       @etag = digestor.digest.unpack('H*'.freeze).first
     end
     
