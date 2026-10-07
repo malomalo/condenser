@@ -29,6 +29,9 @@ class ActiveSupport::TestCase
     @path = File.realpath(Dir.mktmpdir)
     @npm_dir = File.expand_path('../../tmp', __FILE__)
     Dir.mkdir(@npm_dir) if !Dir.exist?(@npm_dir)
+    # The test npm dir's lockfile depends on which package versions got
+    # installed, so leave it out of etags to keep them the same everywhere.
+    Condenser::BuildCache.any_instance.stubs(:npm_digest).returns(nil)
     @env = Condenser.new(@path, logger: Logger.new('/dev/null', level: :debug), npm_path: @npm_dir, base: @path)
     @env.unregister_writer(Condenser::ZlibWriter)
     @env.unregister_writer(Condenser::BrotliWriter)

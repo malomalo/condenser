@@ -10,7 +10,9 @@ class Condenser
   class Asset
     
     include EncodingUtils
-    
+
+    NPM_DEPENDENT_TYPES = %w(application/javascript text/css).freeze
+
     attr_reader :environment, :filename, :content_types, :source_file, :source_path
     attr_reader :content_types_digest
     attr_writer :source, :sourcemap
@@ -218,8 +220,18 @@ class Condenser
           Digest::SHA256.file(dep.source_file).hexdigest
         ]
       end
+      f << ['npm', npm_digest] if npm_digest
 
       @ecv = Digest::SHA1.hexdigest(JSON.generate(f))
+    end
+
+    # JS and CSS can include files from node_modules that aren't tracked as
+    # dependencies, so their export cache key and etag also cover the npm
+    # lockfiles.
+    def npm_digest
+      if NPM_DEPENDENT_TYPES.include?(content_type)
+        @environment.build_cache.npm_digest(@environment.npm_path)
+      end
     end
     
     def needs_reprocessing!
@@ -466,6 +478,7 @@ class Condenser
       all_dependenies(export_dependencies, Set.new, :export_dependencies) do |dep|
         digestor << dep.source
       end
+      digestor << npm_digest if npm_digest
       @etag = digestor.digest.unpack('H*'.freeze).first
     end
     

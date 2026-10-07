@@ -462,4 +462,50 @@ class CacheTest < ActiveSupport::TestCase
   ensure
     FileUtils.remove_entry(npm_dir, true) if npm_dir
   end
+
+  test 'js and css etags and export cache keys change when the npm lockfile does' do
+    Condenser::BuildCache.any_instance.unstub(:npm_digest)
+    npm_dir = File.realpath(Dir.mktmpdir)
+    lockfile = File.join(npm_dir, 'package-lock.json')
+    file 'main.js', "console.log(1);\n"
+    file 'main.css', "body { color: red; }\n"
+    file 'main.txt', "text\n"
+
+    # A new environment each time, like a deploy sharing tmp/cache
+    versions = lambda do
+      env = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: npm_dir, base: @path)
+      %w(main.js main.css main.txt).to_h do |name|
+        asset = env.find(name)
+        [name, [asset.etag, asset.export_cache_version]]
+      end
+    end
+
+    File.write(lockfile, '{"version": 1}')
+    before = versions.call
+    assert_equal before, versions.call
+
+    File.write(lockfile, '{"version": 2}')
+    after = versions.call
+    assert_not_equal before['main.js'], after['main.js']
+    assert_not_equal before['main.css'], after['main.css']
+    assert_equal before['main.txt'], after['main.txt']
+  ensure
+    FileUtils.remove_entry(npm_dir, true) if npm_dir
+  end
+
+  test 'a running environment picks up a changed npm lockfile' do
+    Condenser::BuildCache.any_instance.unstub(:npm_digest)
+    npm_dir = File.realpath(Dir.mktmpdir)
+    lockfile = File.join(npm_dir, 'package-lock.json')
+    env = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: npm_dir, base: @path)
+    file 'main.js', "console.log(1);\n"
+
+    File.write(lockfile, '{"version": 1}')
+    etag = env.find('main.js').etag
+
+    File.write(lockfile, '{"version": 22}')
+    assert_not_equal etag, env.find('main.js').etag
+  ensure
+    FileUtils.remove_entry(npm_dir, true) if npm_dir
+  end
 end

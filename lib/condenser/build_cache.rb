@@ -169,8 +169,29 @@ class Condenser
       if @npm_fingerprint && @npm_fingerprint != fingerprint
         @logger.info { "npm packages changed, clearing the build cache" }
         clear
+        remove_instance_variable(:@npm_digest) if instance_variable_defined?(:@npm_digest)
       end
       @npm_fingerprint = fingerprint
+    end
+
+    # A digest of the committed npm lockfiles, or nil if there are none.
+    # Bundles can include files from node_modules that condenser doesn't track
+    # as dependencies (Rollup and the Sass importer read them directly), so
+    # this is part of their export cache key and etag. The local
+    # node_modules/.package-lock.json is left out, since it describes this
+    # install rather than what's committed.
+    def npm_digest(npm_path)
+      return if npm_path.nil?
+      return @npm_digest if instance_variable_defined?(:@npm_digest)
+
+      lockfiles = NPM_LOCKFILES.reject { |f| f.start_with?('node_modules/') }
+                               .map { |f| File.join(npm_path, f) }
+                               .select { |f| File.file?(f) }
+      @npm_digest = if !lockfiles.empty?
+        digest = Digest::SHA256.new
+        lockfiles.each { |f| digest << File.basename(f) << File.binread(f) }
+        digest.hexdigest
+      end
     end
 
     def clear
