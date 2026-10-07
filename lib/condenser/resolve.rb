@@ -145,7 +145,10 @@ class Condenser
         logger.debug { "build cache semaphore locked by #{Thread.current.object_id}" }
       end
 
-      build_cache.clear_if_npm_changed(npm_path) if @build_cc == 0
+      if @build_cc == 0
+        load_previously_used_processors
+        build_cache.clear_if_npm_changed(npm_path)
+      end
       @build_cc += 1
       yield
     ensure

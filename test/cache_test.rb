@@ -1,5 +1,19 @@
 require 'test_helper'
 
+# A processor whose setup adds a directory to the load path, like EJX does.
+class PathAddingProcessor
+  class << self
+    attr_accessor :path
+  end
+
+  def self.setup(environment)
+    environment.append_path(path) if !environment.path.include?(path)
+  end
+
+  def self.call(environment, input)
+  end
+end
+
 class CacheTest < ActiveSupport::TestCase
   
   def setup
@@ -461,5 +475,28 @@ class CacheTest < ActiveSupport::TestCase
     assert_equal npm_file, env.find('pkg/index.js', npm: true)&.source_file
   ensure
     FileUtils.remove_entry(npm_dir, true) if npm_dir
+  end
+
+  test 'a warm build sets up the processors earlier builds used before looking anything up' do
+    PathAddingProcessor.path = File.realpath(Dir.mktmpdir)
+    File.write(File.join(PathAddingProcessor.path, 'helper.js'), "export default function helper() { return 1; }\n")
+    file 'main.js', "import helper from 'helper';\nconsole.log(helper());\n"
+
+    # A new environment sharing the cache each time, like a deploy
+    build = lambda do
+      env = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: @npm_dir, base: @path, cache: @env.cache)
+      env.register_preprocessor('application/javascript', PathAddingProcessor)
+      env.find('main.js').export
+    end
+
+    source = build.call.source
+    assert_includes source, 'function helper'
+
+    # Computing main.js's cache key resolves 'helper', which is only on the
+    # path once PathAddingProcessor is set up
+    Condenser::RollupProcessor.expects(:call).never
+    assert_equal source, build.call.source
+  ensure
+    FileUtils.remove_entry(PathAddingProcessor.path, true) if PathAddingProcessor.path
   end
 end

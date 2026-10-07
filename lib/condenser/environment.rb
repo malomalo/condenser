@@ -21,10 +21,26 @@ class Condenser
     
     def load_processors(*processors)
       processors.flatten!
-      (Set.new(processors) - @loaded_processors).each do |processor|
+      loading = Set.new(processors) - @loaded_processors
+      loading.each do |processor|
         processor.setup(self)
         @loaded_processors << processor
       end
+      remember_loaded_processors if !loading.empty?
+    end
+
+    # Processors are set up the first time an asset uses them, and some
+    # setups change how assets resolve (e.g. EJX adds its asset directory to
+    # the load path). On a warm build an asset's cache key can be computed
+    # before any asset that uses such a processor is processed, so set up the
+    # processors earlier builds with this pipeline used before anything is
+    # looked up.
+    def load_previously_used_processors
+      return if @previously_used_processors_loaded
+      @previously_used_processors_loaded = true
+
+      names = cache.get(loaded_processors_cache_key)
+      load_processors(Marshal.load(names).filter_map(&:safe_constantize)) if names
     end
 
     def prepend_path(*paths)
@@ -85,5 +101,18 @@ class Condenser
     #     end
     #
     attr_reader :context_class
+
+    private
+
+    def loaded_processors_cache_key
+      "loaded-processors/#{pipline_digest}"
+    end
+
+    def remember_loaded_processors
+      key = loaded_processors_cache_key
+      names = (cached = cache.get(key)) ? Marshal.load(cached) : []
+      loaded = @loaded_processors.filter_map(&:name)
+      cache.set(key, Marshal.dump((names | loaded).sort)) if !(loaded - names).empty?
+    end
   end
 end
