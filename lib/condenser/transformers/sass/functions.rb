@@ -2,41 +2,45 @@
 
 # Public: Functions injected into Sass context during Condenser evaluation.
 #
+# Each public method is available in Sass under its name with dashes, e.g.
+# `asset_path` as `asset-path()`. Arguments are `Sass::Value`s and methods
+# return a `Sass::Value` (a returned Ruby String becomes an unquoted Sass
+# string). A method's Sass signature comes from its parameters, or from a
+# `<name>_signature` method returning the Sass parameters.
+#
 # This module may be extended to add global functionality to all Condenser
 # Sass environments. Though, scoping your functions to just your environment
 # is preferred.
 #
-# module Condenser::SassProcessor::Functions
+# module Condenser::Sass::Functions
 #   def asset_path(path, options = {})
 #   end
 # end
 module Condenser::Sass
   module Functions
-  
+
     # Public: Generate a url for asset path.
     #
     # Defaults to Context#asset_path.
     def asset_path(path, options = {})
+      path = sass_to_ruby(path)
       condenser_context.link_asset(path)
 
-      path = condenser_context.asset_path(path, options)
-      query    = "?#{query}" if query
-      fragment = "##{fragment}" if fragment
-      "#{path}#{query}#{fragment}"
+      ::Sass::Value::String.new(condenser_context.asset_path(path, sass_to_ruby(options)), quoted: true)
     end
-    
+
     def asset_path_signature
       {
         "$path" => "String",
         "$options: ()" => 'Map'
       }
     end
-    
+
     # Public: Generate a asset url() link.
     #
     # path - String
     def asset_url(path, options = {})
-      "url(#{asset_path(path, options)})"
+      ::Sass::Value::String.new("url(#{asset_path(path, options).text})", quoted: false)
     end
 
     def asset_url_signature
@@ -45,7 +49,7 @@ module Condenser::Sass
         "$options: ()" => 'Map'
       }
     end
-    
+
     # Public: Generate url for image path.
     def image_path(path)
       asset_path(path, type: :image)
@@ -108,8 +112,8 @@ module Condenser::Sass
 
     # Public: Generate a data URI for asset path.
     def asset_data_url(path)
-      url = condenser_environment.asset_data_uri(path.value)
-      Sass::Script::String.new("url(" + url + ")")
+      url = condenser_context.asset_data_uri(sass_to_ruby(path))
+      ::Sass::Value::String.new("url(#{url})", quoted: false)
     end
 
     protected
@@ -119,7 +123,7 @@ module Condenser::Sass
       def condenser_context
         options[:condenser][:context]
       end
-    
+
       def condenser_environment
         options[:condenser][:environment]
       end
@@ -129,6 +133,19 @@ module Condenser::Sass
       # Returns a Set.
       def condenser_dependencies
         options[:asset][:process_dependencies]
+      end
+
+      # Converts a Sass::Value to a Ruby String, Numeric, Array or Hash (with
+      # Symbol keys). Other values are returned unchanged.
+      def sass_to_ruby(value)
+        case value
+        when ::Sass::Value::String then value.text
+        when ::Sass::Value::Number then value.value
+        when ::Sass::Value::Map then value.contents.to_h { |k, v| [sass_to_ruby(k).to_s.to_sym, sass_to_ruby(v)] }
+        when ::Sass::Value::List then value.to_a.empty? ? {} : value.to_a.map { |v| sass_to_ruby(v) }
+        when ::Sass::Value::Null then nil
+        else value
+        end
       end
 
   end

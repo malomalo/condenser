@@ -1,38 +1,41 @@
 # frozen_string_literal: true
 
 class Condenser::SassMinifier
-    
+
+  def self.setup(environment)
+    Condenser::Sass.require_sass_embedded!(name)
+  end
+
   def self.instance
     @instance ||= new
   end
 
   def self.call(environment, input)
-    require "sassc" unless defined?(::SassC::Engine)
-    
+    setup(environment)
     instance.call(environment, input)
   end
-  
+
+  attr_reader :options
+
   def initialize(options = {})
+    options = options.dup
+    @logger = options.delete(:logger)
     @options = {
-      syntax:     :scss,
-      cache:      false,
-      read_cache: false,
-      style:      :compressed
+      style: :compressed
     }.merge(options).freeze
   end
 
+  def name
+    self.class.name
+  end
+
   def call(environment, input)
-    engine = SassC::Engine.new(input[:source], {
-      filename: input[:filename],
-      source_map_file: "#{input[:filename]}.map",
-      source_map_contents: true
-    }.merge(@options))
-    
-    css = engine.render
-    css.delete_suffix!("\n/*# sourceMappingURL=#{File.basename(input[:filename])}.map */")
-    # engine.source_map
-    
-    input[:source] = css
+    result = ::Sass.compile_string(input[:source], **{
+      syntax: :css,
+      logger: @logger || Condenser::Sass::Logger.new(environment.logger)
+    }.merge(Condenser::Sass.compile_options(@options)))
+
+    input[:source] = result.css
   end
 
 end
