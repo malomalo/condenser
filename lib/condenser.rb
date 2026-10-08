@@ -20,6 +20,7 @@ class Condenser
   
   autoload :BabelProcessor,   'condenser/processors/babel_processor'
   autoload :RollupProcessor,  'condenser/processors/rollup_processor'
+  autoload :EsbuildProcessor, 'condenser/processors/esbuild_processor'
   autoload :JSAnalyzer,       'condenser/processors/js_analyzer'
   autoload :PurgeCSSProcessor,'condenser/processors/purgecss_processor'
   autoload :CSSMediaCombinerProcessor,'condenser/processors/css_media_combiner_processor'

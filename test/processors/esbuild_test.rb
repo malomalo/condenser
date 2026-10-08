@@ -1,0 +1,239 @@
+require 'test_helper'
+
+ESBUILD = ENV['CONDENSER_ESBUILD_PATH'] || '/private/tmp/claude-501/-Users-malomalo-Code-scratch-surveys/e1bf4d1d-31a0-4fa2-b1c0-e9e72409416c/scratchpad/bench/node_modules/esbuild' unless defined?(ESBUILD)
+
+# Copied from rollup_test.rb, with the expected output changed to esbuild's
+# formatting (the bundled code is the same).
+class EsbuildTest < ActiveSupport::TestCase
+  
+  def setup
+    super
+    @env.unregister_minifier('application/javascript')
+    @env.unregister_exporter('application/javascript')
+    @env.register_exporter('application/javascript', Condenser::EsbuildProcessor.new(@env.npm_path, bundler_path: ESBUILD))
+  end
+  
+  test 'file is exported as module' do
+    file 'main.js', <<~JS
+      console.log( cube( 5 ) ); // 125
+    JS
+    
+    asset = assert_exported_file 'main.js', 'application/javascript', <<~FILE
+      console.log(cube(5));
+    FILE
+    assert_equal "module", asset.type
+  end
+  
+  test 'import file' do
+    file 'main.js', <<~JS
+      import { cube } from './math.js';
+
+      console.log( cube( 5 ) ); // 125
+    JS
+    file 'math.js', <<~JS
+    
+      // This function isn't used anywhere, so
+      // Rollup excludes it from the bundle...
+      export function square ( x ) {
+        return x * x;
+      }
+
+      // This function gets included
+      export function cube ( x ) {
+        return x * x * x;
+      }
+    JS
+
+    assert_exported_file 'main.js', 'application/javascript', <<~FILE
+        var __defProp = Object.defineProperty;
+        var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+
+        function cube(x) {
+          return x * x * x;
+        }
+        __name(cube, "cube");
+
+        console.log(cube(5));
+    FILE
+  end
+  
+  test 'import an erb file' do
+    file 'main.js', <<~JS
+      import { cube } from './math.js';
+
+      console.log( cube( 5 ) ); // 125
+    JS
+    file 'math.js.erb', <<~JS
+      export function cube ( x ) {
+        return <%= 2 %> * x * x;
+      }
+    JS
+
+    assert_exported_file 'main.js', 'application/javascript', <<~FILE
+      var __defProp = Object.defineProperty;
+      var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+
+      function cube(x) {
+        return 2 * x * x;
+      }
+      __name(cube, "cube");
+
+      console.log(cube(5));
+    FILE
+  end
+
+  test 'import a file with the same name as another css file' do
+    file 'a/main.js', <<~JS
+      import { cube } from 'math';
+
+      console.log( cube( 5 ) ); // 125
+    JS
+    file 'a/math.css', <<~CSS
+      * {
+        background: green;
+      }
+    CSS
+    file 'b/math.js', <<~JS
+      export function cube ( x ) {
+        return x * x * x;
+      }
+    JS
+
+    @env.append_path File.join(@path, 'b')
+    @env.append_path File.join(@path, 'a')
+
+    assert_exported_file 'main.js', 'application/javascript', <<~FILE
+        var __defProp = Object.defineProperty;
+        var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+
+        function cube(x) {
+          return x * x * x;
+        }
+        __name(cube, "cube");
+
+        console.log(cube(5));
+    FILE
+  end
+
+  test 'import glob via /*' do
+    file 'main.js', <<~JS
+      import 'maths/*';
+
+      console.log( square(cube( 5 )) );
+    JS
+    
+    file 'maths/square.js', <<~JS
+      window.square = function ( x ) {
+        return x * x;
+      };
+    JS
+    
+    file 'maths/cube.js', <<~JS
+      window.cube = function ( x ) {
+        return x * x * x;
+      };
+    JS
+
+    assert_exported_file 'main.js', 'application/javascript', <<~FILE
+      window.cube = function(x) {
+        return x * x * x;
+      };
+
+      window.square = function(x) {
+        return x * x;
+      };
+
+      console.log(square(cube(5)));
+    FILE
+  end
+
+  test 'import glob via /* as array' do
+    $d = true
+    file 'main.js', <<~JS
+      import maths from 'maths/*';
+
+      var x = 1;
+      for (var i = 0; i < maths.length; i++) {
+        x = maths[i](x);
+      }
+      console.log(x);
+    JS
+    
+    file 'maths/square.js', <<~JS
+      export default function square ( x ) {
+        return x * x;
+      };
+    JS
+    
+    file 'maths/cube.js', <<~JS
+      export default function cube ( x ) {
+        return x * x * x;
+      };
+    JS
+
+    assert_exported_file 'main.js', 'application/javascript', <<~FILE
+      var __defProp = Object.defineProperty;
+      var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+
+      function cube(x2) {
+        return x2 * x2 * x2;
+      }
+      __name(cube, "cube");
+
+      function square(x2) {
+        return x2 * x2;
+      }
+      __name(square, "square");
+
+      var __default = [cube, square];
+
+      var x = 1;
+      for (i = 0; i < __default.length; i++) {
+        x = __default[i](x);
+      }
+      var i;
+      console.log(x);
+    FILE
+    $d = false
+  end
+
+  test 'import the same file via relative require and full path' do
+    file "#{@npm_path}/module/base.js", <<~JS
+      export default class Base { };
+    JS
+    
+    file "#{@npm_path}/module/base/other.js", <<~JS
+      import Base from '../base';
+      
+      export default class Lower extends Base { };
+    JS
+    
+    file 'main.js', <<~JS
+      import Other from 'module/base/other';
+      import Base from 'module/base';
+
+      console.log( Base, Other );
+    JS
+
+
+    assert_exported_file 'main.js', 'application/javascript', <<~FILE
+      var __defProp = Object.defineProperty;
+      var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+
+      var Base = class {
+        static {
+          __name(this, "Base");
+        }
+      };
+
+      var Lower = class extends Base {
+        static {
+          __name(this, "Lower");
+        }
+      };
+
+      console.log(Base, Lower);
+    FILE
+  end
+
+end
