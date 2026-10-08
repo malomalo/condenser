@@ -1,5 +1,19 @@
 require 'test_helper'
 
+# A processor whose setup adds a directory to the load path, like EJX does.
+class PathAddingProcessor
+  class << self
+    attr_accessor :path
+  end
+
+  def self.setup(environment)
+    environment.append_path(path) if !environment.path.include?(path)
+  end
+
+  def self.call(environment, input)
+  end
+end
+
 class CacheTest < ActiveSupport::TestCase
   
   def setup
@@ -91,13 +105,13 @@ class CacheTest < ActiveSupport::TestCase
     asset = assert_exported_file 'main.js', 'application/javascript', <<~JS
       function cube(c){return c*c}console.log(cube(5));
     JS
-    assert_equal '12f823bc50c3e6246418a496eff3b1d4386d0fed801347630d81a2e46ffe90fd', asset.etag
+    assert_equal '5235f6c47918b953feb8f0369e70f0808515f73f840efe33571852f07a3cf8da', asset.etag
     
 
     asset = assert_exported_file 'main.js', 'application/javascript', <<~JS
       function cube(c){return c*c}console.log(cube(5));
     JS
-    assert_equal '12f823bc50c3e6246418a496eff3b1d4386d0fed801347630d81a2e46ffe90fd', asset.etag
+    assert_equal '5235f6c47918b953feb8f0369e70f0808515f73f840efe33571852f07a3cf8da', asset.etag
     
     file 'math.js', <<-JS
       export function cube ( x ) {
@@ -108,7 +122,7 @@ class CacheTest < ActiveSupport::TestCase
     asset = assert_exported_file 'main.js', 'application/javascript', <<~CSS
       function cube(c){return c*c*c}console.log(cube(5));
     CSS
-    assert_equal 'b2e0f6b34545190ff0bd529270cc572bf6c9d520a63c6415d78d46ce423b331d', asset.etag
+    assert_equal '7342732e96be8a59d27f4266cdc13e048d81ad56f2f0e32e905f253f2f39dba9', asset.etag
   end
 
   test 'changing a scss dependency reflects in the next call' do
@@ -461,5 +475,28 @@ class CacheTest < ActiveSupport::TestCase
     assert_equal npm_file, env.find('pkg/index.js', npm: true)&.source_file
   ensure
     FileUtils.remove_entry(npm_dir, true) if npm_dir
+  end
+  
+  test 'a warm build sets up the processors of a file before using its cached dependencies' do
+    PathAddingProcessor.path = File.realpath(Dir.mktmpdir)
+    File.write(File.join(PathAddingProcessor.path, 'helper.js'), "export default function helper() { return 1; }\n")
+    file 'main.js', "import helper from 'helper';\nconsole.log(helper());\n"
+
+    # A new environment sharing the cache each time, like a deploy
+    build = lambda do
+      env = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: @npm_dir, base: @path, cache: @env.cache)
+      env.register_preprocessor('application/javascript', PathAddingProcessor)
+      env.find('main.js').export
+    end
+
+    source = build.call.source
+    assert_includes source, 'function helper'
+
+    # Computing main.js's cache key resolves 'helper', which is only on the
+    # path once PathAddingProcessor is set up
+    Condenser::RollupProcessor.expects(:call).never
+    assert_equal source, build.call.source
+  ensure
+    FileUtils.remove_entry(PathAddingProcessor.path, true) if PathAddingProcessor.path
   end
 end
