@@ -4,7 +4,6 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
   
   def setup
     super
-    skip 'set CONDENSER_ROLLDOWN_PATH to the rolldown package to run' unless ENV['CONDENSER_ROLLDOWN_PATH']
     @env.unregister_minifier('application/javascript')
     @env.unregister_exporter('application/javascript')
     @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path))
@@ -34,27 +33,54 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
       export {cube};
     JS
 
-    assert_exported_file 'main.js', 'application/javascript', <<~FILE
-      function cube$1 ( x ) {
-        return x * x * x;
+    # Unlike Rollup, which hoists math/b.js's side effect (`x;`) to the top of
+    # the bundle, Rolldown runs each inlined module when its import() is
+    # evaluated, as native dynamic imports would.
+    assert_exported_file 'main.js', 'application/javascript', <<~'FILE'
+      //#region \0rolldown/runtime.js
+      var __defProp = Object.defineProperty;
+      var __esmMin = (fn, res, err) => () => {
+      	if (err) throw err[0];
+      	try {
+      		return fn && (res = fn(fn = 0)), res;
+      	} catch (e) {
+      		throw err = [e], e;
+      	}
+      };
+      var __exportAll = (all, no_symbols) => {
+      	let target = {};
+      	for (var name in all) __defProp(target, name, {
+      		get: all[name],
+      		enumerable: true
+      	});
+      	if (!no_symbols) __defProp(target, Symbol.toStringTag, { value: "Module" });
+      	return target;
+      };
+      //#endregion
+      //#region math/cube.js
+      function cube$1(x) {
+      	return x * x * x;
       }
-
-      const math = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
-        __proto__: null,
-        cube: cube$1
-      }, Symbol.toStringTag, { value: 'Module' }));
-
-      x;
-
-      const b = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
-        __proto__: null,
-        cube: cube$1
-      }, Symbol.toStringTag, { value: 'Module' }));
-
-      cube = await Promise.resolve().then(() => math);
-      bigCube = await Promise.resolve().then(() => b);
-
-      console.log( cube( 5 ) ); // 125
+      var init_cube = __esmMin(() => {});
+      //#endregion
+      //#region math/math.js
+      var math_exports = /* @__PURE__ */ __exportAll({ cube: () => cube$1 });
+      var init_math = __esmMin(() => {
+      	init_cube();
+      });
+      //#endregion
+      //#region math/b.js
+      var b_exports = /* @__PURE__ */ __exportAll({ cube: () => cube$1 });
+      var init_b = __esmMin(() => {
+      	init_cube();
+      	x;
+      });
+      //#endregion
+      //#region main.js
+      cube = await Promise.resolve().then(() => (init_math(), math_exports));
+      bigCube = await Promise.resolve().then(() => (init_b(), b_exports));
+      console.log(cube(5));
+      //#endregion
     FILE
   end
 
@@ -110,10 +136,11 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'main.js', 'application/javascript', <<~FILE
-      cube = await import('/#{@env.find('math/math').path}');
-      bigCube = await import('/#{@env.find('math/b').path}');
-
-      console.log( cube( 5 ) ); // 125
+      //#region main.js
+      cube = await import("/#{@env.find('math/math').path}");
+      bigCube = await import("/#{@env.find('math/b').path}");
+      console.log(cube(5));
+      //#endregion
     FILE
 
     Dir.mktmpdir do |export_dir|
@@ -140,36 +167,40 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
       data = JSON.parse(File.read(manifest.filename))
 
       assert data['main.js']
-      assert_equal 240, data['main.js']['size']
+      assert_equal 259, data['main.js']['size']
       assert_equal main.path, data['main.js']['path']
       assert_equal(<<~JS.rstrip, File.read(File.join(export_dir, data['main.js']['path'])).rstrip)
-        cube = await import('/#{math.path}');
-        bigCube = await import('/#{mathb.path}');
-
-        console.log( cube( 5 ) ); // 125
+        //#region main.js
+        cube = await import("/#{math.path}");
+        bigCube = await import("/#{mathb.path}");
+        console.log(cube(5));
+        //#endregion
       JS
 
       assert data['math/math.js']
-      assert_equal 62, data['math/math.js']['size']
+      assert_equal 93, data['math/math.js']['size']
       assert_equal math.path, data['math/math.js']['path']
       assert_equal(<<~JS.rstrip, File.read(File.join(export_dir, data['math/math.js']['path'])).rstrip)
-        function cube ( x ) {
-          return x * x * x;
+        //#region math/cube.js
+        function cube(x) {
+        	return x * x * x;
         }
-
+        //#endregion
         export { cube };
       JS
 
       assert data['math/b.js']
-      assert_equal 66, data['math/b.js']['size']
+      assert_equal 129, data['math/b.js']['size']
       assert_equal mathb.path, data['math/b.js']['path']
       assert_equal(<<~JS.rstrip, File.read(File.join(export_dir, data['math/b.js']['path'])).rstrip)
-        function cube ( x ) {
-          return x * x * x;
+        //#region math/cube.js
+        function cube(x) {
+        	return x * x * x;
         }
-
+        //#endregion
+        //#region math/b.js
         x;
-
+        //#endregion
         export { cube };
       JS
     end
@@ -203,10 +234,11 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'main.js', 'application/javascript', <<~FILE
-      cube = await import('/assets/#{@env.find('math/math').path}');
-      bigCube = await import('/assets/#{@env.find('math/b').path}');
-
-      console.log( cube( 5 ) ); // 125
+      //#region main.js
+      cube = await import("/assets/#{@env.find('math/math').path}");
+      bigCube = await import("/assets/#{@env.find('math/b').path}");
+      console.log(cube(5));
+      //#endregion
     FILE
 
     Dir.mktmpdir do |export_dir|
@@ -233,36 +265,40 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
       data = JSON.parse(File.read(manifest.filename))
 
       assert data['main.js']
-      assert_equal 254, data['main.js']['size']
+      assert_equal 273, data['main.js']['size']
       assert_equal main.path, data['main.js']['path']
       assert_equal(<<~JS.rstrip, File.read(File.join(export_dir, data['main.js']['path'])).rstrip)
-        cube = await import('/assets/#{math.path}');
-        bigCube = await import('/assets/#{mathb.path}');
-
-        console.log( cube( 5 ) ); // 125
+        //#region main.js
+        cube = await import("/assets/#{math.path}");
+        bigCube = await import("/assets/#{mathb.path}");
+        console.log(cube(5));
+        //#endregion
       JS
 
       assert data['math/math.js']
-      assert_equal 62, data['math/math.js']['size']
+      assert_equal 93, data['math/math.js']['size']
       assert_equal math.path, data['math/math.js']['path']
       assert_equal(<<~JS.rstrip, File.read(File.join(export_dir, data['math/math.js']['path'])).rstrip)
-        function cube ( x ) {
-          return x * x * x;
+        //#region math/cube.js
+        function cube(x) {
+        	return x * x * x;
         }
-
+        //#endregion
         export { cube };
       JS
 
       assert data['math/b.js']
-      assert_equal 66, data['math/b.js']['size']
+      assert_equal 129, data['math/b.js']['size']
       assert_equal mathb.path, data['math/b.js']['path']
       assert_equal(<<~JS.rstrip, File.read(File.join(export_dir, data['math/b.js']['path'])).rstrip)
-        function cube ( x ) {
-          return x * x * x;
+        //#region math/cube.js
+        function cube(x) {
+        	return x * x * x;
         }
-
+        //#endregion
+        //#region math/b.js
         x;
-
+        //#endregion
         export { cube };
       JS
     end
@@ -294,9 +330,10 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'main.js', 'application/javascript', <<~FILE
-      const cube = await import('/#{@env.find('/math/math').export.path}');
-
-      console.log( cube( 5 ) ); // 125
+      //#region main.js
+      const cube = await import("/#{@env.find('/math/math').export.path}");
+      console.log(cube(5));
+      //#endregion
     FILE
 
     Dir.mktmpdir do |export_dir|
@@ -325,32 +362,66 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
       assert_equal ["main.js", "math/math.js"], data.keys
 
       assert data['main.js']
-      assert_equal 143, data['main.js']['size']
+      assert_equal 162, data['main.js']['size']
       assert_equal main.path, data['main.js']['path']
       assert_equal(<<~JS.rstrip, File.read(File.join(export_dir, data['main.js']['path'])).rstrip)
-        const cube = await import('/#{math.path}');
-
-        console.log( cube( 5 ) ); // 125
+        //#region main.js
+        const cube = await import("/#{math.path}");
+        console.log(cube(5));
+        //#endregion
       JS
 
+      # math/cube.js dynamically imports math/math.js, the module being
+      # exported, while math/math.js statically imports it. This output throws
+      # when run ("Cannot read properties of undefined (reading 'then')"), as
+      # Rollup's does ("Cannot access 'entry' before initialization"); this
+      # asserts what Rolldown currently produces.
       assert data['math/math.js']
-      assert_equal 336, data['math/math.js']['size']
+      assert_equal 951, data['math/math.js']['size']
       assert_equal math.path, data['math/math.js']['path']
-      assert_equal(<<~JS.rstrip, File.read(File.join(export_dir, data['math/math.js']['path'])).rstrip)
-        const math = await Promise.resolve().then(() => entry);
-
-        function cube ( x ) {
-          return math.number(x) * x * x;
+      assert_equal(<<~'JS'.rstrip, File.read(File.join(export_dir, data['math/math.js']['path'])).rstrip)
+        //#region \0rolldown/runtime.js
+        var __defProp = Object.defineProperty;
+        var __esmMin = (fn, res, err) => () => {
+        	if (err) throw err[0];
+        	try {
+        		return fn && (res = fn(fn = 0)), res;
+        	} catch (e) {
+        		throw err = [e], e;
+        	}
+        };
+        var __exportAll = (all, no_symbols) => {
+        	let target = {};
+        	for (var name in all) __defProp(target, name, {
+        		get: all[name],
+        		enumerable: true
+        	});
+        	if (!no_symbols) __defProp(target, Symbol.toStringTag, { value: "Module" });
+        	return target;
+        };
+        //#endregion
+        //#region math/cube.js
+        function cube(x) {
+        	return math.number(x) * x * x;
         }
-
-        function number (x) { return x; }
-
-        const entry = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
-          __proto__: null,
-          cube,
-          number
-        }, Symbol.toStringTag, { value: 'Module' }));
-
+        var math;
+        var init_cube = __esmMin(async () => {
+        	math = await init_math().then(() => math_exports);
+        });
+        //#endregion
+        //#region math/math.js
+        var math_exports = /* @__PURE__ */ __exportAll({
+        	cube: () => cube,
+        	number: () => number
+        });
+        function number(x) {
+        	return x;
+        }
+        var init_math = __esmMin(async () => {
+        	await init_cube();
+        });
+        //#endregion
+        await init_math();
         export { cube, number };
       JS
     end

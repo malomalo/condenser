@@ -4,7 +4,6 @@ class RolldownTest < ActiveSupport::TestCase
   
   def setup
     super
-    skip 'set CONDENSER_ROLLDOWN_PATH to the rolldown package to run' unless ENV['CONDENSER_ROLLDOWN_PATH']
     @env.unregister_minifier('application/javascript')
     @env.unregister_exporter('application/javascript')
     @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path))
@@ -16,7 +15,9 @@ class RolldownTest < ActiveSupport::TestCase
     JS
     
     asset = assert_exported_file 'main.js', 'application/javascript', <<~FILE
-      console.log( cube( 5 ) ); // 125
+      //#region main.js
+      console.log(cube(5));
+      //#endregion
     FILE
     assert_equal "module", asset.type
   end
@@ -42,12 +43,14 @@ class RolldownTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'main.js', 'application/javascript', <<~FILE
-        // This function gets included
-        function cube ( x ) {
-          return x * x * x;
-        }
-
-        console.log( cube( 5 ) ); // 125
+      //#region math.js
+      function cube(x) {
+      	return x * x * x;
+      }
+      //#endregion
+      //#region main.js
+      console.log(cube(5));
+      //#endregion
     FILE
   end
   
@@ -64,11 +67,14 @@ class RolldownTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'main.js', 'application/javascript', <<~FILE
-      function cube ( x ) {
-        return 2 * x * x;
+      //#region math.js.erb
+      function cube(x) {
+      	return 2 * x * x;
       }
-
-      console.log( cube( 5 ) ); // 125
+      //#endregion
+      //#region main.js
+      console.log(cube(5));
+      //#endregion
     FILE
   end
 
@@ -93,11 +99,14 @@ class RolldownTest < ActiveSupport::TestCase
     @env.append_path File.join(@path, 'a')
 
     assert_exported_file 'main.js', 'application/javascript', <<~FILE
-        function cube ( x ) {
-          return x * x * x;
-        }
-
-        console.log( cube( 5 ) ); // 125
+      //#region b/math.js
+      function cube(x) {
+      	return x * x * x;
+      }
+      //#endregion
+      //#region a/main.js
+      console.log(cube(5));
+      //#endregion
     FILE
   end
 
@@ -121,15 +130,19 @@ class RolldownTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'main.js', 'application/javascript', <<~FILE
-      window.cube = function ( x ) {
-        return x * x * x;
+      //#region maths/cube.js
+      window.cube = function(x) {
+      	return x * x * x;
       };
-
-      window.square = function ( x ) {
-        return x * x;
+      //#endregion
+      //#region maths/square.js
+      window.square = function(x) {
+      	return x * x;
       };
-
-      console.log( square(cube( 5 )) );
+      //#endregion
+      //#region main.js
+      console.log(square(cube(5)));
+      //#endregion
     FILE
   end
 
@@ -157,22 +170,25 @@ class RolldownTest < ActiveSupport::TestCase
       };
     JS
 
-    assert_exported_file 'main.js', 'application/javascript', <<~FILE
-      function cube ( x ) {
-        return x * x * x;
+    assert_exported_file 'main.js', 'application/javascript', <<~'FILE'
+      //#region maths/cube.js
+      function cube(x) {
+      	return x * x * x;
       }
-
-      function square ( x ) {
-        return x * x;
+      //#endregion
+      //#region maths/square.js
+      function square(x) {
+      	return x * x;
       }
-
-      const maths = [cube, square];
-
+      //#endregion
+      //#region \0condenser-glob:maths/*
+      var __default = [cube, square];
+      //#endregion
+      //#region main.js
       var x = 1;
-      for (var i = 0; i < maths.length; i++) {
-        x = maths[i](x);
-      }
+      for (var i = 0; i < __default.length; i++) x = __default[i](x);
       console.log(x);
+      //#endregion
     FILE
     $d = false
   end
@@ -197,11 +213,15 @@ class RolldownTest < ActiveSupport::TestCase
 
 
     assert_exported_file 'main.js', 'application/javascript', <<~FILE
-      class Base { }
-
-      class Lower extends Base { }
-
-      console.log( Base, Lower );
+      //#region module/base.js
+      var Base = class {};
+      //#endregion
+      //#region module/base/other.js
+      var Lower = class extends Base {};
+      //#endregion
+      //#region main.js
+      console.log(Base, Lower);
+      //#endregion
     FILE
   end
 
