@@ -1,6 +1,5 @@
 require 'test_helper'
 
-ESBUILD = ENV['CONDENSER_ESBUILD_PATH'] || '/private/tmp/claude-501/-Users-malomalo-Code-scratch-surveys/e1bf4d1d-31a0-4fa2-b1c0-e9e72409416c/scratchpad/bench/node_modules/esbuild' unless defined?(ESBUILD)
 
 # Copied from rollup_test.rb, with the expected output changed to esbuild's
 # formatting (the bundled code is the same).
@@ -10,7 +9,7 @@ class EsbuildTest < ActiveSupport::TestCase
     super
     @env.unregister_minifier('application/javascript')
     @env.unregister_exporter('application/javascript')
-    @env.register_exporter('application/javascript', Condenser::EsbuildProcessor.new(@env.npm_path, bundler_path: ESBUILD))
+    @env.register_exporter('application/javascript', Condenser::EsbuildProcessor.new(@env.npm_path))
   end
   
   test 'file is exported as module' do

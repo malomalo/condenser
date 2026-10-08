@@ -53,8 +53,9 @@ class Condenser::EsbuildProcessor
   # @param bundler_path [string] path to the esbuild package to use. Defaults
   #    to $CONDENSER_ESBUILD_PATH, then esbuild in the npm path.
   # @param const_shim [boolean] rewrite `const` declarations that are later
-  #    assigned to as `let`, since esbuild refuses to bundle them.
-  def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, const_shim: true)
+  #    assigned to as `let`, since esbuild refuses to bundle them. Off by
+  #    default; the reassignment would throw at runtime anyway.
+  def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, const_shim: false)
     @bundler_path = bundler_path || self.class.default_bundler_path
     self.class.install_npm_packages(dir) if !@bundler_path
     @npm_dir = dir
@@ -71,7 +72,7 @@ class Condenser::EsbuildProcessor
 
   class Runner < Condenser::NodeProcessor
 
-    def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, const_shim: true, const_patches: {})
+    def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, const_shim: false, const_patches: {})
       super(dir)
       @const_shim = const_shim
       @const_patches = const_patches

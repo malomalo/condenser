@@ -1,6 +1,5 @@
 require 'test_helper'
 
-ESBUILD = ENV['CONDENSER_ESBUILD_PATH'] || '/private/tmp/claude-501/-Users-malomalo-Code-scratch-surveys/e1bf4d1d-31a0-4fa2-b1c0-e9e72409416c/scratchpad/bench/node_modules/esbuild' unless defined?(ESBUILD)
 
 # Copied from rollup/dynamic_import_test.rb, with the expected output changed
 # to esbuild's formatting where the bundled code is the same.
@@ -10,7 +9,7 @@ class EsbuildDynamicImportTest < ActiveSupport::TestCase
     super
     @env.unregister_minifier('application/javascript')
     @env.unregister_exporter('application/javascript')
-    @env.register_exporter('application/javascript', Condenser::EsbuildProcessor.new(@env.npm_path, bundler_path: ESBUILD))
+    @env.register_exporter('application/javascript', Condenser::EsbuildProcessor.new(@env.npm_path))
   end
  
   test 'dynamic imports get inlined' do
@@ -117,7 +116,7 @@ class EsbuildDynamicImportTest < ActiveSupport::TestCase
 
   test "dynamic imports don't inlined and are exported" do
     @env.unregister_exporter 'application/javascript'
-    @env.register_exporter 'application/javascript', Condenser::EsbuildProcessor.new(@env.npm_path, bundler_path: ESBUILD, dynamic_imports: false)
+    @env.register_exporter 'application/javascript', Condenser::EsbuildProcessor.new(@env.npm_path, dynamic_imports: false)
 
     file 'main.js', <<~JS
       cube = await import('./math/math');
@@ -218,7 +217,7 @@ class EsbuildDynamicImportTest < ActiveSupport::TestCase
 
   test "dynamic imports with a prefix" do
     @env.unregister_exporter 'application/javascript'
-    @env.register_exporter 'application/javascript', Condenser::EsbuildProcessor.new(@env.npm_path, bundler_path: ESBUILD, prefix: "/assets", dynamic_imports: false)
+    @env.register_exporter 'application/javascript', Condenser::EsbuildProcessor.new(@env.npm_path, prefix: "/assets", dynamic_imports: false)
 
     file 'main.js', <<~JS
       cube = await import('./math/math');
@@ -319,7 +318,7 @@ class EsbuildDynamicImportTest < ActiveSupport::TestCase
 
   test "cyclical dynamic imports don't inlined and are exported" do
     @env.unregister_exporter 'application/javascript'
-    @env.register_exporter 'application/javascript', Condenser::EsbuildProcessor.new(@env.npm_path, bundler_path: ESBUILD, dynamic_imports: false)
+    @env.register_exporter 'application/javascript', Condenser::EsbuildProcessor.new(@env.npm_path, dynamic_imports: false)
 
     file 'main.js', <<~JS
       const cube = await import('./math/math');
