@@ -74,7 +74,7 @@ class ServerTest < ActiveSupport::TestCase
   test "serve source with etag headers" do
     get "/assets/foo.js"
 
-    digest = 'b603d946eb2b396ca4ecf65c223daff659dbe6f1cfeac235b7c61d3ba6964cae'
+    digest = '32b4e17cd87c7355cebc434cc453c8c988724c1675a2b7286d51161f1e8bfb1f'
     assert_equal "\"#{digest}\"", last_response.headers['ETag']
   end
 
@@ -108,7 +108,7 @@ class ServerTest < ActiveSupport::TestCase
       'HTTP_IF_NONE_MATCH' => "nope"
 
     assert_equal 200, last_response.status
-    assert_equal '"b603d946eb2b396ca4ecf65c223daff659dbe6f1cfeac235b7c61d3ba6964cae"', last_response.headers['ETag']
+    assert_equal '"32b4e17cd87c7355cebc434cc453c8c988724c1675a2b7286d51161f1e8bfb1f"', last_response.headers['ETag']
     assert_equal '15', last_response.headers['Content-Length']
   end
 
@@ -168,7 +168,7 @@ class ServerTest < ActiveSupport::TestCase
       'HTTP_IF_MATCH' => etag
 
     assert_equal 200, last_response.status
-    assert_equal '"b603d946eb2b396ca4ecf65c223daff659dbe6f1cfeac235b7c61d3ba6964cae"', last_response.headers['ETag']
+    assert_equal '"32b4e17cd87c7355cebc434cc453c8c988724c1675a2b7286d51161f1e8bfb1f"', last_response.headers['ETag']
     assert_equal '15', last_response.headers['Content-Length']
   end
 

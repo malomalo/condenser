@@ -65,6 +65,7 @@ class Condenser
     end
     
     def process_dependencies
+      load_pipeline_processors
       deps = @environment.cache.fetch "direct-deps/#{cache_key}" do
         process
         # Sort so etag and cache key are same irrelevant of ordering of
@@ -94,6 +95,7 @@ class Condenser
     # The imports and other dependencies recorded while processing, as
     # [name, accepted mime types] pairs.
     def export_dependency_names
+      load_pipeline_processors
       @environment.cache.fetch "export-deps/#{cache_key}" do
         process
         # Sort so etag and cache key are same irrelevant of ordering of
@@ -147,6 +149,7 @@ class Condenser
     end
     
     def linked_assets
+      load_pipeline_processors
       deps = @environment.cache.fetch "linked-assets/#{cache_key}" do
         process
         @linked_assets.map { |fn| [normalize_filename_base(fn[0]), fn[1]] }
@@ -222,10 +225,73 @@ class Condenser
       f
     end
     
+    # The processors #process runs on this asset, in order, as [role, mime
+    # type, processor] (plus the type it transforms to for transformers).
+    # They follow from the asset's mime types: a template for each trailing
+    # template type, the preprocessors of the resulting type, the transformers
+    # from it if that isn't the requested type, then the postprocessors of
+    # the final type.
+    def processing_steps
+      mime_types = @environment.decompose_path(@source_file)[3].dup
+      steps = []
+
+      while @environment.templates.has_key?(mime_types.last)
+        steps << [:template, mime_types.last, @environment.templates[mime_types.pop]]
+      end
+
+      @environment.preprocessors[mime_types.last]&.each do |processor|
+        steps << [:preprocessor, mime_types.last, processor]
+      end
+
+      if mime_types.last != @content_types.last && @environment.transformers.has_key?(mime_types.last)
+        from_mime_type = mime_types.pop
+        @environment.transformers[from_mime_type].each do |to_mime_type, processor|
+          steps << [:transformer, from_mime_type, processor, to_mime_type]
+          mime_types << to_mime_type
+        end
+      end
+
+      @environment.postprocessors[mime_types.last]&.each do |processor|
+        steps << [:postprocessor, mime_types.last, processor]
+      end
+
+      steps
+    end
+
+    # The part of the pipeline this asset depends on, as [role, mime type,
+    # processor]: the #processing_steps plus the preprocessors of every other
+    # type it passes through, since some processors run those themselves
+    # (e.g. JstTransformer runs the JavaScript preprocessors). It's known
+    # without processing the asset, so it's used to set processors up lazily
+    # and in the cache key.
+    def pipeline_processors
+      @pipeline_processors ||= begin
+        steps = processing_steps
+        entries = steps.map { |role, mime_type, processor, _| [role, mime_type, processor] }
+        steps.flat_map { |_, mime_type, _, to_mime_type| [mime_type, to_mime_type] }.compact.uniq.each do |mime_type|
+          @environment.preprocessors[mime_type]&.each do |processor|
+            entry = [:preprocessor, mime_type, processor]
+            entries << entry if !entries.include?(entry)
+          end
+        end
+        entries
+      end
+    end
+
+    # Sets up the processors this asset uses. A warm build reads an asset's
+    # dependencies from the cache without processing it, and some setups
+    # change how those resolve (EJX adds its asset directory to the load
+    # path), so this runs before cached dependencies are resolved.
+    def load_pipeline_processors
+      return if @pipeline_processors_loaded
+      @pipeline_processors_loaded = true
+      @environment.load_processors(pipeline_processors.map { |_, _, p| p.is_a?(Class) ? p : p.class })
+    end
+
     def cache_key
       @cache_key ||= Digest::SHA1.base64digest(JSON.generate([
         Condenser::VERSION,
-        @environment.pipline_digest,
+        @environment.pipeline_digest_for(pipeline_processors),
         normalize_filename_base(@source_file),
         Digest::SHA256.file(@source_file).hexdigest,
         @content_types_digest
@@ -247,10 +313,9 @@ class Condenser
 
       f = []
       all_dependenies(process_dependencies, Set.new, :process_dependencies) do |dep|
-        f << [
-          normalize_filename_base(dep.source_file),
-          Digest::SHA256.file(dep.source_file).hexdigest
-        ]
+        # A dependency's cache key covers its contents and the part of the
+        # pipeline that processes it
+        f << [normalize_filename_base(dep.source_file), dep.cache_key]
       end
       
       @pcv = Digest::SHA1.base64digest(JSON.generate(f))
@@ -261,10 +326,9 @@ class Condenser
 
       f = []
       all_dependenies(export_dependencies, Set.new, :export_dependencies) do |dep|
-        f << [
-          normalize_filename_base(dep.source_file),
-          Digest::SHA256.file(dep.source_file).hexdigest
-        ]
+        # A dependency's cache key covers its contents and the part of the
+        # pipeline that processes it
+        f << [normalize_filename_base(dep.source_file), dep.cache_key]
       end
       f << ["npm", npm_digest] if npm_digest
 
@@ -311,17 +375,19 @@ class Condenser
             processors: Set.new
           }
         
-          while @environment.templates.has_key?(data[:content_type].last)
-            templator = @environment.templates[data[:content_type].pop]
-            
+          steps = processing_steps
+          steps.each do |role, _, templator|
+            next if role != :template
+            data[:content_type].pop
+
             templator_klass = (templator.is_a?(Class) ? templator : templator.class)
             data[:processors] << templator_klass.name
             @environment.load_processors(templator_klass)
-            
+
             templator.call(@environment, data)
             data[:filename] = data[:filename].gsub(/\.#{extensions.last}$/, '')
           end
-          
+
           case @environment.mime_types[data[:content_type].last][:charset]
           when :unicode
             detect_unicode(data[:source])
@@ -333,36 +399,25 @@ class Condenser
             detect(data[:source]) if mime_types.last.start_with?('text/')
           end
           
-          if @environment.preprocessors.has_key?(data[:content_type].last)
-            @environment.preprocessors[data[:content_type].last].each do |processor|
-              processor_klass = (processor.is_a?(Class) ? processor : processor.class)
-              data[:processors] << processor_klass.name
-              @environment.load_processors(processor_klass)
+          transformed = false
+          steps.each do |role, from_mime_type, processor, to_mime_type|
+            next if role == :template
 
+            processor_klass = (processor.is_a?(Class) ? processor : processor.class)
+            data[:processors] << processor_klass.name
+            @environment.load_processors(processor_klass)
+
+            case role
+            when :preprocessor
               @environment.logger.info { "Pre Processing #{self.filename} with #{processor.name}" }
               processor.call(@environment, data)
-            end
-          end
-      
-          if data[:content_type].last != @content_types.last && @environment.transformers.has_key?(data[:content_type].last)
-            from_mime_type = data[:content_type].pop
-            @environment.transformers[from_mime_type].each do |to_mime_type, processor|
-              processor_klass = (processor.is_a?(Class) ? processor : processor.class)
-              data[:processors] << processor_klass.name
-              @environment.load_processors(processor_klass)
-              
+            when :transformer
+              data[:content_type].pop if !transformed
+              transformed = true
               @environment.logger.info { "Transforming #{self.filename} from #{from_mime_type} to #{to_mime_type} with #{processor.name}" }
               processor.call(@environment, data)
               data[:content_type] << to_mime_type
-            end
-          end
-          
-          if @environment.postprocessors.has_key?(data[:content_type].last)
-            @environment.postprocessors[data[:content_type].last].each do |processor|
-              processor_klass = (processor.is_a?(Class) ? processor : processor.class)
-              data[:processors] << processor_klass.name
-              @environment.load_processors(processor_klass)
-
+            when :postprocessor
               @environment.logger.info { "Post Processing #{self.filename} with #{processor.name}" }
               processor.call(@environment, data)
             end
@@ -432,7 +487,7 @@ class Condenser
       return @export if @export
       
       @export = @environment.build do
-        data = @environment.cache.fetch_if(Proc.new {"export/#{cache_key}/#{export_cache_version}"}, "export-deps/#{cache_key}") do
+        data = @environment.cache.fetch_if(Proc.new {"export/#{cache_key}/#{export_cache_version}/#{@environment.export_pipeline_digest(content_type)}"}, "export-deps/#{cache_key}") do
           process
           dirname, basename, extensions, mime_types = @environment.decompose_path(@filename)
           data = {
@@ -518,6 +573,10 @@ class Condenser
         digestor << dep.source
       end
       digestor << npm_digest if npm_digest
+      # Exporting and minifying change the output, so they change the URL too
+      if export_digest = @environment.export_pipeline_digest(content_type)
+        digestor << export_digest
+      end
       @etag = digestor.digest.unpack('H*'.freeze).first
     end
     

@@ -64,6 +64,25 @@ class Condenser
     def pipline_digest
       @pipline_digest ||= Digest::MD5.hexdigest(pipline_hash)
     end
+
+    # A digest of just the given part of the pipeline, as [role, mime type,
+    # processor] entries (see Asset#pipeline_processors), so an asset's cache
+    # only depends on the processors that process it.
+    def pipeline_digest_for(entries)
+      Digest::MD5.hexdigest(JSON.generate(entries.map { |role, mime_type, processor|
+        [role, mime_type, pipline_to_json(processor)]
+      }))
+    end
+
+    # A digest of what exporting +mime_type+ uses, its exporters and minifier,
+    # or nil if it has neither.
+    def export_pipeline_digest(mime_type)
+      exporters = @exporters[mime_type] || []
+      minifier = @minifiers[mime_type]
+      return if exporters.empty? && minifier.nil?
+
+      Digest::MD5.hexdigest(JSON.generate(pipline_to_json([exporters, minifier])))
+    end
     
     def register_mime_type(mime_type, extensions: nil, extension: nil, charset: :default)
       extensions = Array(extensions || extension)

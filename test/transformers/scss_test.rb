@@ -87,8 +87,8 @@ class CondenserSCSSTest < ActiveSupport::TestCase
       url: url(/assets/foo-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.mp3);
       url: url(/assets/foo-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.woff2);
       url: url(/assets/foo-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.woff);
-      url: url(/assets/foo-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.js);
-      url: url(/assets/foo-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.css); }
+      url: url(/assets/foo-8a122aed70ad47f5ccffb10ce29103f61e194533cc95327906d40cdf46e88f4c.js);
+      url: url(/assets/foo-8e48022588e76a6c2fac08e7704ce16203d2cbf072352b511fa0731db64dbd51.css); }
     CSS
     
     asset = @env.find('test.css')
