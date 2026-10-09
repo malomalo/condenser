@@ -3,18 +3,9 @@
 require 'json'
 require 'digest/md5'
 
-# Resolves Sass `@import`, `@use` and `@forward` rules through the Condenser
-# environment, the same way the sassc importer did: URLs starting with `./` or
-# `../` resolve next to the importing stylesheet and other URLs from the load
-# paths. Globs (`@import "dir/*"`) import every match sorted by filename, and
-# if nothing matches an npm package with a `style` entry is imported.
-#
-# A stylesheet's canonical URL is `condenser:/<logical filename>`. Dart Sass
-# drops a leading `./` before calling an importer, so before a stylesheet is
-# handed to Dart Sass its relative URLs are rewritten to
-# `condenser-relative:/<resolved name>` (see Condenser::Sass::RelativeImports).
-# Dart Sass's requests to resolve a URL relative to the importing stylesheet
-# are declined, so other URLs resolve from the load paths.
+# Resolves Sass imports through the Condenser environment. Every stylesheet,
+# the entry included, gets a `condenser:` URL, and Dart Sass's tries at
+# resolving a URL relative to one are declined, so bare URLs use the load paths.
 class Condenser::Sass::Importer
   SCHEME = 'condenser'
   NPM_SCHEME = 'condenser-npm'

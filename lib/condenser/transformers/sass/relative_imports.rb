@@ -1,14 +1,8 @@
 # frozen_string_literal: true
 
-# Finds the relative URLs (starting with `./` or `../`) of a stylesheet's
-# `@import`, `@use` and `@forward` rules so they can be replaced before Dart
-# Sass, which drops a leading `./`, sees them.
-#
-# The scanner skips comments, strings and `url()`, and leaves plain CSS
-# imports alone: `url()`, `.css` and `http(s)://` URLs, interpolated URLs and
-# URLs followed by a media query.
-#
-#   Condenser::Sass::RelativeImports.rewrite(source) { |url| "new-url" }
+# Rewrites the `./` and `../` URLs of `@import`, `@use` and `@forward` rules,
+# since Dart Sass strips `./` and `./x` can't be told from `x`. Plain CSS
+# imports are left alone.
 class Condenser::Sass::RelativeImports
   RULE = /\G@(import|use|forward)(?![\w-])/n
   QUOTES = ['"', "'"].freeze

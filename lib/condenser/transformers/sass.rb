@@ -34,10 +34,8 @@ module Condenser::Sass
   INTERNAL_URL = %r{condenser(?:-[a-z]+)*:/(?:[^\s"'?!;,)]*!/)?([^\s"'?!;,)]*)(?:\?[^\s"';,)]*)?}
   RELATIVE_URL = %r{condenser-relative:/[^\s"'?!;,)]*!/([^\s"'?!;,)]*)}
 
-  # Returns a Sass::CompileError like +error+ whose message starts with the
-  # stylesheet, line and column and has the source line, showing condenser's
-  # internal URLs as filenames and relative imports as written. +filename+ is
-  # used when the error has no URL.
+  # Returns +error+ with a `file:line:col` message that shows filenames and
+  # relative imports as written instead of condenser's internal URLs.
   def self.compile_error(error, filename)
     span = error.span
     name = span&.url ? display_urls(span.url) : filename
@@ -54,9 +52,8 @@ module Condenser::Sass
     ::Sass::CompileError.new(message, nil, stack, span, error.loaded_urls)
   end
 
-  # Replaces condenser's internal URLs in +text+ with filenames, and when
-  # +dir+ is given relative import URLs with the relative URL written in a
-  # stylesheet in +dir+.
+  # Replaces condenser's internal URLs in +text+ with filenames, or with the
+  # relative URL as written in +dir+ when given.
   def self.display_urls(text, dir = nil)
     text = text.gsub(RELATIVE_URL) { relative_url(URI.decode_uri_component($1), dir) } if dir
     text.gsub(INTERNAL_URL) { URI.decode_uri_component($1) }

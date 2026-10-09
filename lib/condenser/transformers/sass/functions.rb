@@ -1,21 +1,8 @@
 # frozen_string_literal: true
 
-# Public: Functions injected into Sass context during Condenser evaluation.
-#
-# Each public method is available in Sass under its name with dashes, e.g.
-# `asset_path` as `asset-path()`. Arguments are `Sass::Value`s and methods
-# return a `Sass::Value` (a returned Ruby String becomes an unquoted Sass
-# string). A method's Sass signature comes from its parameters, or from a
-# `<name>_signature` method returning the Sass parameters.
-#
-# This module may be extended to add global functionality to all Condenser
-# Sass environments. Though, scoping your functions to just your environment
-# is preferred.
-#
-# module Condenser::Sass::Functions
-#   def asset_path(path, options = {})
-#   end
-# end
+# Public: Functions available in Sass with dashes (`asset-path()`). They take
+# Sass::Values and return a Sass::Value or String; the Sass signature comes
+# from the parameters or a `<name>_signature` method.
 module Condenser::Sass
   module Functions
 
