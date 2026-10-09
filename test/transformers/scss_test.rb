@@ -784,11 +784,12 @@ class CondenserSCSSTest < ActiveSupport::TestCase
     SCSS
 
     @env.find('test.css').source
-    assert_match(/DEBUG -- : Sass deprecation warning \[import\] condenser:\/test.scss:1: Sass @import rules are deprecated/, log.string)
-    assert_match(/DEBUG -- : Sass deprecation warning \[slash-div\] condenser:\/test.scss:3/, log.string)
-    assert_match(/WARN -- : Sass warning condenser:\/test.scss 2:1: careful/, log.string)
+    assert_match(/DEBUG -- : Sass deprecation warning \[import\] test.scss:1:9: Sass @import rules are deprecated/, log.string)
+    assert_match(/DEBUG -- : Sass deprecation warning \[slash-div\] test.scss:3:15:/, log.string)
+    assert_match(/WARN -- : Sass warning test.scss:2:1: careful/, log.string)
     assert_match(/DEBUG -- : Sass: \d+ repetitive deprecation warnings omitted/, log.string)
     assert_equal 1, log.string.scan(/WARN -- /).size
+    assert_no_match(/condenser[-a-z]*:/, log.string)
 
     log.truncate(0)
     @env.logger.level = :info

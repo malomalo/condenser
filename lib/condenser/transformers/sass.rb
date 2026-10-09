@@ -109,11 +109,13 @@ module Condenser::Sass
 
     private
 
+    # ` file:line:col`, from the span or else the top of the stack.
     def location(context)
       if context.span&.url
-        " #{context.span.url}:#{context.span.start.line + 1}"
+        " #{Condenser::Sass.display_urls(context.span.url)}:#{context.span.start.line + 1}:#{context.span.start.column + 1}"
       elsif context.respond_to?(:stack) && context.stack && !context.stack.empty?
-        " #{context.stack.lines.first.split(/\s{2,}/).first.strip}"
+        frame = context.stack.lines.first.split(/\s{2,}/).first.strip
+        " #{Condenser::Sass.display_urls(frame.sub(/ (\d+:\d+)\z/, ':\\1'))}"
       end
     end
   end
