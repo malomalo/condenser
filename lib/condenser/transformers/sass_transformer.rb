@@ -106,10 +106,9 @@ class Condenser::SassTransformer
     importer = @importer_class.new(environment, input)
     functions = @function_context.new(context: context, environment: environment, asset: input)
 
-    url = importer.url
     result = ::Sass.compile_string(importer.source(self.class.syntax), **{
       syntax: self.class.syntax,
-      url: url,
+      url: importer.url,
       importer: importer,
       importers: [importer],
       functions: sass_functions(functions),

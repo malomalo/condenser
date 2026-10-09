@@ -36,17 +36,15 @@ class Condenser::Sass::Importer
     @source_files = {}
     @sources = {}
     @relative = []
+
+    root = @environment.path.find { |p| @input[:source_file].start_with?(File.join(p, '')) }
+    @name = root ? @input[:source_file].delete_prefix(File.join(root, '')) : @input[:filename]
+    @url = self.class.url(SCHEME, @name)
+    @source_files[@url] = @input[:source_file]
   end
 
-  # The canonical URL of the stylesheet being compiled (call before #source).
-  def url
-    root = @environment.path.find { |p| @input[:source_file].start_with?(File.join(p, '')) }
-    name = root ? @input[:source_file].delete_prefix(File.join(root, '')) : @input[:filename]
-    @name = name
-    url = self.class.url(SCHEME, name)
-    @source_files[url] = @input[:source_file]
-    url
-  end
+  # The canonical URL of the stylesheet being compiled.
+  attr_reader :url
 
   # The source of the stylesheet being compiled, with its relative imports
   # rewritten.

@@ -121,6 +121,17 @@ class CondenserSCSSTest < ActiveSupport::TestCase
     CSS
   end
 
+  test 'the importer does not depend on #url being called before #source' do
+    file 'dir/a.scss', '.a { color: red; }'
+    file 'dir/index.scss', "@import './a';"
+    input = { source: "@import './a';", source_file: File.join(@path, 'dir/index.scss'), filename: 'dir/index.scss', process_dependencies: Set.new }
+
+    importer = Condenser::Sass::Importer.new(@env, input)
+    source = importer.source(:scss)
+    css = Sass.compile_string(source, syntax: :scss, url: importer.url, importer: importer, importers: [importer]).css
+    assert_equal ".a {\n  color: red;\n}", css
+  end
+
   test 'relative imports from nested files' do
     file 'shared.scss', '.top { color: red; }'
     file 'pages/shared.scss', '.pages { color: green; }'
