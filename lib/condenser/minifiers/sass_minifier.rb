@@ -11,7 +11,6 @@ class Condenser::SassMinifier
   end
 
   def self.call(environment, input)
-    setup(environment)
     instance.call(environment, input)
   end
 
@@ -31,6 +30,7 @@ class Condenser::SassMinifier
   end
 
   def call(environment, input)
+    self.class.setup(environment)
     result = ::Sass.compile_string(input[:source], **{
       syntax: :css,
       logger: @logger || Condenser::Sass::Logger.new(environment.logger)
