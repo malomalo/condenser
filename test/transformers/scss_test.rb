@@ -1,4 +1,5 @@
 require 'test_helper'
+require 'sass-embedded'
 
 class CondenserSCSSTest < ActiveSupport::TestCase
 
@@ -502,6 +503,43 @@ class CondenserSCSSTest < ActiveSupport::TestCase
 
     error = assert_raises(Sass::CompileError) { @env.find('test.css').source }
     assert_match "Can't find stylesheet to import.", error.message
+  end
+
+  test 'a missing relative import error shows the file, line and URL as written' do
+    file 'missing.scss', "a { b: c; }\n@import './nope';\n"
+    file 'm/a.scss', "@import '../x/nope';\n"
+
+    error = assert_raises(Sass::CompileError) { @env.find('missing.css').source }
+    assert_equal <<~MSG.chomp, error.message
+      missing.scss:2:9: Can't find stylesheet to import.
+        ╷
+      2 │ @import './nope';
+        │         ^^^^^^^^
+        ╵
+        missing.scss 2:9  root stylesheet
+    MSG
+    assert_instance_of Sass::CompileError, error.cause
+
+    error = assert_raises(Sass::CompileError) { @env.find('m/a.css').source }
+    assert_match "m/a.scss:1:9: Can't find stylesheet to import.", error.message
+    assert_match "1 │ @import '../x/nope';", error.message
+    assert_no_match(/condenser/, error.message)
+  end
+
+  test 'a syntax error in an imported file shows its file and line' do
+    file 'dir/syntax.scss', "a {\n  b: c;\n  d: ;\n}\n"
+    file 'test.scss', "@import './dir/syntax';\n"
+
+    error = assert_raises(Sass::CompileError) { @env.find('test.css').source }
+    assert_equal <<~MSG.chomp, error.message
+      dir/syntax.scss:3:6: Expected expression.
+        ╷
+      3 │   d: ;
+        │      ^
+        ╵
+        dir/syntax.scss 3:6  @import
+        test.scss 1:9        root stylesheet
+    MSG
   end
 
   test "url functions" do

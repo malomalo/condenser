@@ -33,10 +33,13 @@ class Condenser::SassMinifier
     self.class.setup(environment)
     result = ::Sass.compile_string(input[:source], **{
       syntax: :css,
+      url: Condenser::Sass::Importer.url(Condenser::Sass::Importer::SCHEME, input[:filename]),
       logger: @logger || Condenser::Sass::Logger.new(environment.logger)
     }.merge(@options))
 
     input[:source] = result.css
+  rescue ::Sass::CompileError => e
+    raise Condenser::Sass.compile_error(e, input[:filename])
   end
 
 end

@@ -1,4 +1,5 @@
 require 'test_helper'
+require 'sass-embedded'
 
 class SassMinifierTest < ActiveSupport::TestCase
 
@@ -41,6 +42,14 @@ class SassMinifierTest < ActiveSupport::TestCase
     assert_exported_file 'test.css', 'text/css', <<~CSS
       .a{width:10px/2}
     CSS
+  end
+
+  test 'an error shows the file and line' do
+    file 'test.css', ".a { color: red; }\n.b { color: red\n"
+
+    error = assert_raises(Sass::CompileError) { @env.find('test.css').export }
+    assert_match(/\Atest.css:2:16: expected end of rule\./, error.message)
+    assert_match "2 │ .b { color: red", error.message
   end
 
   test 'with options' do
