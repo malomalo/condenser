@@ -107,7 +107,7 @@ class CondenserSCSSTest < ActiveSupport::TestCase
   test 'a glob does not import the file importing it' do
     file "dir/a.scss", ".a { color: green; }"
     file "dir/b.scss", ".b { color: blue; }"
-    file "dir/index.scss", '@import "*";'
+    file "dir/index.scss", '@import "./*";'
 
     assert_file 'dir/index.css', 'text/css', <<~CSS
     .a {
@@ -163,26 +163,194 @@ class CondenserSCSSTest < ActiveSupport::TestCase
     assert_equal ["pages/admin/partials/table.scss", "pages/admin/users.scss", "pages/shared.scss", "shared.scss"], asset.process_dependencies.map(&:filename).uniq.sort
   end
 
-  test 'an import resolves next to the importing file before the load paths' do
-    file 'config.scss', '$color: red;'
-    file 'pdf/config.scss', '$color: green;'
-    file 'pdf/index.scss', <<~SCSS
-      @import 'config';
-      .pdf { color: $color; }
-    SCSS
-    file 'share/index.scss', <<~SCSS
-      @import 'config';
-      .share { color: $color; }
+  test 'bare imports resolve from the load paths and ./ imports next to the importing file' do
+    file 'utilities.scss', '.top-utilities { color: red; }'
+    file 'components/card.scss', '.top-card { color: red; }'
+    file 'share/v2/utilities.scss', '.share-utilities { color: green; }'
+    file 'share/v2/components/unit.scss', '.share-unit { color: green; }'
+    file 'share/v2/components/list/item.scss', '.share-item { color: green; }'
+    file 'share/v2/index.scss', <<~SCSS
+      @import 'utilities';
+      @import 'components/*';
+      @import './utilities';
+      @import './components/**/*';
     SCSS
 
-    assert_file 'pdf/index.css', 'text/css', <<~CSS
-    .pdf {
+    assert_file 'share/v2/index.css', 'text/css', <<~CSS
+    .top-utilities {
+      color: red;
+    }
+
+    .top-card {
+      color: red;
+    }
+
+    .share-utilities {
+      color: green;
+    }
+
+    .share-item {
+      color: green;
+    }
+
+    .share-unit {
       color: green;
     }
     CSS
-    assert_file 'share/index.css', 'text/css', <<~CSS
-    .share {
+
+    asset = @env.find('share/v2/index.css')
+    assert_equal ["components/*", "share/v2/components/**/*", "share/v2/utilities", "utilities"], asset.instance_variable_get(:@process_dependencies).map(&:first).sort
+  end
+
+  test 'relative imports with ../ and dir/../' do
+    file 'base.scss', '.base { color: red; }'
+    file 'a/shared.scss', '.a-shared { color: green; }'
+    file 'a/b/other.scss', '.a-b-other { color: blue; }'
+    file 'other.scss', '.top-other { color: black; }'
+    file 'a/b/index.scss', <<~SCSS
+      @import '../shared';
+      @import '../../base';
+      @import './x/../other';
+      @import 'b/../other';
+    SCSS
+
+    assert_file 'a/b/index.css', 'text/css', <<~CSS
+    .a-shared {
+      color: green;
+    }
+
+    .base {
       color: red;
+    }
+
+    .a-b-other {
+      color: blue;
+    }
+
+    .top-other {
+      color: black;
+    }
+    CSS
+  end
+
+  test 'an @import with several URLs' do
+    file 'utilities.scss', '.top { color: red; }'
+    file 'dir/utilities.scss', '.dir { color: green; }'
+    file 'dir/more.scss', '.more { color: blue; }'
+    file 'dir/index.scss', %q(@import "./utilities", 'utilities' , "./more";)
+
+    assert_file 'dir/index.css', 'text/css', <<~CSS
+    .dir {
+      color: green;
+    }
+
+    .top {
+      color: red;
+    }
+
+    .more {
+      color: blue;
+    }
+    CSS
+  end
+
+  test '@use and @forward' do
+    file 'theme.scss', '$color: red !default;'
+    file 'dir/theme.scss', <<~SCSS
+      $color: green !default;
+      $size: 1px;
+      @mixin box { padding: $size; }
+    SCSS
+    file 'dir/forwards.scss', <<~SCSS
+      @forward './theme' show $color, box;
+      @forward "./theme" as theme-* hide $size;
+    SCSS
+    file 'dir/index.scss', <<~SCSS
+      @use 'theme' as top;
+      @use './theme' as local with ($color: blue);
+      @use "./forwards";
+      .a { color: top.$color; }
+      .b { color: local.$color; @include forwards.box; }
+      .c { color: forwards.$theme-color; }
+    SCSS
+
+    assert_file 'dir/index.css', 'text/css', <<~CSS
+    .a {
+      color: red;
+    }
+
+    .b {
+      color: blue;
+      padding: 1px;
+    }
+
+    .c {
+      color: blue;
+    }
+    CSS
+  end
+
+  test 'plain CSS imports and URLs in comments and strings are left alone' do
+    file 'dir/a.scss', '.a { color: red; }'
+    file 'dir/index.scss', <<~SCSS
+      // @import './missing';
+      /* @import "./missing"; */
+      @import './a.css';
+      @import url('./b.css');
+      @import url(./c);
+      @import 'https://example.com/d';
+      @import './a' screen;
+      .x { content: "@import './missing'"; }
+      @import /* comment */ './a';
+    SCSS
+
+    assert_file 'dir/index.css', 'text/css', <<~CSS
+    /* @import "./missing"; */
+    @import './a.css';
+    @import url("./b.css");
+    @import url(./c);
+    @import 'https://example.com/d';
+    @import './a' screen;
+    .x {
+      content: "@import './missing'";
+    }
+
+    .a {
+      color: red;
+    }
+    CSS
+  end
+
+  test 'relative imports in the indented syntax' do
+    @env.register_mime_type 'text/sass', extensions: %w(.sass)
+    @env.register_transformer 'text/sass', 'text/css', Condenser::SassTransformer
+    file 'utilities.scss', '.top { color: red; }'
+    file 'dir/utilities.scss', '.dir { color: green; }'
+    file 'dir/more.sass', <<~SASS
+      // @import ./missing
+      @import ./utilities
+      .more
+        color: blue
+    SASS
+    file 'dir/index.sass', <<~SASS
+      /* @import ./missing
+         @import ./missing
+      @import utilities, "./more"
+    SASS
+
+    assert_file 'dir/index.css', 'text/css', <<~CSS
+    /* @import ./missing
+     * @import ./missing */
+    .top {
+      color: red;
+    }
+
+    .dir {
+      color: green;
+    }
+
+    .more {
+      color: blue;
     }
     CSS
   end
@@ -216,7 +384,7 @@ class CondenserSCSSTest < ActiveSupport::TestCase
     FileUtils.remove_entry(other, true) if other
   end
 
-  test 'creating a file next to the importing file changes what is imported' do
+  test 'a file next to the importing file does not change a bare import' do
     file 'config.scss', '$color: red;'
     file 'pdf/index.scss', <<~SCSS
       @import 'config';
@@ -226,12 +394,12 @@ class CondenserSCSSTest < ActiveSupport::TestCase
     assert_exported_file 'pdf/index.css', 'text/css', <<~CSS
     .pdf{color:red}
     CSS
-    assert_equal ["pdf/config", "config"], @env.find('pdf/index.css').instance_variable_get(:@process_dependencies).map(&:first)
+    assert_equal ["config"], @env.find('pdf/index.css').instance_variable_get(:@process_dependencies).map(&:first)
 
     file 'pdf/config.scss', '$color: green;'
 
     env = Condenser.new(@path, logger: Logger.new('/dev/null'), cache: @env.cache, npm_path: @npm_dir, base: @path)
-    assert_equal '.pdf{color:green}', env.find('pdf/index.css').export.source.rstrip
+    assert_equal '.pdf{color:red}', env.find('pdf/index.css').export.source.rstrip
   end
 
   test 'npm package style fallback' do

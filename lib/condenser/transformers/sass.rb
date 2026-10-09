@@ -3,6 +3,7 @@
 module Condenser::Sass
   autoload :Functions, 'condenser/transformers/sass/functions'
   autoload :Importer, 'condenser/transformers/sass/importer'
+  autoload :RelativeImports, 'condenser/transformers/sass/relative_imports'
 
   # Options libsass (sassc) accepted that Dart Sass doesn't have.
   SASSC_ONLY_OPTIONS = %i(syntax filename cache read_cache precision line_comments

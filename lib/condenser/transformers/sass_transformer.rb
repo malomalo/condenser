@@ -80,9 +80,10 @@ class Condenser::SassTransformer
       asset: input
     )
 
-    result = ::Sass.compile_string(input[:source], **{
+    url = importer.url
+    result = ::Sass.compile_string(importer.source(self.class.syntax), **{
       syntax: self.class.syntax,
-      url: importer.url,
+      url: url,
       importer: importer,
       importers: [importer],
       functions: sass_functions(functions),
