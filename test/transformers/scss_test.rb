@@ -639,6 +639,33 @@ class CondenserSCSSTest < ActiveSupport::TestCase
     CSS
   end
 
+  test "changing a custom function changes the cache key" do
+    cache = Condenser::Cache::MemoryStore.new
+    file 'test.scss', 'div { content: tag(); }'
+
+    compile = lambda do |value|
+      file 'functions.rb', <<~RUBY
+        Condenser::ScssTransformer.new {
+          def tag
+            #{value.inspect}
+          end
+        }
+      RUBY
+      transformer = eval(File.read(File.join(@path, 'functions.rb')), binding, File.join(@path, 'functions.rb'))
+      env = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: @npm_dir, base: @path, cache: cache)
+      env.register_transformer 'text/scss', 'text/css', transformer
+      env.find('test.css').source
+    end
+
+    assert_match 'content: one', compile.call('one')
+    assert_match 'content: two', compile.call('two')
+  end
+
+  test "the default options are empty" do
+    assert_equal({}, Condenser::ScssTransformer.new.options)
+    assert_equal({}, Condenser::ScssTransformer.new(functions: Module.new).options)
+  end
+
   test "sass options" do
     @env.register_transformer 'text/scss', 'text/css', Condenser::ScssTransformer.new(sass_config: { style: :compressed })
     file 'test.scss', 'div { a { color: red; } }'

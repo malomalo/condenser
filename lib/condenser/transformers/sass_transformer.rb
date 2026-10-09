@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require 'digest'
+require 'json'
+
 # Transformer engine class for the SASS/SCSS compiler. Depends on the
 # `sass-embedded` gem (Dart Sass).
 #
@@ -45,8 +48,11 @@ class Condenser::SassTransformer
 
   # Public: Initialize template with custom options.
   #
-  # cache_version - String custom cache version. Used to force a cache
-  #                 change after code changes are made to Sass Functions.
+  # cache_version - String custom cache version. Changing it changes the
+  #                 cache key of every stylesheet. The source files that
+  #                 define the `functions:` module's and the block's
+  #                 methods are part of the cache key, so use this when the
+  #                 functions depend on code defined elsewhere.
   # sass_config - Hash of options passed to Dart Sass, e.g. `style`,
   #               `silence_deprecations` or `quiet_deps`.
   # functions - Module of additional functions (see Condenser::Sass::Functions).
@@ -57,10 +63,15 @@ class Condenser::SassTransformer
   def initialize(cache_version: nil, sass_config: {}, functions: nil, importer: Condenser::Sass::Importer, logger: nil, &block)
     # Only options that differ from the defaults, since these are part of the
     # pipeline digest
+    function_module = Module.new do
+      include Functions
+      include functions if functions
+      class_eval(&block) if block_given?
+    end
     @options = {
       cache_version: cache_version,
       sass_config: (sass_config unless sass_config.empty?),
-      functions: functions,
+      functions: functions_digest(function_module, block),
       importer: (importer unless importer == Condenser::Sass::Importer)
     }.compact
     @logger = logger
@@ -68,11 +79,6 @@ class Condenser::SassTransformer
     @importer_class = importer
 
     @sass_config = sass_config
-    function_module = Module.new do
-      include Functions
-      include functions if functions
-      class_eval(&block) if block_given?
-    end
     @function_context = Class.new(FunctionContext) { include function_module }
     @function_names = function_module.public_instance_methods.reject { |m| m.end_with?('_signature') }
   end
@@ -100,6 +106,21 @@ class Condenser::SassTransformer
   end
 
   private
+
+  # A digest of the custom functions' names and the files they're defined
+  # in, or nil if there are none. Condenser's own functions are left out.
+  def functions_digest(function_module, block)
+    methods = (function_module.instance_methods + function_module.private_instance_methods).map { |name| function_module.instance_method(name) }
+    methods.reject! { |method| Functions.ancestors.include?(method.owner) }
+    return if methods.empty? && block.nil?
+
+    files = methods.filter_map { |method| method.source_location&.first }
+    files << block.source_location.first if block
+    Digest::SHA256.hexdigest(JSON.generate([
+      methods.map(&:name).sort,
+      files.uniq.select { |file| File.file?(file) }.map { |file| Digest::SHA256.file(file).hexdigest }.sort
+    ]))
+  end
 
   def sass_functions(functions)
     @function_names.to_h do |name|
