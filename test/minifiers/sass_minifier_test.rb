@@ -52,6 +52,13 @@ class SassMinifierTest < ActiveSupport::TestCase
     assert_match "2 │ .b { color: red", error.message
   end
 
+  test "options can't set the options condenser sets" do
+    %i(syntax url).each do |key|
+      error = assert_raises(ArgumentError) { Condenser::SassMinifier.new(key => nil) }
+      assert_match "SassMinifier options can't include :#{key}, ", error.message
+    end
+  end
+
   test 'with options' do
     @env.register_minifier 'text/css', Condenser::SassMinifier.new(style: :expanded)
     file 'test.css', ".a { color: red }"

@@ -14,6 +14,15 @@ module Condenser::Sass
     raise LoadError, "#{processor} requires the sass-embedded gem, add `gem 'sass-embedded'` to your Gemfile"
   end
 
+  # Raises an ArgumentError if +options+ has a key in +reserved+, a Hash of
+  # the keys condenser sets to what to use instead.
+  def self.check_reserved_options!(options, reserved, argument)
+    options.each_key do |key|
+      next unless (instead = reserved[key.to_sym])
+      raise ArgumentError, "#{argument} can't include #{key.inspect}, #{instead}"
+    end
+  end
+
   # The version of Dart Sass, or nil if sass-embedded isn't installed. The
   # gem's version is the version of the Dart Sass it runs.
   def self.version

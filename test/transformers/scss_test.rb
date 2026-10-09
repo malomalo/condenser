@@ -700,6 +700,18 @@ class CondenserSCSSTest < ActiveSupport::TestCase
     assert_match(/precision/, error.message)
   end
 
+  test "sass_config can't set the options condenser sets" do
+    %i(syntax url importer importers functions logger load_paths).each do |key|
+      error = assert_raises(ArgumentError) { Condenser::ScssTransformer.new(sass_config: { key => nil }) }
+      assert_match "sass_config can't include :#{key}, ", error.message
+    end
+
+    error = assert_raises(ArgumentError) { Condenser::ScssTransformer.new(sass_config: { functions: {} }) }
+    assert_equal "sass_config can't include :functions, use the `functions:` option or a block", error.message
+    error = assert_raises(ArgumentError) { Condenser::ScssTransformer.new(sass_config: { 'logger' => nil }) }
+    assert_equal 'sass_config can\'t include "logger", use the `logger:` option', error.message
+  end
+
   test "deprecation warnings go to the logger at debug level" do
     log = StringIO.new
     @env.logger = Logger.new(log, level: :debug)

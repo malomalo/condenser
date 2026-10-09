@@ -15,6 +15,16 @@ class Condenser::SassTransformer
 
   attr_accessor :options
 
+  RESERVED_SASS_CONFIG = {
+    syntax: 'use Condenser::SassTransformer or Condenser::ScssTransformer',
+    url: "condenser sets it to the asset's",
+    importer: 'use the `importer:` option',
+    importers: 'use the `importer:` option',
+    functions: 'use the `functions:` option or a block',
+    logger: 'use the `logger:` option',
+    load_paths: "add the paths to the environment's path, so imports are tracked as dependencies"
+  }.freeze
+
   # Internal: Defines default sass syntax to use. Exposed so the ScssProcessor
   # may override it.
   def self.syntax
@@ -58,13 +68,16 @@ class Condenser::SassTransformer
   #                 methods are part of the cache key, so use this when the
   #                 functions depend on code defined elsewhere.
   # sass_config - Hash of options passed to Dart Sass, e.g. `style`,
-  #               `silence_deprecations` or `quiet_deps`.
+  #               `silence_deprecations` or `quiet_deps`. The options
+  #               condenser sets (see RESERVED_SASS_CONFIG) raise an
+  #               ArgumentError.
   # functions - Module of additional functions (see Condenser::Sass::Functions).
   # importer - Class used to resolve imports (see Condenser::Sass::Importer).
   # logger - Sass logger for warnings and `@debug`. Defaults to sending them
   #          to the environment's logger (see Condenser::Sass::Logger).
   #
   def initialize(cache_version: nil, sass_config: {}, functions: nil, importer: Condenser::Sass::Importer, logger: nil, &block)
+    Condenser::Sass.check_reserved_options!(sass_config, RESERVED_SASS_CONFIG, 'sass_config')
     function_module = Module.new do
       include Functions
       include functions if functions

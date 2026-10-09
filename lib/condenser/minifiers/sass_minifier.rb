@@ -2,6 +2,11 @@
 
 class Condenser::SassMinifier
 
+  RESERVED_OPTIONS = {
+    syntax: 'the minifier always compiles CSS',
+    url: "condenser sets it to the asset's"
+  }.freeze
+
   def self.setup(environment)
     Condenser::Sass.require_sass_embedded!(name)
   end
@@ -24,7 +29,10 @@ class Condenser::SassMinifier
 
   # logger - Sass logger for warnings. Defaults to the environment's logger.
   # options - Options passed to Dart Sass, e.g. `style` (default :compressed).
+  #           `syntax` and `url` are set by condenser and raise an
+  #           ArgumentError.
   def initialize(logger: nil, **options)
+    Condenser::Sass.check_reserved_options!(options, RESERVED_OPTIONS, 'SassMinifier options')
     @logger = logger
     @sass_options = {
       style: :compressed
