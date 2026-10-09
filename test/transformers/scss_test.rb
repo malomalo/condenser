@@ -585,7 +585,7 @@ class CondenserSCSSTest < ActiveSupport::TestCase
       url: url(/assets/foo-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.woff2);
       url: url(/assets/foo-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.woff);
       url: url(/assets/foo-8a122aed70ad47f5ccffb10ce29103f61e194533cc95327906d40cdf46e88f4c.js);
-      url: url(/assets/foo-8e48022588e76a6c2fac08e7704ce16203d2cbf072352b511fa0731db64dbd51.css);
+      url: url(/assets/foo-8f1d065b11cb8b5d95bfa1804f1ceb81bb21726a7a1797f247bf763eb283fa38.css);
     }
     CSS
 
@@ -661,9 +661,23 @@ class CondenserSCSSTest < ActiveSupport::TestCase
     assert_match 'content: two', compile.call('two')
   end
 
-  test "the default options are empty" do
-    assert_equal({}, Condenser::ScssTransformer.new.options)
-    assert_equal({}, Condenser::ScssTransformer.new(functions: Module.new).options)
+  test "the default options only have the Dart Sass version" do
+    assert_equal({ dart_sass: Sass::Embedded::VERSION }, Condenser::ScssTransformer.new.options)
+    assert_equal({ dart_sass: Sass::Embedded::VERSION }, Condenser::ScssTransformer.new(functions: Module.new).options)
+  end
+
+  test "the Dart Sass version is part of the cache key" do
+    file 'test.scss', 'div { color: red; }'
+    before = @env.find('test.css').cache_key
+    export_before = @env.export_pipeline_digest('text/css')
+
+    Condenser::Sass.stubs(:version).returns('0.0.1')
+    [Condenser::ScssTransformer, Condenser::SassMinifier].each { |c| c.instance_variable_set(:@instance, nil) }
+    env = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: @npm_dir, base: @path)
+    assert_not_equal before, env.find('test.css').cache_key
+    assert_not_equal export_before, env.export_pipeline_digest('text/css')
+  ensure
+    [Condenser::ScssTransformer, Condenser::SassMinifier].each { |c| c.instance_variable_set(:@instance, nil) }
   end
 
   test "sass options" do

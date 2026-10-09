@@ -14,15 +14,22 @@ class Condenser::SassMinifier
     instance.call(environment, input)
   end
 
+  def self.options
+    instance.options
+  end
+
+  # The Dart Sass options and version, which are part of the export
+  # pipeline digest.
   attr_reader :options
 
   # logger - Sass logger for warnings. Defaults to the environment's logger.
   # options - Options passed to Dart Sass, e.g. `style` (default :compressed).
   def initialize(logger: nil, **options)
     @logger = logger
-    @options = {
+    @sass_options = {
       style: :compressed
     }.merge(options).freeze
+    @options = @sass_options.merge(dart_sass: Condenser::Sass.version).compact.freeze
   end
 
   def name
@@ -35,7 +42,7 @@ class Condenser::SassMinifier
       syntax: :css,
       url: Condenser::Sass::Importer.url(Condenser::Sass::Importer::SCHEME, input[:filename]),
       logger: @logger || Condenser::Sass::Logger.new(environment.logger)
-    }.merge(@options))
+    }.merge(@sass_options))
 
     input[:source] = result.css
   rescue ::Sass::CompileError => e

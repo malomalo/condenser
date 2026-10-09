@@ -40,6 +40,10 @@ class Condenser::SassTransformer
     instance.cache_key
   end
 
+  def self.options
+    instance.options
+  end
+
   attr_reader :cache_key
 
   def name
@@ -61,18 +65,19 @@ class Condenser::SassTransformer
   #          to the environment's logger (see Condenser::Sass::Logger).
   #
   def initialize(cache_version: nil, sass_config: {}, functions: nil, importer: Condenser::Sass::Importer, logger: nil, &block)
-    # Only options that differ from the defaults, since these are part of the
-    # pipeline digest
     function_module = Module.new do
       include Functions
       include functions if functions
       class_eval(&block) if block_given?
     end
+    # Only options that differ from the defaults, and the Dart Sass version,
+    # since these are part of the pipeline digest
     @options = {
       cache_version: cache_version,
       sass_config: (sass_config unless sass_config.empty?),
       functions: functions_digest(function_module, block),
-      importer: (importer unless importer == Condenser::Sass::Importer)
+      importer: (importer unless importer == Condenser::Sass::Importer),
+      dart_sass: Condenser::Sass.version
     }.compact
     @logger = logger
     @cache_version = cache_version

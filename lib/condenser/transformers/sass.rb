@@ -14,6 +14,14 @@ module Condenser::Sass
     raise LoadError, "#{processor} requires the sass-embedded gem, add `gem 'sass-embedded'` to your Gemfile"
   end
 
+  # The version of Dart Sass, or nil if sass-embedded isn't installed. The
+  # gem's version is the version of the Dart Sass it runs.
+  def self.version
+    require 'sass/embedded/version' unless defined?(::Sass::Embedded::VERSION)
+    ::Sass::Embedded::VERSION
+  rescue LoadError
+  end
+
   INTERNAL_URL = %r{condenser(?:-[a-z]+)*:/([^\s"'?;,)]*)(?:\?[^\s"';,)]*)?}
   RELATIVE_URL = %r{condenser-relative:/([^\s"'?;,)]*)(?:\?\d+)?}
 
