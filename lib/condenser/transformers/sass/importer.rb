@@ -22,6 +22,7 @@ class Condenser::Sass::Importer
   GLOB_ENTRY_SCHEME = 'condenser-glob-entry'
   RELATIVE_SCHEME = 'condenser-relative'
   EXTENSIONS = %w(.sass .scss .css).freeze
+  SYNTAXES = { 'text/sass' => :indented, 'text/scss' => :scss, 'text/css' => :css }.freeze
 
   def self.url(scheme, name)
     "#{scheme}:/" + name.gsub(%r{[^A-Za-z0-9\-._~/*!$&'()+,;=:@]}) { |c| c.bytes.map { |b| format('%%%02X', b) }.join }
@@ -89,7 +90,7 @@ class Condenser::Sass::Importer
       { contents: source, syntax: :scss }
     else
       asset = @assets[canonical_url]
-      syntax = File.extname(asset.source_file) == '.sass' ? :indented : :scss
+      syntax = SYNTAXES.fetch(asset.content_type, :scss)
       { contents: rewrite_relative_imports(asset.source, asset.filename, asset.source_file, syntax), syntax: syntax }
     end
   end
@@ -97,6 +98,8 @@ class Condenser::Sass::Importer
   private
 
   def rewrite_relative_imports(source, name, source_file, syntax)
+    return source if syntax == :css
+
     Condenser::Sass::RelativeImports.rewrite(source, indented: syntax == :indented) do |url|
       if (path = expand_path(File.join(File.dirname(name), url)))
         @relative << source_file
@@ -133,7 +136,8 @@ class Condenser::Sass::Importer
 
   def resolve(name)
     @input[:process_dependencies] << [name, @accept.map { |i| [i] }]
-    @environment.resolve(name, accept: @accept)
+    assets = @environment.resolve(name, accept: @accept)
+    assets.group_by(&:source_file).map { |_, a| a.min_by { |x| @accept.index(x.content_type) || @accept.size } }.sort_by(&:filename)
   end
 
   def npm_style(name)
@@ -147,6 +151,7 @@ class Condenser::Sass::Importer
       next unless style
 
       file = File.expand_path(style, dir)
+      @input[:process_dependencies] << [file, @accept.map { |i| [i] }]
       url = self.class.url(NPM_SCHEME, file.delete_prefix(File.join(@environment.npm_path, '')))
       @sources[url] = File.read(file)
       return url

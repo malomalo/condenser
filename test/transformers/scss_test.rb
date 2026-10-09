@@ -425,6 +425,78 @@ class CondenserSCSSTest < ActiveSupport::TestCase
     FileUtils.remove_entry(npm, true) if npm
   end
 
+  test 'changing an npm package style fallback reprocesses the importing file' do
+    npm = File.realpath(Dir.mktmpdir)
+    file 'node_modules/stylish/package.json', '{"name": "stylish", "style": "s.css"}', base: npm
+    file 'node_modules/stylish/s.css', '.v1 { color: pink; }', base: npm
+    file 'test.scss', '@import "stylish";'
+
+    env = Condenser.new(@path, logger: Logger.new('/dev/null'), cache: @env.cache, npm_path: npm, base: @path)
+    assert_equal ".v1 {\n  color: pink;\n}", env.find('test.css').source.rstrip
+
+    file 'node_modules/stylish/s.css', '.v2 { color: pink; }', base: npm
+
+    env = Condenser.new(@path, logger: Logger.new('/dev/null'), cache: @env.cache, npm_path: npm, base: @path)
+    assert_equal ".v2 {\n  color: pink;\n}", env.find('test.css').source.rstrip
+  ensure
+    FileUtils.remove_entry(npm, true) if npm
+  end
+
+  test 'importing a templated .sass file from scss' do
+    @env.register_mime_type 'text/sass', extensions: %w(.sass)
+    @env.register_transformer 'text/sass', 'text/css', Condenser::SassTransformer
+    file 'a.sass.erb', "div\n  color: <%= 'red' %>\n"
+    file 'test.scss', "@import './a';"
+
+    assert_file 'test.css', 'text/css', <<~CSS
+    div {
+      color: red;
+    }
+    CSS
+  end
+
+  test 'importing a templated .scss file from sass' do
+    @env.register_mime_type 'text/sass', extensions: %w(.sass)
+    @env.register_transformer 'text/sass', 'text/css', Condenser::SassTransformer
+    file 'a.scss.erb', "div { color: <%= 'red' %>; }"
+    file 'test.sass', "@import 'a'\n"
+
+    assert_file 'test.css', 'text/css', <<~CSS
+    div {
+      color: red;
+    }
+    CSS
+  end
+
+  test 'a templated .sass file importing a relative file' do
+    @env.register_mime_type 'text/sass', extensions: %w(.sass)
+    @env.register_transformer 'text/sass', 'text/css', Condenser::SassTransformer
+    file 'dir/b.scss', "div { color: red; }"
+    file 'dir/a.sass.erb', "@import ./b\n"
+    file 'b.scss', "div { color: blue; }"
+    file 'test.scss', "@import 'dir/a';"
+
+    assert_file 'test.css', 'text/css', <<~CSS
+    div {
+      color: red;
+    }
+    CSS
+  end
+
+  test 'a .css import is parsed as plain CSS' do
+    file 'a.css', ".a { color: red; .b { color: blue; } }"
+    file 'test.scss', "@import 'a';"
+
+    assert_file 'test.css', 'text/css', <<~CSS
+    .a {
+      color: red;
+      .b {
+        color: blue;
+      }
+    }
+    CSS
+  end
+
   test 'a missing import raises a Sass::CompileError' do
     file 'test.scss', '@import "missing";'
 
