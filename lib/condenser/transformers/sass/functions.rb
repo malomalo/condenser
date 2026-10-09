@@ -121,18 +121,18 @@ module Condenser::Sass
       #
       # Returns Condenser::Environment.
       def condenser_context
-        options[:condenser][:context]
+        @context
       end
 
       def condenser_environment
-        options[:condenser][:environment]
+        @environment
       end
 
       # Public: Mutatable set of dependencies.
       #
       # Returns a Set.
       def condenser_dependencies
-        options[:asset][:process_dependencies]
+        @asset[:process_dependencies]
       end
 
       # Converts a Sass::Value to a Ruby String, Numeric, Array or Hash (with

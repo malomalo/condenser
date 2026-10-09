@@ -45,7 +45,6 @@ class Condenser::SassTransformer
 
   # Public: Initialize template with custom options.
   #
-  # options - Hash
   # cache_version - String custom cache version. Used to force a cache
   #                 change after code changes are made to Sass Functions.
   # sass_config - Hash of options passed to Dart Sass, e.g. `style`,
@@ -55,30 +54,33 @@ class Condenser::SassTransformer
   # logger - Sass logger for warnings and `@debug`. Defaults to sending them
   #          to the environment's logger (see Condenser::Sass::Logger).
   #
-  def initialize(options = {}, &block)
-    options = options.dup
-    @logger = options.delete(:logger)
-    @options = options
-    @cache_version = options[:cache_version]
-    @importer_class = options[:importer] || Condenser::Sass::Importer
+  def initialize(cache_version: nil, sass_config: {}, functions: nil, importer: Condenser::Sass::Importer, logger: nil, &block)
+    # Only options that differ from the defaults, since these are part of the
+    # pipeline digest
+    @options = {
+      cache_version: cache_version,
+      sass_config: (sass_config unless sass_config.empty?),
+      functions: functions,
+      importer: (importer unless importer == Condenser::Sass::Importer)
+    }.compact
+    @logger = logger
+    @cache_version = cache_version
+    @importer_class = importer
 
-    @sass_config = options[:sass_config] || {}
-    functions = Module.new do
+    @sass_config = sass_config
+    function_module = Module.new do
       include Functions
-      include options[:functions] if options[:functions]
+      include functions if functions
       class_eval(&block) if block_given?
     end
-    @function_context = Class.new(FunctionContext) { include functions }
-    @function_names = functions.public_instance_methods.reject { |m| m.end_with?('_signature') }
+    @function_context = Class.new(FunctionContext) { include function_module }
+    @function_names = function_module.public_instance_methods.reject { |m| m.end_with?('_signature') }
   end
 
   def call(environment, input)
     context = environment.new_context_class
     importer = @importer_class.new(environment, input)
-    functions = @function_context.new(
-      condenser: { context: context, environment: environment },
-      asset: input
-    )
+    functions = @function_context.new(context: context, environment: environment, asset: input)
 
     url = importer.url
     result = ::Sass.compile_string(importer.source(self.class.syntax), **{
@@ -134,10 +136,10 @@ class Condenser::SassTransformer
 
   # The object the Sass functions are called on.
   class FunctionContext
-    attr_reader :options
-
-    def initialize(options)
-      @options = options
+    def initialize(context:, environment:, asset:)
+      @context = context
+      @environment = environment
+      @asset = asset
     end
   end
 

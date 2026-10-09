@@ -17,9 +17,10 @@ class Condenser::SassMinifier
 
   attr_reader :options
 
-  def initialize(options = {})
-    options = options.dup
-    @logger = options.delete(:logger)
+  # logger - Sass logger for warnings. Defaults to the environment's logger.
+  # options - Options passed to Dart Sass, e.g. `style` (default :compressed).
+  def initialize(logger: nil, **options)
+    @logger = logger
     @options = {
       style: :compressed
     }.merge(options).freeze
