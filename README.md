@@ -210,7 +210,7 @@ recompiled so that the fingerprint will be correct in the generated asset.
 adds features like nested rules, variables, mixins and selector
 inheritance.
 
-If the `sassc` gem is available to your application, you can use Sass
+If the `sass-embedded` gem (Dart Sass) is available to your application, you can use Sass
 to write CSS assets in Condenser.
 
 Condenser supports both Sass syntaxes. For the original
@@ -289,7 +289,7 @@ environment.register_minifier 'application/javascript', Condenser::UglifyMinifie
 ```
 
 If you are using Condenser directly with a Rack app, don't forget to add
-the dependencies (the `sassc` gem in the example above) to your Gemfile.
+the dependencies (the `sass-embedded` gem in the example above) to your Gemfile.
 
 ### Gzip
 

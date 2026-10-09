@@ -39,6 +39,8 @@ class Condenser
         values.map do |value|
           pipline_to_json(value)
         end
+      elsif values.is_a?(Class) && values.respond_to?(:options)
+        { values.name => pipline_to_json(values.options) }
       elsif values.is_a?(Class) || values.is_a?(Module)
         values.name
       elsif values.is_a?(String)

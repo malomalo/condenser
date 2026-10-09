@@ -75,7 +75,8 @@ class Condenser
     
       deps.inject([]) do |memo, i|
         i[0] = File.join(@environment.base, i[0].delete_prefix('!')) if i[0].start_with?('!') && @environment.base
-        @environment.resolve(i[0], File.dirname(@source_file), accept: i[1]).each do |asset|
+        npm = !@environment.npm_path.nil? && i[0].start_with?('/')
+        @environment.resolve(i[0], File.dirname(@source_file), accept: i[1], npm: npm).each do |asset|
           memo << asset
         end
         memo

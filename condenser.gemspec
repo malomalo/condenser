@@ -26,7 +26,7 @@ Gem::Specification.new do |s|
   s.add_runtime_dependency  "logger"
 
   s.add_development_dependency "ruby-ejs", '~> 1.0'  
-  s.add_development_dependency "sassc", ">= 2.2.0", "< 3.0"
+  s.add_development_dependency "sass-embedded", "~> 1.80"
   s.add_development_dependency "brotli"
   
   s.add_development_dependency "rake"

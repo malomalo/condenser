@@ -29,8 +29,6 @@ class Condenser
   autoload :Erubi,            'condenser/templating_engine/erb'
   autoload :Sass,             'condenser/transformers/sass'
   autoload :SassMinifier,     'condenser/minifiers/sass_minifier'
-  autoload :DartSassTransformer, 'condenser/transformers/dart_sass_transformer'
-  autoload :DartScssTransformer, 'condenser/transformers/dart_sass_transformer'
   autoload :SassTransformer,     'condenser/transformers/sass_transformer'
   autoload :ScssTransformer,  'condenser/transformers/sass_transformer'
   autoload :EjsTemplate,      'condenser/templating_engine/ejs'
