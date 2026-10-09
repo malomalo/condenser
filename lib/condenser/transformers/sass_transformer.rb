@@ -46,15 +46,9 @@ class Condenser::SassTransformer
     instance.call(environment, input)
   end
 
-  def self.cache_key
-    instance.cache_key
-  end
-
   def self.options
     instance.options
   end
-
-  attr_reader :cache_key
 
   def name
     self.class.name
@@ -79,7 +73,7 @@ class Condenser::SassTransformer
   def initialize(cache_version: nil, sass_config: {}, functions: nil, importer: Condenser::Sass::Importer, logger: nil, &block)
     Condenser::Sass.check_reserved_options!(sass_config, RESERVED_SASS_CONFIG, 'sass_config')
     function_module = Module.new do
-      include Functions
+      include Condenser::Sass::Functions
       include functions if functions
       class_eval(&block) if block_given?
     end
@@ -93,7 +87,6 @@ class Condenser::SassTransformer
       dart_sass: Condenser::Sass.version
     }.compact
     @logger = logger
-    @cache_version = cache_version
     @importer_class = importer
 
     @sass_config = sass_config
@@ -128,7 +121,7 @@ class Condenser::SassTransformer
   # in, or nil if there are none. Condenser's own functions are left out.
   def functions_digest(function_module, block)
     methods = (function_module.instance_methods + function_module.private_instance_methods).map { |name| function_module.instance_method(name) }
-    methods.reject! { |method| Functions.ancestors.include?(method.owner) }
+    methods.reject! { |method| Condenser::Sass::Functions.ancestors.include?(method.owner) }
     return if methods.empty? && block.nil?
 
     files = methods.filter_map { |method| method.source_location&.first }
@@ -170,6 +163,8 @@ class Condenser::SassTransformer
     when true then ::Sass::Value::Boolean::TRUE
     when false then ::Sass::Value::Boolean::FALSE
     when Numeric then ::Sass::Value::Number.new(value)
+    when Array then ::Sass::Value::List.new(value.map { |v| to_sass_value(v) })
+    when Hash then ::Sass::Value::Map.new(value.to_h { |k, v| [to_sass_value(k.is_a?(Symbol) ? k.to_s : k), to_sass_value(v)] })
     else ::Sass::Value::String.new(value.to_s, quoted: false)
     end
   end
@@ -181,11 +176,6 @@ class Condenser::SassTransformer
       @environment = environment
       @asset = asset
     end
-  end
-
-  # Functions injected into Sass context during Condenser evaluation.
-  module Functions
-    include Condenser::Sass::Functions
   end
 end
 

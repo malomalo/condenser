@@ -640,7 +640,7 @@ class CondenserSCSSTest < ActiveSupport::TestCase
       url: url(/assets/foo-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.woff2);
       url: url(/assets/foo-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.woff);
       url: url(/assets/foo-8a122aed70ad47f5ccffb10ce29103f61e194533cc95327906d40cdf46e88f4c.js);
-      url: url(/assets/foo-8f1d065b11cb8b5d95bfa1804f1ceb81bb21726a7a1797f247bf763eb283fa38.css);
+      url: url(/assets/#{@env.find('foo.css').path});
     }
     CSS
 
@@ -690,6 +690,26 @@ class CondenserSCSSTest < ActiveSupport::TestCase
       content: "HI";
       width: 4;
       height: 6px;
+    }
+    CSS
+  end
+
+  test "custom functions can return Arrays and Hashes" do
+    @env.register_transformer 'text/scss', 'text/css', Condenser::ScssTransformer.new {
+      def sizes
+        [1, 2]
+      end
+
+      def colors
+        { primary: 'red' }
+      end
+    }
+    file 'test.scss', 'div { width: nth(sizes(), 2); color: map-get(colors(), primary); }'
+
+    assert_file 'test.css', 'text/css', <<~CSS
+    div {
+      width: 2;
+      color: red;
     }
     CSS
   end

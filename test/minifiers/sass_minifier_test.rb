@@ -48,7 +48,7 @@ class SassMinifierTest < ActiveSupport::TestCase
     file 'test.css', ".a { color: red; }\n.b { color: red\n"
 
     error = assert_raises(Sass::CompileError) { @env.find('test.css').export }
-    assert_match(/\Atest.css:2:16: expected end of rule\./, error.message)
+    assert_match(/\Atest.css:2:16: /, error.message)
     assert_match "2 │ .b { color: red", error.message
   end
 

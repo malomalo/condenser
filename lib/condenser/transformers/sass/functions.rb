@@ -104,13 +104,12 @@ module Condenser::Sass
     end
 
     protected
-      # Public: The Environment.
-      #
-      # Returns Condenser::Environment.
+      # Public: The Condenser::Context for the asset being compiled.
       def condenser_context
         @context
       end
 
+      # Public: The Condenser::Environment.
       def condenser_environment
         @environment
       end
@@ -123,7 +122,9 @@ module Condenser::Sass
       end
 
       # Converts a Sass::Value to a Ruby String, Numeric, Array or Hash (with
-      # Symbol keys). Other values are returned unchanged.
+      # Symbol keys). An empty List becomes a Hash, since `()` is the empty
+      # map in Sass, e.g. the default `$options`. Other values are returned
+      # unchanged.
       def sass_to_ruby(value)
         case value
         when ::Sass::Value::String then value.text
