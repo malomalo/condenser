@@ -31,8 +31,8 @@ module Condenser::Sass
   rescue LoadError
   end
 
-  INTERNAL_URL = %r{condenser(?:-[a-z]+)*:/([^\s"'?;,)]*)(?:\?[^\s"';,)]*)?}
-  RELATIVE_URL = %r{condenser-relative:/([^\s"'?;,)]*)(?:\?\d+)?}
+  INTERNAL_URL = %r{condenser(?:-[a-z]+)*:/(?:[^\s"'?!;,)]*!/)?([^\s"'?!;,)]*)(?:\?[^\s"';,)]*)?}
+  RELATIVE_URL = %r{condenser-relative:/[^\s"'?!;,)]*!/([^\s"'?!;,)]*)}
 
   # Returns a Sass::CompileError like +error+ whose message starts with the
   # stylesheet, line and column and has the source line, showing condenser's

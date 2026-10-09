@@ -128,7 +128,7 @@ class CondenserSCSSTest < ActiveSupport::TestCase
 
     importer = Condenser::Sass::Importer.new(@env, input)
     source = importer.source(:scss)
-    css = Sass.compile_string(source, syntax: :scss, url: importer.url, importer: importer, importers: [importer]).css
+    css = Sass.compile_string(source, syntax: :scss, url: importer.url, importer: importer, importers: [importer], logger: Sass::Logger.silent).css
     assert_equal ".a {\n  color: red;\n}", css
   end
 
@@ -507,6 +507,50 @@ class CondenserSCSSTest < ActiveSupport::TestCase
       }
     }
     CSS
+  end
+
+  test 'relative imports of .css files' do
+    file 'dir/a.css', '.a { color: red; }'
+    file 'dir/b.css', '.b { color: green; }'
+    file 'dir/index.scss', <<~SCSS
+      @use './a.css';
+      @use './b';
+    SCSS
+
+    assert_file 'dir/index.css', 'text/css', <<~CSS
+    .a {
+      color: red;
+    }
+
+    .b {
+      color: green;
+    }
+    CSS
+  end
+
+  test 'relative imports with ?, # and ! in the URL' do
+    file 'dir/a?b#c!d.scss', '.a { color: red; }'
+    file 'dir/e!f/index.scss', <<~SCSS
+      @import '../a?b#c!d';
+      @import './*';
+    SCSS
+    file 'dir/e!f/g.scss', '.g { color: green; }'
+
+    assert_file 'dir/e!f/index.css', 'text/css', <<~CSS
+    .a {
+      color: red;
+    }
+
+    .g {
+      color: green;
+    }
+    CSS
+
+    file 'missing.scss', "@import './nope?x#y!z';\n"
+    error = assert_raises(Sass::CompileError) { @env.find('missing.css').source }
+    assert_match "missing.scss:1:9: Can't find stylesheet to import.", error.message
+    assert_match "1 │ @import './nope?x#y!z';", error.message
+    assert_no_match(/condenser/, error.message)
   end
 
   test 'a missing import raises a Sass::CompileError' do

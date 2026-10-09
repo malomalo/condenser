@@ -21,11 +21,18 @@ class Condenser::Sass::Importer
   GLOB_SCHEME = 'condenser-glob'
   GLOB_ENTRY_SCHEME = 'condenser-glob-entry'
   RELATIVE_SCHEME = 'condenser-relative'
+  # Stops Dart Sass treating glob entries ending in `.css` as plain CSS imports
+  ENTRY_QUERY = '?entry'
   EXTENSIONS = %w(.sass .scss .css).freeze
   SYNTAXES = { 'text/sass' => :indented, 'text/scss' => :scss, 'text/css' => :css }.freeze
 
   def self.url(scheme, name)
-    "#{scheme}:/" + name.gsub(%r{[^A-Za-z0-9\-._~/*!$&'()+,;=:@]}) { |c| c.bytes.map { |b| format('%%%02X', b) }.join }
+    "#{scheme}:/#{escape(name)}"
+  end
+
+  # Percent-encodes +name+ for a URL path, including `!`, `?` and `#`.
+  def self.escape(name)
+    name.gsub(%r{[^A-Za-z0-9\-._~/*$&'()+,;=:@]}) { |c| c.bytes.map { |b| format('%%%02X', b) }.join }
   end
 
   def initialize(environment, input)
@@ -35,7 +42,6 @@ class Condenser::Sass::Importer
     @assets = {}
     @source_files = {}
     @sources = {}
-    @relative = []
 
     root = @environment.path.find { |p| @input[:source_file].start_with?(File.join(p, '')) }
     @name = root ? @input[:source_file].delete_prefix(File.join(root, '')) : @input[:filename]
@@ -49,20 +55,20 @@ class Condenser::Sass::Importer
   # The source of the stylesheet being compiled, with its relative imports
   # rewritten.
   def source(syntax)
-    rewrite_relative_imports(@input[:source], @name, @input[:source_file], syntax)
+    rewrite_relative_imports(@input[:source], @name, syntax)
   end
 
   def canonicalize(url, context)
-    scheme, raw = parse(url.sub(/\?[^?]*\z/, ''))
+    scheme, path = parse(url)
     case scheme
     when GLOB_ENTRY_SCHEME
-      return self.class.url(SCHEME, raw)
+      return self.class.url(SCHEME, decode(path.delete_suffix(ENTRY_QUERY)))
     when RELATIVE_SCHEME
-      name = raw
-      importer_file = @relative[url[/\?(\d+)\z/, 1].to_i]
+      importer, name = path.split('!/', 2).map { |part| decode(part) }
+      importer_file = @source_files[self.class.url(SCHEME, importer)]
     when nil
       return if context.containing_url.nil?
-      name = expand_path(raw)
+      name = expand_path(decode(path))
       return if name.nil?
       importer_file = @source_files[context.containing_url]
     else
@@ -77,8 +83,7 @@ class Condenser::Sass::Importer
     else
       assets.each { |a| canonical_url(a) }
       glob = self.class.url(GLOB_SCHEME, name) + "?#{Digest::MD5.hexdigest(assets.map(&:filename).join(','))}"
-      # The query stops Dart Sass treating `.css` URLs as plain CSS imports
-      @sources[glob] = assets.map { |a| "@import \"#{self.class.url(GLOB_ENTRY_SCHEME, a.filename)}?entry\";\n" }.join
+      @sources[glob] = assets.map { |a| "@import \"#{self.class.url(GLOB_ENTRY_SCHEME, a.filename)}#{ENTRY_QUERY}\";\n" }.join
       glob
     end
   end
@@ -89,19 +94,21 @@ class Condenser::Sass::Importer
     else
       asset = @assets[canonical_url]
       syntax = SYNTAXES.fetch(asset.content_type, :scss)
-      { contents: rewrite_relative_imports(asset.source, asset.filename, asset.source_file, syntax), syntax: syntax }
+      { contents: rewrite_relative_imports(asset.source, asset.filename, syntax), syntax: syntax }
     end
   end
 
   private
 
-  def rewrite_relative_imports(source, name, source_file, syntax)
+  # Rewrites relative URLs to `condenser-relative:/<importing file>!/<resolved
+  # name>`. The resolved name comes last since `@use` takes its namespace from
+  # the URL's basename.
+  def rewrite_relative_imports(source, name, syntax)
     return source if syntax == :css
 
     Condenser::Sass::RelativeImports.rewrite(source, indented: syntax == :indented) do |url|
       if (path = expand_path(File.join(File.dirname(name), url)))
-        @relative << source_file
-        self.class.url(RELATIVE_SCHEME, path) + "?#{@relative.size - 1}"
+        "#{self.class.url(RELATIVE_SCHEME, name)}!/#{self.class.escape(path)}"
       end
     end
   end
@@ -113,12 +120,13 @@ class Condenser::Sass::Importer
     url
   end
 
+  # Splits +url+ into its scheme (nil if it has none) and the rest.
   def parse(url)
-    if url =~ %r{\A([a-z][a-z0-9+\-.]*):/?(.*)\z}i
-      [$1, URI.decode_uri_component($2)]
-    else
-      [nil, URI.decode_uri_component(url)]
-    end
+    url =~ %r{\A([a-z][a-z0-9+\-.]*):/?(.*)\z}i ? [$1, $2] : [nil, url]
+  end
+
+  def decode(path)
+    URI.decode_uri_component(path)
   end
 
   # Normalizes a logical path, returning nil if it points above the root.
