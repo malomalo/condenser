@@ -535,14 +535,18 @@ class CondenserSCSSTest < ActiveSupport::TestCase
 
     assert_file 'test.css', 'text/css', 'div a{color:red}'
 
-    @env.register_transformer 'text/scss', 'text/css', Condenser::ScssTransformer.new(sass_config: { style: :nested, precision: 5 })
-    file 'test2.scss', 'div { a { color: red; } }'
+  end
 
-    assert_file 'test2.css', 'text/css', <<~CSS
-    div a {
-      color: red;
-    }
-    CSS
+  test "options sassc supported but Dart Sass doesn't raise an error" do
+    file 'test.scss', 'div { a { color: red; } }'
+
+    @env.register_transformer 'text/scss', 'text/css', Condenser::ScssTransformer.new(sass_config: { style: :nested })
+    error = assert_raises(ArgumentError) { @env.find('test.css').process }
+    assert_match(/style must be one of :expanded, :compressed/, error.message)
+
+    @env.register_transformer 'text/scss', 'text/css', Condenser::ScssTransformer.new(sass_config: { precision: 5 })
+    error = assert_raises(ArgumentError) { @env.find('test.css').process }
+    assert_match(/precision/, error.message)
   end
 
   test "deprecation warnings go to the logger at debug level" do

@@ -88,7 +88,7 @@ class Condenser::SassTransformer
       importers: [importer],
       functions: sass_functions(functions),
       logger: @logger || Condenser::Sass::Logger.new(environment.logger)
-    }.merge(Condenser::Sass.compile_options(@sass_config)))
+    }.merge(@sass_config))
 
     input[:source] = result.css
     input[:linked_assets]         += context.links

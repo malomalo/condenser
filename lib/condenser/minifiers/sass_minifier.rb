@@ -33,7 +33,7 @@ class Condenser::SassMinifier
     result = ::Sass.compile_string(input[:source], **{
       syntax: :css,
       logger: @logger || Condenser::Sass::Logger.new(environment.logger)
-    }.merge(Condenser::Sass.compile_options(@options)))
+    }.merge(@options))
 
     input[:source] = result.css
   end

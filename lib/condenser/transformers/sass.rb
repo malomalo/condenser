@@ -5,23 +5,10 @@ module Condenser::Sass
   autoload :Importer, 'condenser/transformers/sass/importer'
   autoload :RelativeImports, 'condenser/transformers/sass/relative_imports'
 
-  # Options libsass (sassc) accepted that Dart Sass doesn't have.
-  SASSC_ONLY_OPTIONS = %i(syntax filename cache read_cache precision line_comments
-    source_comments source_map_file source_map_contents source_map_embed
-    omit_source_map_url importer).freeze
-
   def self.require_sass_embedded!(processor)
     require "sass-embedded" unless defined?(::Sass::Compiler)
   rescue LoadError
     raise LoadError, "#{processor} requires the sass-embedded gem, add `gem 'sass-embedded'` to your Gemfile"
-  end
-
-  # Converts options written for sassc to Dart Sass: drops the ones Dart Sass
-  # doesn't support and maps the :nested and :compact styles to :expanded.
-  def self.compile_options(options)
-    options = options.reject { |k, _| SASSC_ONLY_OPTIONS.include?(k) }
-    options[:style] = :expanded if %i(nested compact).include?(options[:style]&.to_sym)
-    options
   end
 
   # A Sass logger that sends Dart Sass deprecation warnings and `@debug` to
