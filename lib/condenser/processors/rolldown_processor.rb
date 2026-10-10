@@ -125,9 +125,13 @@ class Condenser::RolldownProcessor
           end
         end
       rescue Errno::EPIPE, EOFError
+      rescue Exception
+        Process.kill('TERM', io.pid) rescue nil
+        raise
+      ensure
+        io.close
       end
 
-      io.close
       if error
         raise exec_runtime_error("#{error[0]}: #{error[1]}")
       elsif !$?.success? || output.nil?

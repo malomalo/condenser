@@ -1,6 +1,13 @@
 require 'test_helper'
 
 class RolldownTest < ActiveSupport::TestCase
+
+  module PopenSpy
+    def popen(*args, **kwargs, &block)
+      super.tap { |io| Thread.current[:popen_pids]&.push(io.pid) }
+    end
+  end
+  IO.singleton_class.prepend(PopenSpy)
   
   def setup
     super
@@ -223,6 +230,29 @@ class RolldownTest < ActiveSupport::TestCase
       console.log(Base, Lower);
       //#endregion
     FILE
+  end
+
+  test 'an error raised in ruby stops the node process' do
+    file 'main.js', <<~JS
+      import maths from 'maths/*';
+
+      console.log( maths );
+    JS
+    file 'maths/cube.js', <<~JS
+      export default function cube ( x ) {
+        return x * x * x;
+      };
+    JS
+    Condenser::Asset.any_instance.stubs(:has_default_export?).raises(RuntimeError, 'boom')
+
+    pids = Thread.current[:popen_pids] = []
+    error = assert_raises(RuntimeError) { @env.find('main.js').export }
+    assert_equal 'boom', error.message
+    assert_equal 1, pids.size
+    assert_raises(Errno::ESRCH) { Process.kill(0, pids.first) }
+  ensure
+    Thread.current[:popen_pids] = nil
+    pids&.each { |pid| Process.kill('KILL', pid) rescue nil }
   end
 
 end
