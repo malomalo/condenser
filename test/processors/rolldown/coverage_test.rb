@@ -133,4 +133,26 @@ class RolldownCoverageTest < ActiveSupport::TestCase
     assert_equal "<b>x</b>\n", run_bundle('main.js')
   end
 
+  test 'bundler_path: builds with the Rolldown at that path' do
+    rolldown = File.realpath(File.join(@npm_dir, 'node_modules', 'rolldown'))
+    file 'wrapped-rolldown/package.json', JSON.generate({ name: 'rolldown', version: '0.0.1-wrapped', main: './index.js' })
+    file 'wrapped-rolldown/index.js', <<~JS
+      const real = require(#{JSON.generate(rolldown)});
+      module.exports = {
+        ...real,
+        rolldown(options) {
+          options.transform.define.__BUNDLER__ = JSON.stringify('wrapped');
+          return real.rolldown(options);
+        }
+      };
+    JS
+    file 'main.js', <<~JS
+      console.log( typeof __BUNDLER__ === 'undefined' ? 'npm' : __BUNDLER__ );
+    JS
+
+    register_rolldown(bundler_path: File.join(@path, 'wrapped-rolldown'))
+    assert_equal '0.0.1-wrapped', @env.exporters['application/javascript'].first.options[:rolldown]
+    assert_equal "wrapped\n", run_bundle('main.js')
+  end
+
 end
