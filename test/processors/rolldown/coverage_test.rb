@@ -3,6 +3,13 @@ require 'open3'
 
 class RolldownCoverageTest < ActiveSupport::TestCase
 
+  module SpawnSpy
+    def spawn(*args, **kwargs)
+      super.tap { |pid| Thread.current[:rolldown_coverage_pids]&.push(pid) }
+    end
+  end
+  Process.singleton_class.prepend(SpawnSpy)
+
   def setup
     super
     @env.unregister_minifier('application/javascript')
@@ -153,6 +160,26 @@ class RolldownCoverageTest < ActiveSupport::TestCase
     register_rolldown(bundler_path: File.join(@path, 'wrapped-rolldown'))
     assert_equal '0.0.1-wrapped', @env.exporters['application/javascript'].first.options[:rolldown]
     assert_equal "wrapped\n", run_bundle('main.js')
+  end
+
+  test 'node exits on its own after a build error' do
+    file 'main.js', <<~JS
+      import x from './missing.js';
+
+      console.log( x );
+    JS
+
+    pids = Thread.current[:rolldown_coverage_pids] = []
+    Process.expects(:kill).never
+    error = Timeout.timeout(30) { assert_raises(RuntimeError) { @env.find('main.js').export } }
+    Process.unstub(:kill)
+
+    assert_includes error.message, '[UNRESOLVED_IMPORT]'
+    assert_equal 1, pids.size
+    assert_raises(Errno::ESRCH) { Process.kill(0, pids.first) }
+  ensure
+    Thread.current[:rolldown_coverage_pids] = nil
+    pids&.each { |pid| Process.kill('KILL', pid) rescue nil }
   end
 
 end
