@@ -68,9 +68,6 @@ class Condenser::RolldownProcessor
   end
 
   class Runner < Condenser::NodeProcessor
-    # Used as the entry's id if the asset has no source file.
-    VIRTUAL_ENTRY = '/__condenser_rolldown__/entry.js'
-
     def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, aliases: {}, platform: 'neutral')
       super(dir)
       @prefix = prefix
@@ -87,7 +84,7 @@ class Condenser::RolldownProcessor
       @token = "#{SecureRandom.hex(8)}:"
       # The entry's source is always the input being exported, not what
       # condenser would load for that file.
-      @entry = input[:source_file] || VIRTUAL_ENTRY
+      @entry = input[:source_file]
 
       config = {
         token: @token,
@@ -152,16 +149,12 @@ class Condenser::RolldownProcessor
 
     private
 
-    def base_for(importer)
-      importer == @entry ? @input[:source_file] : importer
-    end
-
     def answer(method, *args)
       case method
       when 'resolve'
         importee, importer = args
         # npm: false; Rolldown resolves node_modules when this is nil.
-        @environment.find(importee, base_for(importer), accept: @accept)&.source_file
+        @environment.find(importee, importer, accept: @accept)&.source_file
       when 'load'
         id = args.first
         if id == @entry
@@ -200,10 +193,9 @@ class Condenser::RolldownProcessor
     end
 
     def resolve_dynamic_import(importee, importer)
-      base = base_for(importer)
-      asset = @environment.find(importee, base, accept: @accept, npm: true)
-      asset ||= @environment.find(importee.delete_suffix('.js') + "/index.js", base, accept: @accept, npm: true)
-      asset ||= @environment.find(importee.gsub(/\/[^\/]+$/, '') + "/dist/index.js", base, accept: @accept, npm: true)
+      asset = @environment.find(importee, importer, accept: @accept, npm: true)
+      asset ||= @environment.find(importee.delete_suffix('.js') + "/index.js", importer, accept: @accept, npm: true)
+      asset ||= @environment.find(importee.gsub(/\/[^\/]+$/, '') + "/dist/index.js", importer, accept: @accept, npm: true)
       return if asset.nil?
 
       if asset.source_file == @input[:source_file]
