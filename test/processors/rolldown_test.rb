@@ -232,6 +232,76 @@ class RolldownTest < ActiveSupport::TestCase
     FILE
   end
 
+  test 'import an aliased module' do
+    @env.unregister_exporter('application/javascript')
+    @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path, aliases: { 'maths' => File.join(@path, 'math.js') }))
+
+    file 'main.js', <<~JS
+      import { cube } from 'maths';
+
+      console.log( cube( 5 ) );
+    JS
+    file 'math.js', <<~JS
+      export function cube ( x ) {
+        return x * x * x;
+      }
+    JS
+
+    assert_exported_file 'main.js', 'application/javascript', <<~FILE
+      //#region math.js
+      function cube(x) {
+      	return x * x * x;
+      }
+      //#endregion
+      //#region main.js
+      console.log(cube(5));
+      //#endregion
+    FILE
+  end
+
+  test 'platform: sets the conditions npm packages are resolved with' do
+    package = File.join(@npm_dir, 'node_modules', 'condenser-rolldown-platform-test')
+    FileUtils.mkdir_p(package)
+    File.write(File.join(package, 'package.json'), JSON.generate({
+      name: 'condenser-rolldown-platform-test',
+      exports: { browser: './browser.js', default: './neutral.js' }
+    }))
+    File.write(File.join(package, 'browser.js'), "export default 'browser';\n")
+    File.write(File.join(package, 'neutral.js'), "export default 'neutral';\n")
+    file 'neutral.js', <<~JS
+      import platform from 'condenser-rolldown-platform-test';
+
+      console.log( platform );
+    JS
+    file 'browser.js', <<~JS
+      import platform from 'condenser-rolldown-platform-test';
+
+      console.log( platform );
+    JS
+
+    assert_not_includes Condenser::RolldownProcessor.new(@env.npm_path).options, :platform
+    assert_includes @env.find('neutral.js').export.source, 'console.log("neutral")'
+
+    @env.unregister_exporter('application/javascript')
+    @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path, platform: 'browser'))
+    assert_equal 'browser', @env.exporters['application/javascript'].first.options[:platform]
+    assert_includes @env.find('browser.js').export.source, 'console.log("browser")'
+  ensure
+    FileUtils.rm_rf(package)
+  end
+
+  test 'the installed Rolldown version is in the options' do
+    version = JSON.parse(File.read(File.join(@npm_dir, 'node_modules', 'rolldown', 'package.json')))['version']
+    assert_equal version, @env.exporters['application/javascript'].first.options[:rolldown]
+    digest = @env.export_pipeline_digest('application/javascript')
+
+    file 'rolldown/package.json', JSON.generate({ name: 'rolldown', version: '0.0.0' })
+    @env.unregister_exporter('application/javascript')
+    @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path, bundler_path: File.join(@path, 'rolldown')))
+    assert_equal '0.0.0', @env.exporters['application/javascript'].first.options[:rolldown]
+    assert_not_equal digest, @env.export_pipeline_digest('application/javascript')
+  end
+
   test 'an error raised in ruby stops the node process' do
     file 'main.js', <<~JS
       import maths from 'maths/*';
