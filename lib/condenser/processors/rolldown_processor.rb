@@ -15,12 +15,6 @@ class Condenser::RolldownProcessor
   @@setup = []
 
   def self.setup(environment)
-    install_npm_packages(environment.npm_path) if default_bundler_path.nil?
-  end
-
-  # Where to load Rolldown from instead of +npm_path+/node_modules/rolldown.
-  def self.default_bundler_path
-    ENV['CONDENSER_ROLLDOWN_PATH']
   end
 
   def self.install_npm_packages(npm_path)
@@ -47,8 +41,8 @@ class Condenser::RolldownProcessor
   #   dynamic imports; anything else (:keep, :local, false) keeps them as
   #   imports of the separately exported asset's URL
   # @param bundler_path [String] the rolldown package directory to load;
-  #   defaults to $CONDENSER_ROLLDOWN_PATH, then +dir+/node_modules/rolldown
-  def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: self.class.default_bundler_path)
+  #   defaults to +dir+/node_modules/rolldown
+  def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil)
     self.class.install_npm_packages(dir) if bundler_path.nil? && dir
     @npm_dir = dir
     @prefix = prefix
@@ -85,10 +79,7 @@ class Condenser::RolldownProcessor
         entry: @entry,
         bundlerPath: @bundler_path,
         cwd: environment.base || Dir.pwd,
-        modules: npm_path ? [npm_module_path] : [],
-        modulesFile: ENV['CONDENSER_ROLLDOWN_MODULES_FILE'],
-        verbose: !ENV['CONDENSER_ROLLDOWN_VERBOSE'].nil?,
-        timing: !ENV['CONDENSER_ROLLDOWN_TIMING'].nil?
+        modules: npm_path ? [npm_module_path] : []
       }
 
       input[:source] = exec_runtime(config)
