@@ -274,4 +274,21 @@ class RolldownTest < ActiveSupport::TestCase
     assert_not_includes log.string, "\e["
   end
 
+  test 'a build error is raised without colour codes and names the file' do
+    file 'main.js', <<~JS
+      import a from './bad.js';
+
+      console.log( a );
+    JS
+    file 'bad.js', <<~JS
+      const a = 1;
+      const a = 2;
+      export default a;
+    JS
+
+    error = assert_raises(RuntimeError) { @env.find('main.js').export }
+    assert error.message.start_with?("Error: #{@path}/bad.js:1:7: [PARSE_ERROR] Identifier `a` has already been declared\n"), error.message
+    assert_not_includes error.message, "\e["
+  end
+
 end
