@@ -291,4 +291,40 @@ class RolldownTest < ActiveSupport::TestCase
     assert_not_includes error.message, "\e["
   end
 
+  test 'output on stdout without a trailing newline does not break the build' do
+    file 'main.js', <<~JS
+      import { cube } from './math.js';
+
+      console.log( cube( 5 ) );
+    JS
+    file 'math.js', <<~JS
+      export function cube ( x ) {
+        return x * x * x;
+      }
+    JS
+    file 'noise.js', <<~JS
+      process.stdout.write('noise');
+    JS
+
+    node_options = ENV['NODE_OPTIONS']
+    ENV['NODE_OPTIONS'] = "--require #{File.join(@path, 'noise.js')}"
+    out, _ = capture_io do
+      Timeout.timeout(10) do
+        assert_exported_file 'main.js', 'application/javascript', <<~FILE
+          //#region math.js
+          function cube(x) {
+          	return x * x * x;
+          }
+          //#endregion
+          //#region main.js
+          console.log(cube(5));
+          //#endregion
+        FILE
+      end
+    end
+    assert_equal "noise\n", out
+  ensure
+    ENV['NODE_OPTIONS'] = node_options
+  end
+
 end
