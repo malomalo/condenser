@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require 'json'
-require 'securerandom'
+require 'socket'
 
 class Condenser::RolldownProcessor
 
@@ -69,11 +69,9 @@ class Condenser::RolldownProcessor
       @environment = environment
       @input = input
       @accept = input[:content_types].last
-      @token = "#{SecureRandom.hex(8)}:"
       @entry = input[:source_file]
 
       config = {
-        token: @token,
         entry: @entry,
         bundlerPath: @bundler_path,
         cwd: environment.base || Dir.pwd,
@@ -88,47 +86,46 @@ class Condenser::RolldownProcessor
     end
 
     def exec_runtime(config)
-      io = IO.popen([binary, '--max_old_space_size=5120', SCRIPT, JSON.generate(config)], 'r+')
-      buffer = String.new
+      io, child_io = UNIXSocket.pair
+      begin
+        pid = Process.spawn(binary, '--max_old_space_size=5120', SCRIPT, JSON.generate(config), in: File::NULL, 3 => child_io)
+      rescue Exception
+        io.close
+        raise
+      ensure
+        child_io.close
+      end
       output = nil
       error = nil
 
       begin
-        while IO.select([io]) && (chunk = io.read_nonblock(65_536))
-          buffer << chunk
-          while (newline = buffer.index("\n"))
-            line = buffer.slice!(0, newline + 1)
-            if !line.start_with?(@token)
-              $stdout.write(line) unless line.strip.empty?
-              next
-            end
-
-            message = JSON.parse(line.delete_prefix(@token))
-            case message['method']
-            when 'done'
-              output = message['args'][0]
-            when 'error'
-              error = message['args']
-            when 'warn'
-              @environment.logger.warn(message['args'][0])
-            else
-              ret = answer(message['method'], *message['args'])
-              io.write(JSON.generate({rid: message['rid'], return: ret}), "\n")
-            end
+        while (line = io.gets)
+          message = JSON.parse(line)
+          case message['method']
+          when 'done'
+            output = message['args'][0]
+          when 'error'
+            error = message['args']
+          when 'warn'
+            @environment.logger.warn(message['args'][0])
+          else
+            ret = answer(message['method'], *message['args'])
+            io.write(JSON.generate({rid: message['rid'], return: ret}), "\n")
           end
         end
-      rescue Errno::EPIPE, EOFError
+      rescue Errno::EPIPE, Errno::ECONNRESET
       rescue Exception
-        Process.kill('TERM', io.pid) rescue nil
+        Process.kill('TERM', pid) rescue nil
         raise
       ensure
         io.close
+        _, status = Process.wait2(pid)
       end
 
       if error
         raise exec_runtime_error("#{error[0]}: #{error[1]}")
-      elsif !$?.success? || output.nil?
-        raise exec_runtime_error(buffer.empty? ? "rolldown exited with #{$?}" : buffer)
+      elsif !status.success? || output.nil?
+        raise exec_runtime_error("rolldown exited with #{status}")
       end
       output
     end
