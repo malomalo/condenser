@@ -232,6 +232,33 @@ class RolldownTest < ActiveSupport::TestCase
     FILE
   end
 
+  test 'import an aliased module' do
+    @env.unregister_exporter('application/javascript')
+    @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path, aliases: { 'maths' => File.join(@path, 'math.js') }))
+
+    file 'main.js', <<~JS
+      import { cube } from 'maths';
+
+      console.log( cube( 5 ) );
+    JS
+    file 'math.js', <<~JS
+      export function cube ( x ) {
+        return x * x * x;
+      }
+    JS
+
+    assert_exported_file 'main.js', 'application/javascript', <<~FILE
+      //#region math.js
+      function cube(x) {
+      	return x * x * x;
+      }
+      //#endregion
+      //#region main.js
+      console.log(cube(5));
+      //#endregion
+    FILE
+  end
+
   test 'an error raised in ruby stops the node process' do
     file 'main.js', <<~JS
       import maths from 'maths/*';
