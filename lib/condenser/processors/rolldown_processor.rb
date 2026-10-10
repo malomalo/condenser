@@ -96,8 +96,14 @@ class Condenser::RolldownProcessor
 
     def exec_runtime(config)
       io, child_io = UNIXSocket.pair
-      pid = Process.spawn(binary, '--max_old_space_size=5120', SCRIPT, JSON.generate(config), in: File::NULL, 3 => child_io)
-      child_io.close
+      begin
+        pid = Process.spawn(binary, '--max_old_space_size=5120', SCRIPT, JSON.generate(config), in: File::NULL, 3 => child_io)
+      rescue Exception
+        io.close
+        raise
+      ensure
+        child_io.close
+      end
       output = nil
       error = nil
 

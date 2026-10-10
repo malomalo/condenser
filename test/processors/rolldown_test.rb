@@ -255,6 +255,18 @@ class RolldownTest < ActiveSupport::TestCase
     pids&.each { |pid| Process.kill('KILL', pid) rescue nil }
   end
 
+  test 'the channel is closed if node can not be started' do
+    file 'main.js', <<~JS
+      console.log( 1 );
+    JS
+    sockets = UNIXSocket.pair
+    UNIXSocket.stubs(:pair).returns(sockets)
+    Process.stubs(:spawn).raises(Errno::ENOENT)
+
+    assert_raises(Errno::ENOENT) { @env.find('main.js').export }
+    assert sockets.all?(&:closed?)
+  end
+
   test 'an unresolved import logs a warning' do
     file 'main.js', <<~JS
       import x from 'nope';
