@@ -33,9 +33,17 @@ class Condenser::RolldownProcessor
   end
 
   def options
-    options = {prefix: @prefix, dynamic_imports: @dynamic_imports, aliases: @aliases}
+    options = {prefix: @prefix, dynamic_imports: @dynamic_imports, aliases: @aliases, rolldown: rolldown_version}
     options[:platform] = @platform if @platform != 'neutral'
     options
+  end
+
+  def rolldown_version
+    @rolldown_version ||= begin
+      path = @bundler_path || (@npm_dir && File.join(@npm_dir, 'node_modules', 'rolldown'))
+      package = path && File.join(path, 'package.json')
+      JSON.parse(File.read(package))['version'] if package && File.exist?(package)
+    end
   end
 
   # @param prefix [String] prefixed to the URL of kept dynamic imports

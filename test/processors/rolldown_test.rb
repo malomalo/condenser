@@ -290,6 +290,18 @@ class RolldownTest < ActiveSupport::TestCase
     FileUtils.rm_rf(package)
   end
 
+  test 'the installed Rolldown version is in the options' do
+    version = JSON.parse(File.read(File.join(@npm_dir, 'node_modules', 'rolldown', 'package.json')))['version']
+    assert_equal version, @env.exporters['application/javascript'].first.options[:rolldown]
+    digest = @env.export_pipeline_digest('application/javascript')
+
+    file 'rolldown/package.json', JSON.generate({ name: 'rolldown', version: '0.0.0' })
+    @env.unregister_exporter('application/javascript')
+    @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path, bundler_path: File.join(@path, 'rolldown')))
+    assert_equal '0.0.0', @env.exporters['application/javascript'].first.options[:rolldown]
+    assert_not_equal digest, @env.export_pipeline_digest('application/javascript')
+  end
+
   test 'an error raised in ruby stops the node process' do
     file 'main.js', <<~JS
       import maths from 'maths/*';
