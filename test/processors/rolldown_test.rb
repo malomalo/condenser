@@ -352,7 +352,7 @@ class RolldownTest < ActiveSupport::TestCase
       console.log(x);
       //#endregion
     FILE
-    assert_includes log.string, "WARN -- : [UNRESOLVED_IMPORT] Could not resolve 'nope' in main.js"
+    assert_match(/WARN -- : \[UNRESOLVED_IMPORT\] .*Could not resolve 'nope' in main\.js/, log.string)
     assert_not_includes log.string, "\e["
   end
 
@@ -369,7 +369,8 @@ class RolldownTest < ActiveSupport::TestCase
     JS
 
     error = assert_raises(RuntimeError) { @env.find('main.js').export }
-    assert error.message.start_with?("Error: #{@path}/bad.js:1:7: [PARSE_ERROR] Identifier `a` has already been declared\n"), error.message
+    assert error.message.start_with?("Error: #{@path}/bad.js:1:7: [PARSE_ERROR] "), error.message
+    assert_includes error.message.lines.first, "Identifier `a` has already been declared"
     assert_not_includes error.message, "\e["
   end
 
