@@ -101,4 +101,36 @@ class RolldownCoverageTest < ActiveSupport::TestCase
     assert_equal "top\nnested\n", run_bundle('main.js')
   end
 
+  test 'import an svg file' do
+    file 'icon.svg', <<~SVG
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path d="M0 0L10 10"/></svg>
+    SVG
+    file 'main.js', <<~JS
+      import icon from './icon.svg';
+
+      document.body.append( icon() );
+    JS
+
+    source = @env.find('main.js').export.source
+    assert_includes source, 'document.createElementNS("http://www.w3.org/2000/svg", "svg")'
+    assert_includes source, '"0 0 10 10"'
+    assert_includes source, '"M0 0L10 10"'
+    assert_not_includes source, '<svg'
+  end
+
+  test 'import a jst file' do
+    file 'template.jst', <<~JS
+      export default function (locals) {
+          return "<b>" + name + "</b>";
+      }
+    JS
+    file 'main.js', <<~JS
+      import template from './template';
+
+      console.log( template({ name: 'x' }) );
+    JS
+
+    assert_equal "<b>x</b>\n", run_bundle('main.js')
+  end
+
 end
