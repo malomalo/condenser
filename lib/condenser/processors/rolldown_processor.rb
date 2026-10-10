@@ -118,6 +118,8 @@ class Condenser::RolldownProcessor
               output = message['args'][0]
             when 'error'
               error = message['args']
+            when 'warn'
+              @environment.logger.warn(message['args'][0])
             else
               ret = answer(message['method'], *message['args'])
               io.write(JSON.generate({rid: message['rid'], return: ret}), "\n")

@@ -255,4 +255,23 @@ class RolldownTest < ActiveSupport::TestCase
     pids&.each { |pid| Process.kill('KILL', pid) rescue nil }
   end
 
+  test 'an unresolved import logs a warning' do
+    file 'main.js', <<~JS
+      import x from 'nope';
+
+      console.log( x );
+    JS
+
+    log = StringIO.new
+    @env.logger = Logger.new(log, level: :warn)
+    assert_exported_file 'main.js', 'application/javascript', <<~FILE
+      import x from "nope";
+      //#region main.js
+      console.log(x);
+      //#endregion
+    FILE
+    assert_includes log.string, "WARN -- : [UNRESOLVED_IMPORT] Could not resolve 'nope' in main.js"
+    assert_not_includes log.string, "\e["
+  end
+
 end
