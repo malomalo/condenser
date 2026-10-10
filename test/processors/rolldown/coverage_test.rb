@@ -1,4 +1,5 @@
 require 'test_helper'
+require 'open3'
 
 class RolldownCoverageTest < ActiveSupport::TestCase
 
@@ -11,6 +12,13 @@ class RolldownCoverageTest < ActiveSupport::TestCase
   def register_rolldown(**options)
     @env.unregister_exporter('application/javascript')
     @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path, **options))
+  end
+
+  def run_bundle(name)
+    File.write(File.join(@path, 'bundle.mjs'), @env.find(name).export.source)
+    stdout, stderr, status = Open3.capture3('node', File.join(@path, 'bundle.mjs'))
+    assert status.success?, stderr
+    stdout
   end
 
   [:keep, :local].each do |mode|
@@ -66,6 +74,31 @@ class RolldownCoverageTest < ActiveSupport::TestCase
     assert_not_includes error.message, "\e["
   ensure
     FileUtils.rm_rf(package)
+  end
+
+  test 'import glob via /**/* includes nested directories' do
+    file 'main.js', <<~JS
+      import 'initializers/**/*';
+
+      console.log( [a, b, c].join(' ') );
+    JS
+    file 'initializers/a.js', "globalThis.a = 'top';\n"
+    file 'initializers/sub/b.js', "globalThis.b = 'nested';\n"
+    file 'initializers/sub/deep/c.js', "globalThis.c = 'deeper';\n"
+
+    assert_equal "top nested deeper\n", run_bundle('main.js')
+  end
+
+  test 'import glob via /**/* as array' do
+    file 'main.js', <<~JS
+      import initializers from 'initializers/**/*';
+
+      initializers.forEach((initializer) => initializer());
+    JS
+    file 'initializers/a.js', "export default function a () { console.log('top'); }\n"
+    file 'initializers/sub/b.js', "export default function b () { console.log('nested'); }\n"
+
+    assert_equal "top\nnested\n", run_bundle('main.js')
   end
 
 end
