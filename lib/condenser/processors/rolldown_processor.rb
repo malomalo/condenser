@@ -9,9 +9,6 @@ class Condenser::RolldownProcessor
 
   @@setup = []
 
-  def self.setup(environment)
-  end
-
   def self.install_npm_packages(npm_path)
     return if @@setup.include?(npm_path)
 
