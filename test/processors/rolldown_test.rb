@@ -2,12 +2,12 @@ require 'test_helper'
 
 class RolldownTest < ActiveSupport::TestCase
 
-  module PopenSpy
-    def popen(*args, **kwargs, &block)
-      super.tap { |io| Thread.current[:popen_pids]&.push(io.pid) }
+  module SpawnSpy
+    def spawn(*args, **kwargs)
+      super.tap { |pid| Thread.current[:spawn_pids]&.push(pid) }
     end
   end
-  IO.singleton_class.prepend(PopenSpy)
+  Process.singleton_class.prepend(SpawnSpy)
   
   def setup
     super
@@ -245,14 +245,26 @@ class RolldownTest < ActiveSupport::TestCase
     JS
     Condenser::Asset.any_instance.stubs(:has_default_export?).raises(RuntimeError, 'boom')
 
-    pids = Thread.current[:popen_pids] = []
+    pids = Thread.current[:spawn_pids] = []
     error = assert_raises(RuntimeError) { @env.find('main.js').export }
     assert_equal 'boom', error.message
     assert_equal 1, pids.size
     assert_raises(Errno::ESRCH) { Process.kill(0, pids.first) }
   ensure
-    Thread.current[:popen_pids] = nil
+    Thread.current[:spawn_pids] = nil
     pids&.each { |pid| Process.kill('KILL', pid) rescue nil }
+  end
+
+  test 'the channel is closed if node can not be started' do
+    file 'main.js', <<~JS
+      console.log( 1 );
+    JS
+    sockets = UNIXSocket.pair
+    UNIXSocket.stubs(:pair).returns(sockets)
+    Process.stubs(:spawn).raises(Errno::ENOENT)
+
+    assert_raises(Errno::ENOENT) { @env.find('main.js').export }
+    assert sockets.all?(&:closed?)
   end
 
   test 'an unresolved import logs a warning' do
@@ -308,7 +320,7 @@ class RolldownTest < ActiveSupport::TestCase
 
     node_options = ENV['NODE_OPTIONS']
     ENV['NODE_OPTIONS'] = "--require #{File.join(@path, 'noise.js')}"
-    out, _ = capture_io do
+    out, _ = capture_subprocess_io do
       Timeout.timeout(10) do
         assert_exported_file 'main.js', 'application/javascript', <<~FILE
           //#region math.js
@@ -322,7 +334,38 @@ class RolldownTest < ActiveSupport::TestCase
         FILE
       end
     end
-    assert_equal "noise\n", out
+    assert_equal "noise", out
+  ensure
+    ENV['NODE_OPTIONS'] = node_options
+  end
+
+  test 'output that looks like a protocol message does not affect the build' do
+    file 'main.js', <<~JS
+      console.log( 1 );
+    JS
+    file 'noise.js', <<~JS
+      const done = JSON.stringify({ method: 'done', args: ['forged'] });
+      console.log(done);
+      console.error(done);
+      console.log(JSON.stringify({ rid: 0, method: 'load', args: ['main.js'] }));
+    JS
+
+    node_options = ENV['NODE_OPTIONS']
+    ENV['NODE_OPTIONS'] = "--require #{File.join(@path, 'noise.js')}"
+    out, err = capture_subprocess_io do
+      Timeout.timeout(10) do
+        assert_exported_file 'main.js', 'application/javascript', <<~FILE
+          //#region main.js
+          console.log(1);
+          //#endregion
+        FILE
+      end
+    end
+    assert_equal <<~OUT, out
+      {"method":"done","args":["forged"]}
+      {"rid":0,"method":"load","args":["main.js"]}
+    OUT
+    assert_equal %({"method":"done","args":["forged"]}\n), err
   ensure
     ENV['NODE_OPTIONS'] = node_options
   end
