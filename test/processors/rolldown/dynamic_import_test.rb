@@ -87,9 +87,9 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
   test 'file with dynamic imports' do
     1.upto(3) do |i|
       if i == 3
-        file "module-name/path/to/specific/un-exported/file#{i}.js", "#{i}"
+        file "module-name/path/to/specific/un-exported/file#{i}.js", "console.log('file#{i}');"
       else
-        file "module-name#{i}.js", "#{i}"
+        file "module-name#{i}.js", "console.log('file#{i}');"
       end
     end
 
@@ -106,6 +106,10 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
       "module-name2.js",
       "module-name/path/to/specific/un-exported/file3.js"
     ], asset.linked_assets.map(&:filename)
+
+    source = assert_exported_file('name.js', 'application/javascript').source
+    refute_match(/\bimport\s*\(/, source)
+    1.upto(3) { |i| assert_match(/console\.log\(["']file#{i}["']\)/, source) }
   end
 
   test "dynamic imports don't inlined and are exported" do
