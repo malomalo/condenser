@@ -3,11 +3,6 @@
 require 'json'
 require 'securerandom'
 
-# A drop-in alternative to Condenser::RollupProcessor that bundles with
-# Rolldown. Ruby resolves and loads only what condenser knows about (the
-# entry, load-path imports, processed sources such as .erb/.ejx/.jst/.svg,
-# globs and dynamic imports); Rolldown resolves and reads node_modules itself.
-# See rolldown_processor.js for the Node side.
 class Condenser::RolldownProcessor
 
   SCRIPT = File.expand_path('rolldown_processor.js', __dir__)
@@ -46,13 +41,6 @@ class Condenser::RolldownProcessor
     end
   end
 
-  # @param prefix [String] prefixed to the URL of kept dynamic imports
-  # @param dynamic_imports [Symbol, false] :inline (the default) inlines
-  #   dynamic imports; anything else (:keep, :local, false) keeps them as
-  #   imports of the separately exported asset's URL
-  # @param bundler_path [String] the rolldown package directory to load;
-  #   defaults to +dir+/node_modules/rolldown
-  # @param aliases [Hash] passed to Rolldown's resolve.alias
   def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, aliases: {}, platform: 'neutral')
     self.class.install_npm_packages(dir) if bundler_path.nil? && dir
     @npm_dir = dir
@@ -82,8 +70,6 @@ class Condenser::RolldownProcessor
       @input = input
       @accept = input[:content_types].last
       @token = "#{SecureRandom.hex(8)}:"
-      # The entry's source is always the input being exported, not what
-      # condenser would load for that file.
       @entry = input[:source_file]
 
       config = {
@@ -173,8 +159,6 @@ class Condenser::RolldownProcessor
       string.encoding == Encoding::BINARY ? string.dup.force_encoding(Encoding::UTF_8) : string
     end
 
-    # A module importing every file matched by +glob+, whose default export
-    # is an array of their exports.
     def glob_module(glob)
       code = String.new
       exports = []

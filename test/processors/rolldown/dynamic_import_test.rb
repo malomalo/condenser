@@ -33,9 +33,6 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
       export {cube};
     JS
 
-    # Unlike Rollup, which hoists math/b.js's side effect (`x;`) to the top of
-    # the bundle, Rolldown runs each inlined module when its import() is
-    # evaluated, as native dynamic imports would.
     assert_exported_file 'main.js', 'application/javascript', <<~'FILE'
       //#region \0rolldown/runtime.js
       var __defProp = Object.defineProperty;
@@ -371,11 +368,6 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
         //#endregion
       JS
 
-      # math/cube.js dynamically imports math/math.js, the module being
-      # exported, while math/math.js statically imports it. This output throws
-      # when run ("Cannot read properties of undefined (reading 'then')"), as
-      # Rollup's does ("Cannot access 'entry' before initialization"); this
-      # asserts what Rolldown currently produces.
       assert data['math/math.js']
       assert_equal 951, data['math/math.js']['size']
       assert_equal math.path, data['math/math.js']['path']
