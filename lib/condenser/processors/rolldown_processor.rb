@@ -33,7 +33,9 @@ class Condenser::RolldownProcessor
   end
 
   def options
-    {prefix: @prefix, dynamic_imports: @dynamic_imports, aliases: @aliases}
+    options = {prefix: @prefix, dynamic_imports: @dynamic_imports, aliases: @aliases}
+    options[:platform] = @platform if @platform != 'neutral'
+    options
   end
 
   # @param prefix [String] prefixed to the URL of kept dynamic imports
@@ -43,28 +45,30 @@ class Condenser::RolldownProcessor
   # @param bundler_path [String] the rolldown package directory to load;
   #   defaults to +dir+/node_modules/rolldown
   # @param aliases [Hash] passed to Rolldown's resolve.alias
-  def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, aliases: {})
+  def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, aliases: {}, platform: 'neutral')
     self.class.install_npm_packages(dir) if bundler_path.nil? && dir
     @npm_dir = dir
     @prefix = prefix
     @dynamic_imports = dynamic_imports
     @bundler_path = bundler_path
     @aliases = aliases
+    @platform = platform
   end
 
   def call(environment, input)
-    Runner.new(@npm_dir, prefix: @prefix, dynamic_imports: @dynamic_imports, bundler_path: @bundler_path, aliases: @aliases).call(environment, input)
+    Runner.new(@npm_dir, prefix: @prefix, dynamic_imports: @dynamic_imports, bundler_path: @bundler_path, aliases: @aliases, platform: @platform).call(environment, input)
   end
 
   class Runner < Condenser::NodeProcessor
     # Used as the entry's id if the asset has no source file.
     VIRTUAL_ENTRY = '/__condenser_rolldown__/entry.js'
 
-    def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, aliases: {})
+    def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, aliases: {}, platform: 'neutral')
       super(dir)
       @prefix = prefix
       @dynamic_imports = dynamic_imports
       @aliases = aliases
+      @platform = platform
       @bundler_path = bundler_path || (dir && npm_module_path('rolldown')) || 'rolldown'
     end
 
@@ -83,7 +87,8 @@ class Condenser::RolldownProcessor
         bundlerPath: @bundler_path,
         cwd: environment.base || Dir.pwd,
         modules: npm_path ? [npm_module_path] : [],
-        aliases: @aliases
+        aliases: @aliases,
+        platform: @platform
       }
 
       input[:source] = exec_runtime(config)
