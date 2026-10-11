@@ -154,7 +154,6 @@ class RolldownTest < ActiveSupport::TestCase
   end
 
   test 'import glob via /* as array' do
-    $d = true
     file 'main.js', <<~JS
       import maths from 'maths/*';
 
@@ -197,7 +196,6 @@ class RolldownTest < ActiveSupport::TestCase
       console.log(x);
       //#endregion
     FILE
-    $d = false
   end
 
   test 'import the same file via relative require and full path' do
