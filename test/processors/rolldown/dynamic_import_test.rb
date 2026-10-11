@@ -8,6 +8,16 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
     @env.unregister_exporter('application/javascript')
     @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path))
   end
+
+  def without_rolldown_runtime(source)
+    runtime = /^\/\/#region \\0rolldown\/runtime\.js\n.*?^\/\/#endregion\n/m
+    assert_match runtime, source
+    source.sub(runtime, '')
+  end
+
+  def assert_written_size(export_dir, entry)
+    assert_equal File.size(File.join(export_dir, entry['path'])), entry['size']
+  end
  
   test 'dynamic imports get inlined' do
     file 'main.js', <<~JS
@@ -36,27 +46,8 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
     # Unlike Rollup, which hoists math/b.js's side effect (`x;`) to the top of
     # the bundle, Rolldown runs each inlined module when its import() is
     # evaluated, as native dynamic imports would.
-    assert_exported_file 'main.js', 'application/javascript', <<~'FILE'
-      //#region \0rolldown/runtime.js
-      var __defProp = Object.defineProperty;
-      var __esmMin = (fn, res, err) => () => {
-      	if (err) throw err[0];
-      	try {
-      		return fn && (res = fn(fn = 0)), res;
-      	} catch (e) {
-      		throw err = [e], e;
-      	}
-      };
-      var __exportAll = (all, no_symbols) => {
-      	let target = {};
-      	for (var name in all) __defProp(target, name, {
-      		get: all[name],
-      		enumerable: true
-      	});
-      	if (!no_symbols) __defProp(target, Symbol.toStringTag, { value: "Module" });
-      	return target;
-      };
-      //#endregion
+    source = without_rolldown_runtime(@env.find('main.js').export.source)
+    assert_equal(<<~'FILE'.rstrip, source.rstrip)
       //#region math/cube.js
       function cube$1(x) {
       	return x * x * x;
@@ -171,7 +162,7 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
       data = JSON.parse(File.read(manifest.filename))
 
       assert data['main.js']
-      assert_equal 259, data['main.js']['size']
+      assert_written_size export_dir, data['main.js']
       assert_equal main.path, data['main.js']['path']
       assert_equal(<<~JS.rstrip, File.read(File.join(export_dir, data['main.js']['path'])).rstrip)
         //#region main.js
@@ -182,7 +173,7 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
       JS
 
       assert data['math/math.js']
-      assert_equal 93, data['math/math.js']['size']
+      assert_written_size export_dir, data['math/math.js']
       assert_equal math.path, data['math/math.js']['path']
       assert_equal(<<~JS.rstrip, File.read(File.join(export_dir, data['math/math.js']['path'])).rstrip)
         //#region math/cube.js
@@ -194,7 +185,7 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
       JS
 
       assert data['math/b.js']
-      assert_equal 129, data['math/b.js']['size']
+      assert_written_size export_dir, data['math/b.js']
       assert_equal mathb.path, data['math/b.js']['path']
       assert_equal(<<~JS.rstrip, File.read(File.join(export_dir, data['math/b.js']['path'])).rstrip)
         //#region math/cube.js
@@ -269,7 +260,7 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
       data = JSON.parse(File.read(manifest.filename))
 
       assert data['main.js']
-      assert_equal 273, data['main.js']['size']
+      assert_written_size export_dir, data['main.js']
       assert_equal main.path, data['main.js']['path']
       assert_equal(<<~JS.rstrip, File.read(File.join(export_dir, data['main.js']['path'])).rstrip)
         //#region main.js
@@ -280,7 +271,7 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
       JS
 
       assert data['math/math.js']
-      assert_equal 93, data['math/math.js']['size']
+      assert_written_size export_dir, data['math/math.js']
       assert_equal math.path, data['math/math.js']['path']
       assert_equal(<<~JS.rstrip, File.read(File.join(export_dir, data['math/math.js']['path'])).rstrip)
         //#region math/cube.js
@@ -292,7 +283,7 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
       JS
 
       assert data['math/b.js']
-      assert_equal 129, data['math/b.js']['size']
+      assert_written_size export_dir, data['math/b.js']
       assert_equal mathb.path, data['math/b.js']['path']
       assert_equal(<<~JS.rstrip, File.read(File.join(export_dir, data['math/b.js']['path'])).rstrip)
         //#region math/cube.js
@@ -366,7 +357,7 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
       assert_equal ["main.js", "math/math.js"], data.keys
 
       assert data['main.js']
-      assert_equal 162, data['main.js']['size']
+      assert_written_size export_dir, data['main.js']
       assert_equal main.path, data['main.js']['path']
       assert_equal(<<~JS.rstrip, File.read(File.join(export_dir, data['main.js']['path'])).rstrip)
         //#region main.js
@@ -381,29 +372,9 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
       # Rollup's does ("Cannot access 'entry' before initialization"); this
       # asserts what Rolldown currently produces.
       assert data['math/math.js']
-      assert_equal 951, data['math/math.js']['size']
+      assert_written_size export_dir, data['math/math.js']
       assert_equal math.path, data['math/math.js']['path']
-      assert_equal(<<~'JS'.rstrip, File.read(File.join(export_dir, data['math/math.js']['path'])).rstrip)
-        //#region \0rolldown/runtime.js
-        var __defProp = Object.defineProperty;
-        var __esmMin = (fn, res, err) => () => {
-        	if (err) throw err[0];
-        	try {
-        		return fn && (res = fn(fn = 0)), res;
-        	} catch (e) {
-        		throw err = [e], e;
-        	}
-        };
-        var __exportAll = (all, no_symbols) => {
-        	let target = {};
-        	for (var name in all) __defProp(target, name, {
-        		get: all[name],
-        		enumerable: true
-        	});
-        	if (!no_symbols) __defProp(target, Symbol.toStringTag, { value: "Module" });
-        	return target;
-        };
-        //#endregion
+      assert_equal(<<~'JS'.rstrip, without_rolldown_runtime(File.read(File.join(export_dir, data['math/math.js']['path']))).rstrip)
         //#region math/cube.js
         function cube(x) {
         	return math.number(x) * x * x;
