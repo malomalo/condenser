@@ -45,9 +45,9 @@ class RolldownWorkerTest < ActiveSupport::TestCase
 
   # Exports through the processor itself, so condenser's export cache doesn't
   # skip the build.
-  def export(name, processor: @processor)
+  def export(name, processor: @processor, source: nil)
     asset = @env.find(name)
-    input = { source: asset.source.dup, source_file: asset.source_file, filename: asset.filename.dup, content_types: asset.content_types, map: nil }
+    input = { source: source || asset.source.dup, source_file: asset.source_file, filename: asset.filename.dup, content_types: asset.content_types, map: nil }
     processor.call(@env, input)[:source]
   end
 
@@ -69,6 +69,15 @@ class RolldownWorkerTest < ActiveSupport::TestCase
 
   def on_answer(&block)
     RolldownWorkerTest.on_answer = block
+  end
+
+  def loads
+    loaded = []
+    on_answer { |method, args, _| loaded << args[0] if method == 'load' }
+    yield
+    loaded
+  ensure
+    RolldownWorkerTest.on_answer = nil
   end
 
   test 'exports reuse one worker' do
@@ -133,7 +142,7 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     reference = export('main.js')
     killed = []
     on_answer do |method, _, _|
-      if method == 'load' && killed.empty?
+      if method == 'resolve' && killed.empty?
         killed << worker_pids.first
         Process.kill('KILL', killed.first)
       end
@@ -149,7 +158,7 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     export('main.js')
     killed = []
     on_answer do |method, _, _|
-      if method == 'load'
+      if method == 'resolve'
         killed << worker_pids.first
         Process.kill('KILL', killed.last)
       end
@@ -204,25 +213,19 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     JS
     5.times { |i| file "maths/f#{i}.js", "export default function f#{i} (x) { return x + #{i}; }\n" }
     reference = export('main.js')
-    pid = worker_pids.first
+    Condenser::RolldownProcessor.stop_workers
 
     on_answer do |method, args, _|
       raise ArgumentError, 'boom' if method == 'load' && args[0].end_with?('f2.js')
     end
     error = assert_raises(ArgumentError) { export('main.js') }
     assert_equal 'boom', error.message
+    pid = worker_pids.first
     assert_equal [pid], worker_pids
 
-    answered = []
-    on_answer { |method, args, runner| answered << [method, args, runner] }
+    RolldownWorkerTest.on_answer = nil
     assert_equal reference, export('main.js')
     assert_equal [pid], worker_pids
-    assert_equal 1, answered.map(&:last).uniq.size
-
-    clean = answered.map { |method, args, _| [method, args] }
-    answered.clear
-    export('main.js')
-    assert_equal clean.sort, answered.map { |method, args, _| [method, args] }.sort
   end
 
   test 'a request from an earlier build is not answered by the current one' do
@@ -257,7 +260,7 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     reference = export('main.js')
     pid = worker_pids.first
 
-    on_answer { |method, _, _| raise Abort if method == 'load' }
+    on_answer { |method, _, _| raise Abort if method == 'resolve' }
     assert_raises(Abort) { export('main.js') }
     assert_not alive?(pid)
     assert_empty worker_pids
@@ -421,6 +424,148 @@ class RolldownWorkerTest < ActiveSupport::TestCase
       Process.kill('KILL', child) rescue nil if child
       Process.kill('KILL', worker) rescue nil if worker
     end
+  end
+
+  test 'an unchanged module is not loaded from ruby again' do
+    math = File.join(@path, 'math.js')
+    reference = nil
+    assert_equal [File.join(@path, 'main.js'), math].sort, loads { reference = export('main.js') }.sort
+
+    assert_empty loads { assert_equal reference, export('main.js') }
+  end
+
+  test 'an edited module is loaded again and changes the output' do
+    export('main.js')
+    file 'math.js', <<~JS
+      export function cube ( x ) {
+        return x * x * x * 1;
+      }
+    JS
+
+    source = nil
+    assert_equal [File.join(@path, 'math.js')], loads { source = export('main.js') }
+    assert_includes source, 'x * x * x * 1'
+  end
+
+  test 'the cache is shared by entries and digests are checked per build' do
+    file 'other.js', <<~JS
+      import { cube } from './math.js';
+
+      console.log( cube( 6 ) );
+    JS
+    export('main.js')
+    assert_equal [File.join(@path, 'other.js')], loads { export('other.js') }
+
+    file 'math.js', "export function cube ( x ) { return 'edited'; }\n"
+    assert_includes export('other.js'), '"edited"'
+    assert_includes export('main.js'), '"edited"'
+  end
+
+  test 'an edited entry changes the output' do
+    export('main.js')
+    file 'main.js', <<~JS
+      import { cube } from './math.js';
+
+      console.log( cube( 7 ) );
+    JS
+
+    source = nil
+    assert_equal [File.join(@path, 'main.js')], loads { source = export('main.js') }
+    assert_includes source, 'cube(7)'
+  end
+
+  test 'the export input of an entry is not served when the file is imported' do
+    file 'other.js', <<~JS
+      import './main.js';
+    JS
+
+    assert_includes export('main.js', source: "console.log( 'input' );\n"), '"input"'
+    source = export('other.js')
+    assert_includes source, 'cube(5)'
+    assert_not_includes source, '"input"'
+    assert_includes export('main.js', source: "console.log( 'input' );\n"), '"input"'
+  end
+
+  test 'a module that imports the entry gets the export input' do
+    file 'main.js', <<~JS
+      import { name } from './cycle.js';
+
+      export const entry = 'entry';
+      console.log( name );
+    JS
+    file 'cycle.js', <<~JS
+      import { entry } from './main.js';
+
+      export const name = 'cycle';
+      console.log( entry );
+    JS
+
+    export('main.js')
+    source = export('main.js', source: "import { name } from './cycle.js';\nexport const entry = 'input';\nconsole.log( name );\n")
+    assert_includes source, '"input"'
+    assert_not_includes source, '"entry"'
+  end
+
+  test 'edits to templated and transformed sources change the output' do
+    file 'main.js', <<~JS
+      import value from './value';
+      import template from './template';
+      import icon from './icon.svg';
+
+      console.log( value, template({ name: 'x' }), icon );
+    JS
+    file 'value.js.erb', "export default '<%= 'a' * 3 %>';\n"
+    file 'template.jst', <<~JS
+      export default function (locals) {
+          return "<b>" + name + "</b>";
+      }
+    JS
+    file 'icon.svg', %{<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"></svg>\n}
+
+    source = export('main.js')
+    assert_includes source, '"aaa"'
+    assert_includes source, '"<b>"'
+    assert_includes source, '"0 0 10 10"'
+    assert_empty loads { export('main.js') }
+
+    file 'value.js.erb', "export default '<%= 'b' * 3 %>';\n"
+    file 'template.jst', <<~JS
+      export default function (locals) {
+          return "<i>" + name + "</i>";
+      }
+    JS
+    file 'icon.svg', %{<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"></svg>\n}
+    source = export('main.js')
+    assert_includes source, '"bbb"'
+    assert_includes source, '"<i>"'
+    assert_includes source, '"0 0 20 20"'
+    assert_not_includes source, '"aaa"'
+  end
+
+  test 'glob and dynamic import modules are served from the cache until they change' do
+    file 'main.js', <<~JS
+      import maths from 'maths/*';
+
+      console.log( maths.map((f) => f(2)), await import('./lazy.js') );
+    JS
+    file 'maths/a.js', "export default function a (x) { return x + 1; }\n"
+    file 'maths/b.js', "export default function b (x) { return x + 2; }\n"
+    file 'lazy.js', "export default 'lazy';\n"
+    reference = export('main.js')
+    assert_empty loads { assert_equal reference, export('main.js') }
+
+    file 'maths/b.js', "export default function b (x) { return x + 3; }\n"
+    file 'lazy.js', "export default 'lazier';\n"
+    source = nil
+    assert_equal [File.join(@path, 'lazy.js'), File.join(@path, 'maths/b.js')], loads { source = export('main.js') }.sort
+    assert_includes source, 'x + 3'
+    assert_includes source, '"lazier"'
+  end
+
+  test 'a restarted worker starts with an empty cache' do
+    register_rolldown(max_builds: 1)
+    export('main.js')
+    assert_equal [File.join(@path, 'main.js'), File.join(@path, 'math.js')], loads { export('main.js') }.sort
   end
 
 end

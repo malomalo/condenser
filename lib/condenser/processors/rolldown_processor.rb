@@ -254,9 +254,11 @@ class Condenser::RolldownProcessor
       @input = input
       @accept = input[:content_types].last
       @entry = input[:source_file]
+      @digests = {}
 
       config = {
         entry: @entry,
+        entryDigest: digest_for(@entry),
         bundlerPath: @bundler_path,
         cwd: environment.base || Dir.pwd,
         modules: npm_path ? [npm_module_path] : [],
@@ -296,18 +298,29 @@ class Condenser::RolldownProcessor
       when 'resolve'
         importee, importer = args
         # npm: false; Rolldown resolves node_modules when this is nil.
-        @environment.find(importee, importer, accept: @accept)&.source_file
+        id = @environment.find(importee, importer, accept: @accept)&.source_file
+        { id: id, digest: digest_for(id) } if id
       when 'load'
         id = args.first
         if id == @entry
-          { code: utf8(@input[:source]), map: @input[:map] }
+          { code: utf8(@input[:source]), map: @input[:map], digest: digest_for(@entry) }
         elsif (asset = @environment.find(id, accept: @accept))
-          { code: utf8(asset.source), map: asset.sourcemap }
+          { code: utf8(asset.source), map: asset.sourcemap, digest: asset.hexdigest }
         end
       when 'glob'
         glob_module(args.first)
       when 'resolveDynamicImport'
         resolve_dynamic_import(*args)
+      end
+    end
+
+    # The digest of what `load` returns for +id+: the export input for the
+    # entry, otherwise the processed asset's.
+    def digest_for(id)
+      @digests[id] ||= if id == @entry
+        @environment.digestor.hexdigest(@input[:source])
+      else
+        @environment.find(id, accept: @accept)&.hexdigest
       end
     end
 
@@ -318,7 +331,9 @@ class Condenser::RolldownProcessor
     def glob_module(glob)
       code = String.new
       exports = []
+      digests = {}
       @environment.resolve(glob, nil, accept: @accept, npm: true).each_with_index do |f, i|
+        digests[f.source_file] = digest_for(f.source_file)
         if f.has_default_export?
           code << "import _#{i} from #{JSON.generate(f.source_file)};\n"
           exports << "_#{i}"
@@ -330,6 +345,7 @@ class Condenser::RolldownProcessor
         end
       end
       code << "export default [#{exports.join(', ')}];"
+      { code: code, digests: digests }
     end
 
     def resolve_dynamic_import(importee, importer)
@@ -339,11 +355,11 @@ class Condenser::RolldownProcessor
       return if asset.nil?
 
       if asset.source_file == @input[:source_file]
-        { id: @entry }
+        { id: @entry, digest: digest_for(@entry) }
       elsif @dynamic_imports == :keep
         { external: true, path: File.join("/", *[@prefix, asset.path].compact) }
       else
-        { id: asset.source_file }
+        { id: asset.source_file, digest: digest_for(asset.source_file) }
       end
     end
   end
