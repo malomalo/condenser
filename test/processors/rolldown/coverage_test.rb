@@ -28,27 +28,32 @@ class RolldownCoverageTest < ActiveSupport::TestCase
     stdout
   end
 
-  [:keep, :local].each do |mode|
-    test "dynamic_imports: #{mode.inspect} rewrites dynamic imports as URLs" do
-      register_rolldown(dynamic_imports: mode, prefix: '/assets')
+  test "dynamic_imports: :keep rewrites dynamic imports as URLs" do
+    register_rolldown(dynamic_imports: :keep, prefix: '/assets')
 
-      file 'main.js', <<~JS
-        const math = await import('./math/math');
-        const remote = await import('https://example.com/remote.js');
+    file 'main.js', <<~JS
+      const math = await import('./math/math');
+      const remote = await import('https://example.com/remote.js');
 
-        console.log( math.cube( 5 ), remote );
-      JS
-      file 'math/math.js', <<~JS
-        export function cube ( x ) {
-          return x * x * x;
-        }
-      JS
+      console.log( math.cube( 5 ), remote );
+    JS
+    file 'math/math.js', <<~JS
+      export function cube ( x ) {
+        return x * x * x;
+      }
+    JS
 
-      source = @env.find('main.js').export.source
-      assert_includes source, %{import("/assets/#{@env.find('math/math.js').path}")}
-      assert_includes source, 'import("https://example.com/remote.js")'
-      assert_not_includes source, 'x * x * x'
-      assert_equal mode, @env.exporters['application/javascript'].first.options[:dynamic_imports]
+    source = @env.find('main.js').export.source
+    assert_includes source, %{import("/assets/#{@env.find('math/math.js').path}")}
+    assert_includes source, 'import("https://example.com/remote.js")'
+    assert_not_includes source, 'x * x * x'
+    assert_equal :keep, @env.exporters['application/javascript'].first.options[:dynamic_imports]
+  end
+
+  test "dynamic_imports: only accepts :inline and :keep" do
+    [:local, false, nil, 'keep'].each do |mode|
+      error = assert_raises(ArgumentError) { Condenser::RolldownProcessor.new(@env.npm_path, dynamic_imports: mode) }
+      assert_equal "dynamic_imports must be :inline or :keep, got #{mode.inspect}", error.message
     end
   end
 

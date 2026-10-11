@@ -6,6 +6,7 @@ require 'socket'
 class Condenser::RolldownProcessor
 
   SCRIPT = File.expand_path('rolldown_processor.js', __dir__)
+  DYNAMIC_IMPORTS = %i[inline keep].freeze
 
   @@setup = []
 
@@ -39,6 +40,9 @@ class Condenser::RolldownProcessor
   end
 
   def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, aliases: {}, platform: 'neutral')
+    unless DYNAMIC_IMPORTS.include?(dynamic_imports)
+      raise ArgumentError, "dynamic_imports must be :inline or :keep, got #{dynamic_imports.inspect}"
+    end
     self.class.install_npm_packages(dir) if bundler_path.nil? && dir
     @npm_dir = dir
     @prefix = prefix
@@ -178,7 +182,7 @@ class Condenser::RolldownProcessor
 
       if asset.source_file == @input[:source_file]
         { id: @entry }
-      elsif @dynamic_imports != :inline
+      elsif @dynamic_imports == :keep
         { external: true, path: File.join("/", *[@prefix, asset.path].compact) }
       else
         { id: asset.source_file }
