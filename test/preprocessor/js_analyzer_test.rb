@@ -489,6 +489,38 @@ class JSAnalyzerTest < ActiveSupport::TestCase
     assert_empty asset.export_dependencies
   end
 
+  test 'import and export as property names are not keywords' do
+    file 'name.js', <<~JS
+      class Loader {
+        #import() { return 1; }
+        #export = 2;
+        run() { return this.#import() + this.#export; }
+      }
+      var o = { import: 1, export: 2 };
+      const { import: imp, export: exp } = o;
+      o. import(1);
+      o
+        . export(2);
+      console.log(imp, exp, new Loader().run());
+    JS
+
+    asset = @env.find('name.js')
+    assert_nil asset.type
+    assert_nil asset.exports
+    assert_empty asset.export_dependencies
+    assert_empty asset.linked_assets
+  end
+
+  test 'spread with a space before import is still a dynamic import' do
+    file 'a.js', ''
+    file 'name.js', <<~JS
+      const parts = [... import('./a')];
+    JS
+
+    asset = @env.find('name.js')
+    assert_equal ['a.js'], asset.linked_assets.map(&:filename)
+  end
+
   test 'template functions with import in their names alongside real imports and exports' do
     file 'a.js', ''
     file 'name.js', <<~JS

@@ -5,7 +5,7 @@ class Condenser::JSAnalyzer
   include Condenser::ParseHelpers
 
   # Not part of an identifier or a member access (`obj.import`), but allow spread (`...import()`)
-  KEYWORD_START = /(?<![[:word:]$])(?:(?<!\.)|(?<=\.\.\.))/
+  KEYWORD_START = /(?<![[:word:]$#])(?:(?<!\.)|(?<=\.\.\.))/
 
   def self.setup(env)
   end
@@ -178,13 +178,13 @@ class Condenser::JSAnalyzer
             raise unexptected_token("}")
           end
         when 'export'
-          if @stack.last == :main
+          if @stack.last == :main && keyword?
             @stack << :export
           end
         when 'import'
-          if gobble(/\s*\.\s*meta(?![[:word:]$])/)
+          if gobble(/\G\s*\.\s*meta(?![[:word:]$])/)
             input[:type] = "module"
-          else
+          elsif keyword?
             @stack << :import
           end
         else
@@ -204,7 +204,16 @@ class Condenser::JSAnalyzer
     
     raise Condenser::SyntaxError, "Unexpected EOF" if !@stack.empty? && @stack.last != :main
   end
-  
+
+  # False for a property name: `obj. import(`, `{ import: 1 }`, `{ import: x } = y`
+  def keyword?
+    start = @index - @matched.size
+    before = start > 0 && @source.rindex(/\S/, start - 1)
+    return false if before && @source[before] == '.' && @source[[before - 2, 0].max, 3] != '...'
+
+    !@source.match?(/\G\s*:/, @index)
+  end
+
   def unexptected_token(token)
     start = (@source.rindex("\n", @old_index) || 0) + 1
     uptop = @source.index("\n", @index) || (@old_index + @matched.length)
