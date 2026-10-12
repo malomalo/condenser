@@ -124,48 +124,25 @@ class Condenser::RolldownProcessor
 
       @lock.synchronize do
         start if @pid.nil? || @owner != Process.pid || @version != Condenser::RolldownProcessor.read_version(@bundler_path)
-        io = @io
         id = (@next_build += 1)
-        finished = false
-        failure = nil
+        @failure = nil
+        message = nil
 
         begin
-          write(io, { build: id, config: config })
-          while (line = io.gets)
-            break unless line.end_with?("\n")
-
-            message = JSON.parse(line)
-            if message.key?('rid')
-              if message['build'] != id
-                write(io, { rid: message['rid'], error: 'stale build' })
-                next
-              end
-
-              begin
-                write(io, { rid: message['rid'], return: yield(message['method'], message['args']) })
-              rescue StandardError, ScriptError => e
-                failure ||= e
-                write(io, { rid: message['rid'], error: "#{e.class}: #{e.message}" })
-              end
-            elsif message['build'] == id
-              case message['method']
-              when 'warn'
-                logger.warn(message['args'][0])
-              when 'done', 'error'
-                finished = true
-                @builds += 1
-                @rss = message['rss']
-                raise failure if failure
-                return message
-              end
-            end
+          write({ build: id, config: config })
+          while (line = @io.gets)&.end_with?("\n")
+            break if (message = receive(JSON.parse(line), id, logger, &block))
           end
-          raise WorkerDied, "rolldown exited with #{stop}"
         rescue Errno::EPIPE, Errno::ECONNRESET, IOError
-          raise WorkerDied, "rolldown exited with #{stop}"
-        ensure
-          stop if !finished || @builds >= @max_builds || @rss.to_i > @max_memory
+          nil
         end
+        raise WorkerDied, exited unless message
+
+        @builds += 1
+        raise @failure if @failure
+        message
+      ensure
+        stop if !message || @builds >= @max_builds || message['rss'].to_i > @max_memory
       end
     end
 
@@ -177,6 +154,33 @@ class Condenser::RolldownProcessor
     end
 
     private
+
+    # Answers a hook request or logs a warning, and returns this build's
+    # 'done' or 'error' message.
+    def receive(message, id, logger, &block)
+      if message.key?('rid')
+        write({ rid: message['rid'], **reply(message, id, &block) })
+      elsif message['build'] == id
+        case message['method']
+        when 'warn' then logger.warn(message['args'][0])
+        when 'done', 'error' then return message
+        end
+      end
+      nil
+    end
+
+    def reply(message, id)
+      return { error: 'stale build' } if message['build'] != id
+
+      { return: yield(message['method'], message['args']) }
+    rescue StandardError, ScriptError => e
+      @failure ||= e
+      { error: "#{e.class}: #{e.message}" }
+    end
+
+    def exited
+      "rolldown exited with #{stop}"
+    end
 
     def throwaway_build(config, logger:, &block)
       worker = Worker.new(@binary, @bundler_path)
@@ -200,11 +204,10 @@ class Condenser::RolldownProcessor
       @owner = Process.pid
       @version = Condenser::RolldownProcessor.read_version(@bundler_path)
       @builds = 0
-      @rss = nil
     end
 
-    def write(io, message)
-      io.write(JSON.generate(message), "\n")
+    def write(message)
+      @io.write(JSON.generate(message), "\n")
     end
 
     def reap(pid)
