@@ -1,11 +1,41 @@
 # frozen_string_literal: true
 
+require 'strscan'
+
 class Condenser::JSAnalyzer
 
-  include Condenser::ParseHelpers
+  WHITESPACE    = /[\s\p{Zs}\uFEFF\u2028\u2029]+/
+  LINE_COMMENT  = /\/\/[^\n\r\u2028\u2029]*/
+  BLOCK_COMMENT = /\/\*.*?\*\//m
+  HTML_COMMENT  = /<!--[^\n\r\u2028\u2029]*/
+  SKIP          = /(?:[\s\p{Zs}\uFEFF\u2028\u2029]+|\/\/[^\n\r\u2028\u2029]*|\/\*.*?\*\/)*/m
 
-  # Not part of an identifier or a member access (`obj.import`), but allow spread (`...import()`)
-  KEYWORD_START = /(?<![[:word:]$#])(?:(?<!\.)|(?<=\.\.\.))/
+  ID_START      = /[\p{L}\p{Nl}$_]|\\u\h{4}|\\u\{\h+\}/
+  ID_CONTINUE   = /[\p{L}\p{Nl}\p{Mn}\p{Mc}\p{Nd}\p{Pc}$\u200C\u200D]|\\u\h{4}|\\u\{\h+\}/
+  IDENTIFIER    = /(?:#{ID_START})(?:#{ID_CONTINUE})*/
+  NUMBER        = /(?:0[xXoObB][\h_]+|(?:\d[\d_]*(?:\.[\d_]*)?|\.\d[\d_]*)(?:[eE][+-]?[\d_]+)?)n?/
+  PUNCTUATOR    = />>>=|\.\.\.|===|!==|\*\*=|<<=|>>=|>>>|&&=|\|\|=|\?\?=|=>|==|!=|<=|>=|&&|\|\||\?\?|\?\.(?!\d)|\+\+|--|\+=|-=|\*=|%=|&=|\|=|\^=|\*\*|<<|>>|[;,<>+\-*%&|^!~?:=.@#]/
+  DOUBLE_QUOTED = /"([^"\\\n\r]*(?:\\(?:\r\n|.)[^"\\\n\r]*)*)"/m
+  SINGLE_QUOTED = /'([^'\\\n\r]*(?:\\(?:\r\n|.)[^'\\\n\r]*)*)'/m
+  UNTERMINATED  = /["'][^\\\n\r]*(?:\\(?:\r\n|.)[^\\\n\r]*)*/m
+  TEMPLATE      = /[^`\\$]*(?:(?:\\.|\$(?!\{))[^`\\$]*)*/m
+  REGEX         = /\/(?:[^\/\\\[\n\r]|\\[^\n\r]|\[(?:[^\]\\\n\r]|\\[^\n\r])*\])+\/(?:#{ID_CONTINUE})*/
+  DIVISION      = /\/=?/
+
+  COLON_AHEAD   = /#{SKIP}:/
+  PAREN_AHEAD   = /#{SKIP}\(/
+  BRACE_AHEAD   = /#{SKIP}\{/
+  STAR_AHEAD    = /#{SKIP}\*/
+  META_AHEAD    = /#{SKIP}\.#{SKIP}meta(?!#{ID_CONTINUE})/
+  DEFAULT_AHEAD = /#{SKIP}default(?!#{ID_CONTINUE})/
+  FROM_AHEAD    = /#{SKIP}from(?!#{ID_CONTINUE})/
+  IMPORT_AHEAD  = /#{SKIP}(?:[{*"']|#{ID_START})/
+
+  # A `/` after a :value (or `from`) is division, otherwise it starts a regex
+  KEYWORDS = %w(return typeof instanceof in of new delete void throw case do else yield await extends default).to_h { |k| [k, :keyword] }
+  KEYWORDS.merge!(%w(if for while with).to_h { |k| [k, :control] })
+  KEYWORDS['from'] = :from
+  KEYWORDS.freeze
 
   def self.setup(env)
   end
@@ -15,298 +45,251 @@ class Condenser::JSAnalyzer
   end
   
   def call(environment, input)
-    seek(0)
+    @input = input
     @sourcefile = input[:source_file]
-    @source = input[:source]
-    @stack =  [:main]
-    @previous = [[]]
+    @source = scannable(input[:source])
+    @ss = StringScanner.new(@source)
+    @stack = []
+    @import_sources = []
+    @prev = nil
+    @dynamic_import = false
+    @export_brace = false
+    @module_source = false
 
     input[:linked_assets] ||= Set.new
     input[:export_dependencies] ||= Set.new
 
-    scan_until(/\A(\/\/[^\n]*(\n|\z))*/)
-    if matched
-      directives = matched.split(/\n/).map { |l| l.delete_prefix("//").strip }
-      directives.each do |directive|
+    if directives = @ss.scan(/(?:\/\/[^\n]*(?:\n|\z))+/)
+      directives.split(/\n/).map { |l| l.delete_prefix("//").strip }.each do |directive|
         if directive.start_with?('depends_on')
           input[:process_dependencies] << directive.sub(/\Adepends_on\s+/, '')
         end
       end
+    else
+      @ss.skip(/#![^\n]*/)
     end
-    
-    last_postion = nil
-    last_stack = nil
-    while !eos?
-      case @stack.last
 
-      when :tick_value
-        scan_until(/(\$\{|\`)/)
-        case matched
-        when '`'
-          @stack.pop if pre_match[-1] != "\\" && pre_match[-1] != "\\"
-        when '${'
-          @stack << :tick_statment
-        end
+    until @ss.eos?
+      next if @ss.skip(WHITESPACE)
 
-      when :import
-        scan_until(/[\"\'\`\(]/)
-        dynamic = if matched == "("
-          scan_until(/[\"\'\`]/)
-          true
-        end
-        
-        filename = case matched
-        when "\""
-          double_quoted_value
-        when "'"
-          single_quoted_value
-        when '`'
-          tick_quoted_value
-        end
-
-        input[:type] = "module"
-        if dynamic
-          input[:process_dependencies] << filename
-          input[:linked_assets] << filename 
-        else
-          input[:export_dependencies] << filename
-        end
-        scan_until(/(;|\n|\))/)
-        @stack.pop
-
-      when :export
-        input[:type] = "module"
-        input[:exports] = true;
-        input[:default_export] = true if gobble(/\s+default/)
-        gobble(/\s+/)
-
-        if gobble(/\{/)
-          @stack << :brackets
-          @previous << []
-        elsif gobble(/\*/)
-          @stack << :export_from
-        else
-          @stack.pop
-        end
-
-      when :export_from
-        if gobble(/\s+from\s+/)
-          scan_until(/\"|\'/)
-          input[:export_dependencies] <<  case matched
-          when '"'
-            double_quoted_value
-          when "'"
-            single_quoted_value
-          end
-        end
-        @stack.pop
-        @stack.pop
-        
-      else
-        scan_until(/(\/\/|\/\*|\/|\(|\)|\{|\}|\"|\'|\`|#{KEYWORD_START}(?:export|import)(?![[:word:]$])|\z)/o)
-
-        case matched
-        when '//'
-          scan_until(/(\n|\z)/)
-          @previous.last << :single_line_comment
-        when '/*'
-          scan_until(/\*\//)
-          @previous.last << :multi_line_comment
-        when '"'
-          double_quoted_value
-          @previous.last << :double_quoted_value
-        when "'"
-          single_quoted_value
-          @previous.last << :single_quoted_value
-        when '`'
-          @stack << :tick_value
-        when '/'
-          if pre_match.match(/(\W|\A)(void|typeof|return|export)\z/)
-            regex_value
-          elsif match_index = @source.rindex(/(\w+|\)|\])(\s*)\//m, @index)
-            match = @source.match(/(\w+|\)|\])(\s*)\//, match_index)
-            
-            x = @previous.last.dup
-            while match[2]&.index("\n") && [:single_line_comment, :multi_line_comment].include?(x.last)
-              case x.last
-              when :single_line_comment
-                match_index = @source.rindex(/[^\n]*\/\/[^\n]*\s*/m, match.begin(2))
-                match = @source.match(/(\w+|\)|\])\s*\//, match_index)
-              when :multi_line_comment
-                match_index = @source.rindex(/\/\*/m, match.begin(2))
-                match = @source.match(/(\w+|\)|\])\s*\//, match_index)
-              end
-            end
-
-            if @previous.last.last == :loop && match[1] =~ /\)\z/
-              regex_value
-            elsif %w(void typeof return export).include?(match[1])
-              regex_value
-            elsif match[0].length + match_index != @index
-              regex_value
-            elsif match[1].strip.empty?
-              regex_value
-            end
-          else
-            regex_value
-          end
-        when '('
-          @stack << if pre_match =~ /\W*(for|while)\s*\z/
-            :loop
-          else
-            :parenthesis
-          end
-        when ')'
-          raise unexptected_token(")") if @stack.last != :parenthesis && @stack.last != :loop
-          @previous.last << @stack.pop
-        when '{'
-          @stack.push :brackets
-          @previous << []
-        when '}'
-          case @stack.last
-          when :tick_statment
-            @stack.pop
-          when :brackets
-            @stack.pop
-            @previous.pop
-            @previous.last << :brackets
-            if @stack.last == :export
-              @stack.pop
-              @stack << :export_from if peek(/\s+from/i)
-            end
-          else
-            raise unexptected_token("}")
-          end
-        when 'export'
-          if @stack.last == :main && keyword?
-            @stack << :export
-          end
-        when 'import'
-          if gobble(/\G\s*\.\s*meta(?![[:word:]$])/)
-            input[:type] = "module"
-          elsif keyword?
-            @stack << :import
-          end
-        else
-          @stack.pop
-        end
+      if word = @ss.scan(IDENTIFIER)
+        identifier(word)
+        next
       end
 
-      if last_postion == @index && last_stack == @stack.last
-        syntax_error = Condenser::SyntaxError.new("Error parsing JS file with JSAnalyzer")
-        syntax_error.instance_variable_set(:@path, @sourcefile)
-        raise Condenser::SyntaxError, "Error parsing JS file with JSAnalyzer"
+      case @ss.peek(1)
+      when '/'
+        if @ss.skip(LINE_COMMENT)
+        elsif @ss.skip(BLOCK_COMMENT)
+        elsif @ss.match?(/\/\*/)
+          raise syntax_error("Unexpected EOF", @source.bytesize)
+        elsif @prev == :value || @prev == :from || !@ss.skip(REGEX)
+          @ss.skip(DIVISION)
+          @prev = :operator
+        else
+          @prev = :value
+        end
+      when '"', "'"
+        if @ss.scan(@ss.peek(1) == '"' ? DOUBLE_QUOTED : SINGLE_QUOTED)
+          string(@ss[1])
+        else
+          @ss.skip(UNTERMINATED)
+          raise unexpected_token(@ss.eos? ? "EOF" : "\\n")
+        end
+      when '`'
+        @ss.skip(/`/)
+        template
+      when '('
+        @ss.skip(/\(/)
+        if @dynamic_import
+          @stack << :import_paren
+          @import_sources << nil
+          @dynamic_import = false
+          @prev = :import_paren
+        else
+          @stack << (@prev == :control ? :control_paren : :paren)
+          @prev = :operator
+        end
+      when ')'
+        close_paren
+      when '['
+        @ss.skip(/\[/)
+        @stack << :bracket
+        @prev = :operator
+      when ']'
+        raise unexpected_token("]") if @stack.last != :bracket
+        @ss.skip(/\]/)
+        @stack.pop
+        @prev = :value
+      when '{'
+        @ss.skip(/\{/)
+        @stack << (@export_brace ? :export_brace : :brace)
+        @export_brace = false
+        @prev = :operator
+      when '}'
+        close_brace
       else
-        last_postion = @index
-        last_stack = @stack.last
+        if @ss.skip(NUMBER)
+          @prev = :value
+        elsif @ss.skip(HTML_COMMENT)
+        elsif punctuator = @ss.scan(PUNCTUATOR)
+          @prev = case punctuator
+          when '.', '?.', '#' then :dot
+          when '++', '--' then :value
+          else :operator
+          end
+        else
+          raise unexpected_token(@ss.peek(1))
+        end
       end
     end
-    
-    raise Condenser::SyntaxError, "Unexpected EOF" if !@stack.empty? && @stack.last != :main
+
+    raise syntax_error("Unexpected EOF", @source.bytesize) if !@stack.empty?
   end
 
-  # False for a property name: `obj. import(`, `{ import: 1 }`, `{ import: x } = y`
-  def keyword?
-    start = @index - @matched.size
-    before = start > 0 && @source.rindex(/\S/, start - 1)
-    return false if before && @source[before] == '.' && @source[[before - 2, 0].max, 3] != '...'
+  private
 
-    !@source.match?(/\G\s*:/, @index)
+  def scannable(source)
+    source = source.encode(Encoding::UTF_8) if !source.encoding.ascii_compatible?
+    source = source.dup.force_encoding(Encoding::UTF_8) if source.encoding != Encoding::UTF_8
+    source.valid_encoding? ? source : source.scrub
   end
 
-  def unexptected_token(token)
-    start = (@source.rindex("\n", @old_index) || 0) + 1
-    uptop = @source.index("\n", @index) || (@old_index + @matched.length)
-    lineno = @source[0..start].count("\n") + 1
+  def identifier(word)
+    if @prev == :dot
+      @prev = :value
+    elsif word == 'import'
+      import_keyword
+    elsif word == 'export'
+      export_keyword
+    elsif word == 'await' && @prev == :control
+    else
+      @prev = KEYWORDS[word] || :value
+    end
+  end
 
-    message = "Unexpected token #{token} #{@sourcefile} #{lineno.to_s.rjust(4)}:#{(@index-start)}"
-    message << "\n#{lineno.to_s.rjust(4)}: " << @source[start..uptop]
-    message << "\n      #{'-'* ([@index-1-start,1].max)}#{'^'*([@matched.length,1].max)}"
-    message << "\n"
-    
+  # `import` that isn't `obj.import`, `{ import: x }`, or a class field
+  def import_keyword
+    if @ss.match?(COLON_AHEAD)
+      @prev = :value
+    elsif @ss.match?(META_AHEAD)
+      @input[:type] = "module"
+      @prev = :value
+    elsif @ss.match?(PAREN_AHEAD)
+      @dynamic_import = true
+      @prev = :import
+    elsif @ss.match?(IMPORT_AHEAD)
+      @input[:type] = "module"
+      @module_source = true
+      @prev = :import
+    else
+      @prev = :value
+    end
+  end
+
+  def export_keyword
+    if !@stack.empty? || @ss.match?(COLON_AHEAD)
+      @prev = :value
+      return
+    end
+
+    @input[:type] = "module"
+    @input[:exports] = true
+    @input[:default_export] = true if @ss.match?(DEFAULT_AHEAD)
+    if @ss.match?(STAR_AHEAD)
+      @module_source = true
+    elsif @ss.match?(BRACE_AHEAD)
+      @export_brace = true
+    end
+    @prev = :keyword
+  end
+
+  def string(value)
+    if @prev == :import_paren
+      @import_sources[-1] = value
+    elsif @module_source && (@prev == :import || @prev == :from)
+      @input[:export_dependencies] << value
+      @module_source = false
+    end
+    @prev = :value
+  end
+
+  def template
+    start = @ss.pos
+    @ss.skip(TEMPLATE)
+    if @ss.skip(/`/)
+      @import_sources[-1] = @source.byteslice(start, @ss.pos - start - 1) if @prev == :import_paren
+      @prev = :value
+    elsif @ss.skip(/\$\{/)
+      @stack << :template
+      @prev = :operator
+    else
+      raise syntax_error("Unexpected EOF", @source.bytesize)
+    end
+  end
+
+  def close_paren
+    @ss.skip(/\)/)
+    case @stack.pop
+    when :paren
+      @prev = :value
+    when :control_paren
+      @prev = :operator
+    when :import_paren
+      source = @import_sources.pop
+      # `import(...) { ... }` in a class or object body is a method named import
+      if @stack.last != :brace || !@ss.match?(BRACE_AHEAD)
+        @input[:type] = "module"
+        if source
+          @input[:process_dependencies] << source
+          @input[:linked_assets] << source
+        end
+      end
+      @prev = :value
+    else
+      @ss.unscan
+      raise unexpected_token(")")
+    end
+  end
+
+  def close_brace
+    case @stack.last
+    when :template
+      @ss.skip(/\}/)
+      @stack.pop
+      template
+    when :brace
+      @ss.skip(/\}/)
+      @stack.pop
+      @prev = :operator
+    when :export_brace
+      @ss.skip(/\}/)
+      @stack.pop
+      @module_source = @ss.match?(FROM_AHEAD)
+      @prev = :operator
+    else
+      raise unexpected_token("}")
+    end
+  end
+
+  def unexpected_token(token)
+    syntax_error("Unexpected token #{token}", @ss.pos)
+  end
+
+  def syntax_error(message, pos)
+    line_start = (@source.byterindex("\n", [pos - 1, 0].max) || -1) + 1
+    line_start = 0 if pos == 0
+    line_end = @source.byteindex("\n", pos) || @source.bytesize
+    lineno = @source.byteslice(0, line_start).count("\n") + 1
+    column = @source.byteslice(line_start, pos - line_start).length
+
+    message = "#{message} #{@sourcefile} #{lineno.to_s.rjust(4)}:#{column}"
+    message << "\n#{lineno.to_s.rjust(4)}: " << @source.byteslice(line_start, line_end - line_start)
+    message << "\n      #{'-' * column}^\n"
+
     syntax_error = Condenser::SyntaxError.new(message)
     syntax_error.instance_variable_set(:@path, @sourcefile)
     syntax_error
-  end
-  
-  def double_quoted_value
-    ret_value = String.new
-
-    while scan_until(/[\"\n\\]/)
-      case matched
-      when "\n"
-        raise unexptected_token("\\n")
-      when "\\"
-        ret_value << pre_match << matched << gobble(1)
-      when "\""
-        ret_value << pre_match
-        return ret_value
-      else
-        ret_value << match
-      end
-    end
-  end
-  
-  def single_quoted_value
-    ret_value = String.new
-
-    while scan_until(/[\'\n]/)
-      if matched == "\n"
-        raise unexptected_token("\\n")
-      elsif matched == "\'" && pre_match[-1] != "\\"
-        ret_value << pre_match
-        return ret_value
-      else
-        ret_value << pre_match
-      end
-    end
-  end
-
-  def tick_quoted_value
-    ret_value = String.new
-
-    while scan_until(/[\`]/)
-      if matched == "\`" && pre_match[-1] != "\\"
-        ret_value << pre_match
-        return ret_value
-      else
-        ret_value << pre_match
-      end
-    end
-  end
-  
-  def regex_value
-    ret_value = String.new
-
-    regex_stack =  ['/']
-    while !regex_stack.empty?
-      
-      scan_until(/[\/\[\]]/)
-      escaped = pre_match[-1] == "\\" && pre_match[-2] != "\\"
-      ret_value << pre_match
-      case matched
-      when "["
-        regex_stack << '[' if !escaped && regex_stack.last != "["
-        ret_value << matched
-      when "]"
-        regex_stack.pop if !escaped && regex_stack.last == "["
-        ret_value << matched
-      when "/"
-        # From https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Regular_expressions/Character_class
-        # 
-        # The lexical grammar does a very rough parse of regex literals, so
-        # that it does not end the regex literal at a / character which appears
-        # within a character class. This means /[/]/ is valid without needing
-        # to escape the /.
-        if !escaped && regex_stack.last != "[" && regex_stack.pop != "/"
-          raise unexptected_token("/")
-        else
-          ret_value << matched
-        end
-      end
-    end
-
-    ret_value
   end
 
 end
