@@ -30,6 +30,8 @@ class Condenser
       @linked_assets        = Set.new
       @process_dependencies = Set.new
       @export_dependencies  = Set.new
+      @file_dependencies    = Set.new
+      @directory_dependencies = Set.new
       @default_export       = nil
       @exports              = nil
       @processed            = false
@@ -64,16 +66,24 @@ class Condenser
       TEXT
     end
     
-    def process_dependencies
+    # The dependencies recorded while processing: the assets, plus the plain
+    # files and directories that aren't processed as assets.
+    def direct_dependency_names
       load_pipeline_processors
-      deps = @environment.cache.fetch "direct-deps/#{cache_key}" do
+      @environment.cache.fetch "process-deps/#{cache_key}" do
         process
         # Sort so etag and cache key are same irrelevant of ordering of
         # dependencies
-        @process_dependencies.map { |fn| [normalize_filename_base(fn[0]), fn[1]] }.sort_by { |d| d[0] }
+        {
+          assets: @process_dependencies.map { |fn| [normalize_filename_base(fn[0]), fn[1]] }.sort_by { |d| d[0] },
+          files: @file_dependencies.map { |f| normalize_filename_base(f) }.sort,
+          directories: @directory_dependencies.map { |d, *rest| [normalize_filename_base(d), *rest] }.sort
+        }
       end
-    
-      deps.inject([]) do |memo, i|
+    end
+
+    def process_dependencies
+      direct_dependency_names[:assets].inject([]) do |memo, i|
         i[0] = File.join(@environment.base, i[0].delete_prefix('!')) if i[0].start_with?('!') && @environment.base
         npm = !@environment.npm_path.nil? && i[0].start_with?('/')
         @environment.resolve(i[0], File.dirname(@source_file), accept: i[1], npm: npm).each do |asset|
@@ -81,6 +91,34 @@ class Condenser
         end
         memo
       end.tap { |assets| @environment.build_cache.record_process_dependencies(self, assets) }
+    end
+
+    def file_dependencies
+      direct_dependency_names[:files].map { |f| expand_filename_base(f) }
+    end
+
+    # As [path, globs, recursive]
+    def directory_dependencies
+      direct_dependency_names[:directories].map { |d, *rest| [expand_filename_base(d), *rest] }
+    end
+
+    # A digest of the contents of the file dependencies and the listings of
+    # the directory dependencies, or nil if there are none.
+    def file_dependencies_digest
+      return @fdd if @fdd_computed
+
+      files = file_dependencies
+      directories = directory_dependencies
+      @environment.build_cache.record_file_dependencies(self, files, directories.map(&:first))
+      @fdd = if !files.empty? || !directories.empty?
+        build_cache = @environment.build_cache
+        Digest::SHA1.base64digest(JSON.generate([
+          files.map { |f| [normalize_filename_base(f), build_cache.file_digest(f)] },
+          directories.map { |d, globs, recursive| [normalize_filename_base(d), globs, recursive, build_cache.directory_digest(d, globs: globs, recursive: recursive)] }
+        ]))
+      end
+      @fdd_computed = true
+      @fdd
     end
     
     def export_dependencies
@@ -308,15 +346,24 @@ class Condenser
         source_filename
       end
     end
+
+    def expand_filename_base(filename)
+      if filename.start_with?('!') && @environment.base
+        File.join(@environment.base, filename.delete_prefix('!'))
+      else
+        filename
+      end
+    end
     
     def process_cache_version
       return @pcv if @pcv
 
       f = []
+      f << ['files', file_dependencies_digest] if file_dependencies_digest
       all_dependenies(process_dependencies, Set.new, :process_dependencies) do |dep|
         # A dependency's cache key covers its contents and the part of the
         # pipeline that processes it
-        f << [normalize_filename_base(dep.source_file), dep.cache_key]
+        f << [normalize_filename_base(dep.source_file), dep.cache_key, dep.file_dependencies_digest].compact
       end
       
       @pcv = Digest::SHA1.base64digest(JSON.generate(f))
@@ -326,10 +373,11 @@ class Condenser
       return @ecv if @ecv
 
       f = []
+      f << ['files', file_dependencies_digest] if file_dependencies_digest
       all_dependenies(export_dependencies, Set.new, :export_dependencies) do |dep|
         # A dependency's cache key covers its contents and the part of the
         # pipeline that processes it
-        f << [normalize_filename_base(dep.source_file), dep.cache_key]
+        f << [normalize_filename_base(dep.source_file), dep.cache_key, dep.file_dependencies_digest].compact
       end
       f << ["npm", npm_digest] if npm_digest
 
@@ -339,6 +387,7 @@ class Condenser
     def needs_reprocessing!
       @processed = false
       @pcv = nil
+      @fdd_computed = false
       @cache_key = nil
       @etag = nil
       needs_reexporting!
@@ -357,7 +406,7 @@ class Condenser
       return if @processed
       
       result = @environment.build do
-        @environment.cache.fetch_if(Proc.new {"process/#{cache_key}/#{process_cache_version}"}, "direct-deps/#{cache_key}") do
+        @environment.cache.fetch_if(Proc.new {"process/#{cache_key}/#{process_cache_version}"}, "process-deps/#{cache_key}") do
           @source = File.binread(@source_file)
           dirname, basename, extensions, mime_types = @environment.decompose_path(@source_file)
           
@@ -372,6 +421,8 @@ class Condenser
             linked_assets: Set.new,
             process_dependencies: Set.new,
             export_dependencies: Set.new,
+            file_dependencies: Set.new,
+            directory_dependencies: Set.new,
             
             processors: Set.new
           }
@@ -433,6 +484,8 @@ class Condenser
           data[:process_dependencies] = normialize_dependency_names(data[:process_dependencies])
           data[:export_dependencies] = normialize_dependency_names(data[:export_dependencies])
           data[:linked_assets] = normialize_dependency_names(data[:linked_assets])
+          data[:file_dependencies] = data[:file_dependencies].map { |f| File.expand_path(f) }.uniq
+          data[:directory_dependencies] = normalize_directory_dependencies(data[:directory_dependencies])
 
           # Do this here and at the end so cache_key can be calculated if we
           # run this block
@@ -445,6 +498,8 @@ class Condenser
           @linked_assets = Set.new(data[:linked_assets])
           @process_dependencies = Set.new(data[:process_dependencies])
           @export_dependencies = Set.new(data[:export_dependencies])
+          @file_dependencies = Set.new(data[:file_dependencies])
+          @directory_dependencies = Set.new(data[:directory_dependencies])
           @default_export = data[:default_export]
           @exports = data[:exports]
           @processors = data[:processors]
@@ -464,6 +519,8 @@ class Condenser
       @linked_assets = Set.new(result[:linked_assets])
       @process_dependencies = Set.new(result[:process_dependencies])
       @export_dependencies  = Set.new(result[:export_dependencies])
+      @file_dependencies = Set.new(result[:file_dependencies])
+      @directory_dependencies = Set.new(result[:directory_dependencies])
       @default_export = result[:default_export]
       @exports = result[:exports]
       @processors = result[:processors]
@@ -484,6 +541,16 @@ class Condenser
       end
     end
     
+    # Directory dependencies are a path, or a Hash with a :path, the :glob
+    # (or globs) that the names of the files to watch match (default "*")
+    # and whether it's :recursive. They're stored as [path, globs, recursive].
+    def normalize_directory_dependencies(deps)
+      deps.map do |dep|
+        dep = { path: dep } if dep.is_a?(String)
+        [File.expand_path(dep[:path]), Array(dep[:glob] || '*').map(&:to_s).sort, !!dep[:recursive]]
+      end.uniq
+    end
+
     def export
       return @export if @export
       

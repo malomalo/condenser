@@ -23,6 +23,10 @@ class Condenser
       @lookup_cache = {}
       @process_dependencies = {}
       @export_dependencies = {}
+      @file_dependencies = {}
+      @directory_dependencies = {}
+      @file_digests = {}
+      @directory_digests = {}
       @listening = if listen
         require 'listen'
         Listen::Adapter.select != Listen::Adapter::Polling
@@ -93,8 +97,15 @@ class Condenser
             @lookup_cache&.delete_if do |k,v|
               others.any?{ |a| k.starts_with?(a) || k.starts_with?("/" + a) }
             end
-            
 
+            (added + removed + modified).each do |file|
+              @file_dependencies[file]&.each { |asset| modified << asset.source_file }
+              dir = File.dirname(file)
+              loop do
+                @directory_dependencies[dir]&.each { |asset| modified << asset.source_file }
+                break if dir == (dir = File.dirname(dir))
+              end
+            end
             
             removed.each do |file|
               dependents(@process_dependencies, file).each do |asset|
@@ -138,6 +149,48 @@ class Condenser
     def record_export_dependencies(asset, deps)
       record_dependencies(@export_dependencies, asset, deps)
     end
+
+    def record_file_dependencies(asset, files, directories)
+      return if !@listening
+
+      files.each { |f| (@file_dependencies[f] ||= Set.new) << asset }
+      directories.each { |d| (@directory_dependencies[d] ||= Set.new) << asset }
+    end
+
+    # A digest of the file's contents, or nil if it's missing. It's only
+    # recomputed when the file's stat changes.
+    def file_digest(path)
+      stat = File.stat(path)
+      return if !stat.file?
+
+      signature = [stat.mtime.to_r, stat.ctime.to_r, stat.size, stat.ino]
+      cached = @file_digests[path]
+      return cached[1] if cached && cached[0] == signature
+
+      (@file_digests[path] = [signature, Digest::SHA256.file(path).base64digest])[1]
+    rescue Errno::ENOENT, Errno::ENOTDIR
+      @file_digests.delete(path)
+      nil
+    end
+
+    # A digest of the names of the files in +path+ that match +globs+ and of
+    # its subdirectories (and, if +recursive+, the same for each
+    # subdirectory), or nil if it's missing. Adding, removing or renaming a
+    # matching file or a subdirectory changes it. It's only recomputed when
+    # the mtime of a directory it lists changes.
+    def directory_digest(path, globs: ['*'], recursive: false)
+      key = [path, globs, recursive]
+      cached = @directory_digests[key]
+      if cached && cached[0].all? { |dir, mtime| (File.stat(dir).mtime.to_r rescue nil) == mtime }
+        return cached[1]
+      end
+
+      mtimes = []
+      names = []
+      return if !list_directory(path, '', globs, recursive, mtimes, names)
+
+      (@directory_digests[key] = [mtimes, Digest::SHA256.base64digest(names.join("\0"))])[1]
+    end
     
     # Returns the assets that depend on +source_file+, either directly or
     # through other assets, including the assets built from +source_file+.
@@ -178,6 +231,8 @@ class Condenser
       @lookup_cache.clear
       @process_dependencies.clear
       @export_dependencies.clear
+      @file_dependencies.clear
+      @directory_dependencies.clear
       @npm_packages = nil
       @npm_digests = nil
     end
@@ -265,6 +320,23 @@ class Condenser
     end
     
     private
+
+    def list_directory(dir, prefix, globs, recursive, mtimes, names)
+      mtimes << [dir, File.stat(dir).mtime.to_r]
+      Dir.children(dir).sort.each do |name|
+        full = File.join(dir, name)
+        if File.lstat(full).directory?
+          next if name.start_with?('.')
+          names << "#{prefix}#{name}/"
+          list_directory(full, "#{prefix}#{name}/", globs, recursive, mtimes, names) if recursive
+        elsif globs.any? { |g| File.fnmatch?(g, name, File::FNM_EXTGLOB) }
+          names << "#{prefix}#{name}"
+        end
+      end
+      true
+    rescue Errno::ENOENT, Errno::ENOTDIR
+      false
+    end
     
     def record_dependencies(index, asset, deps)
       return if !@listening
