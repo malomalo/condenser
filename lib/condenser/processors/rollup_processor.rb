@@ -4,7 +4,9 @@ require 'json'
 require 'tmpdir'
 
 class Condenser::RollupProcessor
-  
+
+  DYNAMIC_IMPORTS = %i[inline keep].freeze
+
   @@setup = []
   
   def self.setup(environment)
@@ -35,16 +37,10 @@ class Condenser::RollupProcessor
     {prefix: @prefix, dynamic_imports: @dynamic_imports}
   end
   
-  # @param prefix  [string] string to prefix to the url of dynamic imports
-  # @param imports [symbol] :inline will inline all the imports in the 
-  #                        output file if possible.
-  #                        false will keep all the imports as imports.
-  #                        :local will not inline URLS.
-  # @param dynamic_imports [symbol] Default is :local
-  #    :inline - Inline dynamic imports into the output file if possible.
-  #    :local  - Same as :inline except for URLs are kept as URLs
-  #    :keep   - Keep the dynamic imports but rewrite the import as a URL
   def initialize(dir = nil, prefix: nil, dynamic_imports: :inline)
+    unless DYNAMIC_IMPORTS.include?(dynamic_imports)
+      raise ArgumentError, "dynamic_imports must be :inline or :keep, got #{dynamic_imports.inspect}"
+    end
     self.class.install_npm_packages(dir)
     @npm_dir = dir
     @prefix = prefix
@@ -330,7 +326,7 @@ class Condenser::RollupProcessor
                   # filename: asset.filename
                 }
               else
-                if @dynamic_imports != :inline
+                if @dynamic_imports == :keep
                   {
                     path: File.join("/", *[@prefix, asset.path].compact),
                     source: File.join(@input_dir, asset.filename),

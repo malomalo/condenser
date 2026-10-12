@@ -81,7 +81,7 @@ class RollupDynamicImportTestTest < ActiveSupport::TestCase
 
   test "dynamic imports don't inlined and are exported" do
     @env.unregister_exporter 'application/javascript'
-    @env.register_exporter 'application/javascript', Condenser::RollupProcessor.new(@env.npm_path, dynamic_imports: false)
+    @env.register_exporter 'application/javascript', Condenser::RollupProcessor.new(@env.npm_path, dynamic_imports: :keep)
 
     file 'main.js', <<~JS
       cube = await import('./math/math');
@@ -174,7 +174,7 @@ class RollupDynamicImportTestTest < ActiveSupport::TestCase
 
   test "dynamic imports with a prefix" do
     @env.unregister_exporter 'application/javascript'
-    @env.register_exporter 'application/javascript', Condenser::RollupProcessor.new(@env.npm_path, prefix: "/assets", dynamic_imports: false)
+    @env.register_exporter 'application/javascript', Condenser::RollupProcessor.new(@env.npm_path, prefix: "/assets", dynamic_imports: :keep)
 
     file 'main.js', <<~JS
       cube = await import('./math/math');
@@ -267,7 +267,7 @@ class RollupDynamicImportTestTest < ActiveSupport::TestCase
 
   test "cyclical dynamic imports don't inlined and are exported" do
     @env.unregister_exporter 'application/javascript'
-    @env.register_exporter 'application/javascript', Condenser::RollupProcessor.new(@env.npm_path, dynamic_imports: false)
+    @env.register_exporter 'application/javascript', Condenser::RollupProcessor.new(@env.npm_path, dynamic_imports: :keep)
 
     file 'main.js', <<~JS
       const cube = await import('./math/math');
@@ -350,6 +350,13 @@ class RollupDynamicImportTestTest < ActiveSupport::TestCase
 
         export { cube, number };
       JS
+    end
+  end
+
+  test "dynamic_imports: only accepts :inline and :keep" do
+    [:local, false, nil, 'keep'].each do |mode|
+      error = assert_raises(ArgumentError) { Condenser::RollupProcessor.new(@env.npm_path, dynamic_imports: mode) }
+      assert_equal "dynamic_imports must be :inline or :keep, got #{mode.inspect}", error.message
     end
   end
 
