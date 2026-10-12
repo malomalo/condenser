@@ -14,6 +14,8 @@ class Condenser::RolldownProcessor
   @@setup = []
   @instances = {}
   @lock = Mutex.new
+  @versions = {}
+  @versions_lock = Mutex.new
 
   def self.install_npm_packages(npm_path)
     return if @@setup.include?(npm_path)
@@ -33,7 +35,18 @@ class Condenser::RolldownProcessor
 
   def self.read_version(bundler_path)
     package = File.join(bundler_path, 'package.json')
-    JSON.parse(File.read(package))['version'] if File.exist?(package)
+    stat = File.stat(package)
+    key = [stat.mtime, stat.size, stat.ino]
+    @versions_lock.synchronize do
+      cached = @versions[package]
+      return cached[1] if cached && cached[0] == key
+
+      version = JSON.parse(File.read(package))['version']
+      @versions[package] = [key, version]
+      version
+    end
+  rescue Errno::ENOENT
+    nil
   end
 
   def name
@@ -47,10 +60,8 @@ class Condenser::RolldownProcessor
   end
 
   def rolldown_version
-    @rolldown_version ||= begin
-      path = @bundler_path || (@npm_dir && File.join(@npm_dir, 'node_modules', 'rolldown'))
-      self.class.read_version(path) if path
-    end
+    path = @bundler_path || (@npm_dir && File.join(@npm_dir, 'node_modules', 'rolldown'))
+    self.class.read_version(path) if path
   end
 
   def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, aliases: {}, platform: 'neutral', max_memory: MAX_MEMORY)
