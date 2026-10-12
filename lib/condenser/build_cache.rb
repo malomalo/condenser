@@ -16,6 +16,9 @@ class Condenser
       bun.lockb
     ).freeze
 
+    # Ignored under every watched path, on top of Listen's defaults.
+    WATCH_IGNORES = [%r{(?:\A|/)node_modules(?:/|\z)}, %r{\A(?:\.git|tmp|log)(?:/|\z)}].freeze
+
     def initialize(path, logger:, listen: {})
       @logger = logger
       @path = path
@@ -27,6 +30,7 @@ class Condenser
       @directory_dependencies = {}
       @file_digests = {}
       @directory_digests = {}
+      @watch_listeners = []
       @listening = if listen
         require 'listen'
         Listen::Adapter.select != Listen::Adapter::Polling
@@ -38,7 +42,7 @@ class Condenser
         @polling = false
       else
         @semaphore = Mutex.new
-        @listener = Listen.to(*path) do |modified, added, removed|
+        @on_change = lambda do |modified, added, removed|
           modified = Set.new(modified)
           added = Set.new(added)
           removed = Set.new(removed)
@@ -126,8 +130,26 @@ class Condenser
             @logger.debug { "build cache semaphore unlocked by #{Thread.current.object_id}" }
           end
         end
+        @listener = Listen.to(*path, &@on_change)
         @listener.start
       end
+    end
+
+    # Listens for changes under +path+, which isn't on the load path, so the
+    # file dependencies there invalidate the assets that depend on them.
+    # +ignore+ is a list of Regexps matched against the paths relative to
+    # +path+, or Strings that are directories (or files) relative to it. The
+    # load paths under +path+ are already watched, so they're ignored too.
+    def watch(path, ignore: [])
+      return if !@listening
+
+      prefix = File.join(path, '')
+      ignores = WATCH_IGNORES + (Array(ignore) + @path.select { |p| p.start_with?(prefix) }.map { |p| p.delete_prefix(prefix) }).map do |i|
+        i.is_a?(Regexp) ? i : %r{\A#{Regexp.escape(i.delete_suffix('/'))}(?:/|\z)}
+      end
+      listener = Listen.to(path, ignore: ignores, &@on_change)
+      listener.start
+      @watch_listeners << listener
     end
     
     def map(key)

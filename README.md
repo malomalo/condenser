@@ -195,7 +195,16 @@ A file dependency invalidates the asset when its contents change and a
 directory dependency when a matching file or a subdirectory is added, removed
 or renamed. Both are checked against the cache when a new process starts. A
 running process notices them through the file listener, so they need to be on
-the load path.
+the load path or a watched path. A watched path is listened to but assets
+aren't resolved from it:
+
+```ruby
+env.watch(Rails.root, ignore: ['public/assets', 'storage', /\.log\z/])
+```
+
+`ignore` takes directories relative to the watched path, or Regexps matched
+against the relative paths. `node_modules`, `.git`, `tmp` and `log` are always
+ignored.
 
 ### Invoking Ruby with ERB
 

@@ -10,11 +10,12 @@ require 'condenser/cache/file_store'
 class Condenser
   module Environment
     
-    attr_reader :path, :npm_path
+    attr_reader :path, :npm_path, :watched_paths
     attr_accessor :cache
     
     def initialize(*args, **kws, &block)
       @loaded_processors = Set.new
+      @watched_paths = []
       @context_class = Class.new(Condenser::Context)
       super
     end
@@ -43,6 +44,21 @@ class Condenser
         @path.push(path)
       end
       load_path_changed!
+    end
+
+    # Watches +paths+ for changes to file dependencies, without adding them to
+    # the load path, so assets aren't resolved from them. +ignore+ lists
+    # Regexps matched against the paths relative to each path, or directories
+    # relative to it; node_modules, .git, tmp and log are always ignored.
+    #
+    #     env.watch(Rails.root, ignore: ['public/assets', 'storage'])
+    def watch(*paths, ignore: [])
+      paths.flatten.each do |path|
+        path = File.expand_path(path)
+        raise ArgumentError, "Path \"#{path}\" does not exists" if !File.directory?(path)
+        @watched_paths << [path, ignore]
+        build_cache.watch(path, ignore: ignore) if instance_variable_defined?(:@build_cache)
+      end
     end
 
     def npm_path=(path)

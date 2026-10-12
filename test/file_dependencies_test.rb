@@ -51,15 +51,6 @@ class FileDependenciesTest < ActiveSupport::TestCase
     FileDependencyProcessor.calls['test.txt']
   end
 
-  def wait_until(timeout: 5)
-    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
-    until (result = yield)
-      return false if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
-      sleep 0.05
-    end
-    result
-  end
-
   def assert_rebuilds_with(expected)
     assert wait_until { build.include?(expected) }, "expected the source to include #{expected.inspect}, got #{build.inspect}"
   end
