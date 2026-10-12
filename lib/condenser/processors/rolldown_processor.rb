@@ -58,6 +58,11 @@ class Condenser::RolldownProcessor
     unless DYNAMIC_IMPORTS.include?(dynamic_imports)
       raise ArgumentError, "dynamic_imports must be :inline or :keep, got #{dynamic_imports.inspect}"
     end
+    { max_builds: max_builds, max_memory: max_memory }.each do |name, value|
+      unless value.is_a?(Integer) && value.positive?
+        raise ArgumentError, "#{name} must be a positive Integer, got #{value.inspect}"
+      end
+    end
     self.class.install_npm_packages(dir) if bundler_path.nil? && dir
     @npm_dir = dir
     @prefix = prefix

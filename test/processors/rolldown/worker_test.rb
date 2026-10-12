@@ -356,6 +356,15 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     assert_not_equal first, worker_pid
   end
 
+  test 'max_builds: and max_memory: only accept positive integers' do
+    [nil, 0, -1, 1.5, '5'].each do |value|
+      %i[max_builds max_memory].each do |option|
+        error = assert_raises(ArgumentError) { Condenser::RolldownProcessor.new(@env.npm_path, option => value) }
+        assert_equal "#{option} must be a positive Integer, got #{value.inspect}", error.message
+      end
+    end
+  end
+
   test 'max_memory: restarts the worker once it uses more memory' do
     register_rolldown(max_memory: 1)
     reference = export('main.js')
