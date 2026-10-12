@@ -222,6 +222,24 @@ be referenced with `<%= asset_path("foo.css") %>`. When referencing
 an asset in Rails, always specify the extension you want. Condenser will
 convert `foo.scss` to `foo.css`.
 
+### Browser Targets with Lightning CSS
+
+If the `lightningcss` gem (native Rust bindings for
+[Lightning CSS](https://lightningcss.dev)) is available to your application,
+Condenser can transform CSS for the browsers you support, lowering modern
+syntax such as nesting and `lab()` colors and adding vendor prefixes. Register
+it as a `text/css` exporter so it runs once on the exported CSS (including CSS
+compiled from Sass). `targets` is a Hash of browser to the oldest major version
+you support:
+
+``` ruby
+environment.register_exporter 'text/css', Condenser::LightningCSSExporter.new(targets: { safari: 15, chrome: 100, firefox: 100 })
+```
+
+The gem only applies targets when it minifies, so the output is minified and
+you can unregister the `text/css` minifier. Other options (`error_recovery`,
+`scope`) are passed to `LightningCSS.transform`.
+
 ## Javascript, ES#, & ES Modules
 
 Condenser transforms Javascript for the browser by transpiling all the files
