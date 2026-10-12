@@ -66,6 +66,16 @@ class Condenser
               
                 globs << a << a.delete_prefix('/')
                 globs << b << b.delete_prefix('/')
+
+                # Adding or removing a file, which may be in a new directory,
+                # changes the recursive globs of every directory above it
+                if !modified.include?(file)
+                  dir = File.dirname(a)
+                  until dir == (dir = File.dirname(dir))
+                    c = File.join(dir, '**')
+                    globs << c << c.delete_prefix('/')
+                  end
+                end
               end
             end
 
@@ -178,6 +188,7 @@ class Condenser
       files.each { |f| (@file_dependencies[f] ||= Set.new) << asset }
       directories.each { |d| (@directory_dependencies[d] ||= Set.new) << asset }
     end
+
 
     # A digest of the file's contents, or nil if it's missing. It's only
     # recomputed when the file's stat changes.
