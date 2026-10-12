@@ -3,7 +3,10 @@
 class Condenser::JSAnalyzer
 
   include Condenser::ParseHelpers
-  
+
+  # Not part of an identifier or a member access (`obj.import`), but allow spread (`...import()`)
+  KEYWORD_START = /(?<![[:word:]$])(?:(?<!\.)|(?<=\.\.\.))/
+
   def self.setup(env)
   end
   
@@ -100,7 +103,7 @@ class Condenser::JSAnalyzer
         @stack.pop
         
       else
-        scan_until(/(\/\/|\/\*|\/|\(|\)|\{|\}|\"|\'|\`|export(?![[:alnum:]])|import(?![[:alnum:]])|\z)/)
+        scan_until(/(\/\/|\/\*|\/|\(|\)|\{|\}|\"|\'|\`|#{KEYWORD_START}(?:export|import)(?![[:word:]$])|\z)/o)
 
         case matched
         when '//'
@@ -179,7 +182,11 @@ class Condenser::JSAnalyzer
             @stack << :export
           end
         when 'import'
-          @stack << :import
+          if gobble(/\s*\.\s*meta(?![[:word:]$])/)
+            input[:type] = "module"
+          else
+            @stack << :import
+          end
         else
           @stack.pop
         end

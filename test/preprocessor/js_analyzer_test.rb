@@ -452,4 +452,122 @@ class JSAnalyzerTest < ActiveSupport::TestCase
     assert_empty asset.export_dependencies
   end
 
+  test 'identifiers containing import are not treated as imports' do
+    file 'name.js', <<~JS
+      function bulk_import(locals) { return locals; }
+      function import_into(locals) { return locals; }
+      var reimport = 1, _import = 2, import$ = 3, importé = 4;
+      bulk_import('a');
+      import_into("b");
+      myimport.call();
+      obj.import('c');
+      obj?.import('d');
+      $import('e');
+      ünimport('f');
+      reimport = importé + import$;
+    JS
+
+    asset = @env.find('name.js')
+    assert_nil asset.type
+    assert_nil asset.exports
+    assert_empty asset.export_dependencies
+    assert_empty asset.linked_assets
+  end
+
+  test 'identifiers containing export are not treated as exports' do
+    file 'name.js', <<~JS
+      var exported = 1, exporter = 2, _export = 3, $export = 4, export_ = 5, ünexport = 6;
+      obj.export = function () { return exported; };
+      obj?.export();
+      module.exports = { exporter, _export, $export };
+    JS
+
+    asset = @env.find('name.js')
+    assert_nil asset.type
+    assert_nil asset.exports
+    assert_not asset.has_default_export?
+    assert_empty asset.export_dependencies
+  end
+
+  test 'template functions with import in their names alongside real imports and exports' do
+    file 'a.js', ''
+    file 'name.js', <<~JS
+      import a from 'a';
+
+      function bulk_import(locals) {
+        return locals.rows.map(r => r / 2);
+      }
+
+      function importTpl_into(locals) { return bulk_import(locals); }
+
+      export default { bulk_import, import_into: importTpl_into };
+    JS
+
+    asset = @env.find('name.js')
+    assert_equal "module", asset.type
+    assert asset.exports
+    assert asset.has_default_export?
+    assert_equal ['a.js'], asset.export_dependencies.map(&:filename)
+  end
+
+  test 'import and export keywords after other tokens' do
+    %w(a b c d e f g h).each { |n| file "#{n}.js", '' }
+    file 'name.js', <<~JS
+      import a from 'a';import b from 'b'
+      {}
+      import c from 'c'
+      /* c */import d from 'd'
+      // c
+      import e from 'e'
+      function x() { return import('./f'); }import g from 'g'
+      [...import('./h')];
+      export {a};export const z = 1
+    JS
+
+    asset = @env.find('name.js')
+    assert_equal "module", asset.type
+    assert asset.exports
+    assert_not asset.has_default_export?
+    assert_equal %w(a.js b.js c.js d.js e.js f.js g.js h.js), asset.export_dependencies.map(&:filename).sort
+    assert_equal %w(f.js h.js), asset.linked_assets.map(&:filename).sort
+
+    file 'name.js', "export default function () {}"
+    asset = @env.find('name.js')
+    assert asset.has_default_export?
+
+    file 'name.js', "x();export * from 'a'"
+    asset = @env.find('name.js')
+    assert asset.exports
+    assert_equal ['a.js'], asset.export_dependencies.map(&:filename)
+  end
+
+  test 'import.meta is not an import' do
+    file 'name.js', <<~JS
+      const url = new URL('a.png', import.meta.url);
+      f(import.meta.url, import . meta);
+    JS
+
+    asset = @env.find('name.js')
+    assert_equal "module", asset.type
+    assert_nil asset.exports
+    assert_empty asset.export_dependencies
+    assert_empty asset.linked_assets
+  end
+
+  test 'import and export inside strings, templates, regexes and comments' do
+    file 'name.js', <<~JS
+      var s = 'import a from "a"', d = "export default 1";
+      var t = `import('b') ${bulk_import('c')} export * from 'd'`;
+      var r = /import\\('e'\\)/, q = /export/g;
+      // import f from 'f'
+      /* export default g */
+    JS
+
+    asset = @env.find('name.js')
+    assert_nil asset.type
+    assert_nil asset.exports
+    assert_empty asset.export_dependencies
+    assert_empty asset.linked_assets
+  end
+
 end
