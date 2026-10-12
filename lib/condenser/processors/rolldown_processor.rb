@@ -13,6 +13,8 @@ class Condenser::RolldownProcessor
   class WorkerDied < RuntimeError; end
 
   @@setup = []
+  @instances = {}
+  @lock = Mutex.new
 
   def self.install_npm_packages(npm_path)
     return if @@setup.include?(npm_path)
@@ -22,7 +24,8 @@ class Condenser::RolldownProcessor
   end
 
   def self.call(environment, input)
-    new(environment.npm_path).call(environment, input)
+    instance = @lock.synchronize { @instances[environment.npm_path] ||= new(environment.npm_path) }
+    instance.call(environment, input)
   end
 
   def self.stop_workers
@@ -64,73 +67,58 @@ class Condenser::RolldownProcessor
     @platform = platform
     @max_builds = max_builds
     @max_memory = max_memory
+    @lock = Mutex.new
   end
 
   def call(environment, input)
-    Runner.new(@npm_dir, prefix: @prefix, dynamic_imports: @dynamic_imports, bundler_path: @bundler_path, aliases: @aliases, platform: @platform, max_builds: @max_builds, max_memory: @max_memory).call(environment, input)
+    Runner.new(@npm_dir, worker: worker, prefix: @prefix, dynamic_imports: @dynamic_imports, aliases: @aliases, platform: @platform).call(environment, input)
+  end
+
+  def worker
+    @lock.synchronize do
+      @worker ||= Worker.new(
+        Condenser::NodeProcessor.new(@npm_dir).binary,
+        @bundler_path || (@npm_dir ? File.join(@npm_dir, 'node_modules', 'rolldown') : 'rolldown'),
+        max_builds: @max_builds,
+        max_memory: @max_memory
+      )
+    end
   end
 
   # A node process with Rolldown loaded that runs one build at a time.
-  # Workers are shared by every RolldownProcessor in the process, one per
-  # node binary and Rolldown install (and per nesting level, so an export
-  # started while answering a build gets its own).
   class Worker
-    @workers = {}
-    @owner = Process.pid
-    @lock = Mutex.new
+    @workers = ObjectSpace::WeakMap.new
 
-    class << self
-      def checkout(binary, bundler_path)
-        depth = Thread.current[:condenser_rolldown_depth] || 0
-        worker = @lock.synchronize do
-          reset_after_fork
-          @workers[[binary, bundler_path, depth]] ||= new(binary, bundler_path)
-        end
-        Thread.current[:condenser_rolldown_depth] = depth + 1
-        yield worker
-      ensure
-        Thread.current[:condenser_rolldown_depth] = depth
-      end
+    def self.stop_all
+      @workers.each_key(&:stop)
+    end
 
-      def workers
-        @lock.synchronize do
-          reset_after_fork
-          @workers.values
-        end
-      end
-
-      def stop_all
-        workers.each(&:stop)
-      end
-
-      private
-
-      def reset_after_fork
-        return if @owner == Process.pid
-
-        @workers.each_value(&:abandon)
-        @workers = {}
-        @owner = Process.pid
-      end
+    def self.track(worker)
+      @workers[worker] = true
     end
 
     at_exit { stop_all }
 
     attr_reader :pid
 
-    def initialize(binary, bundler_path)
+    def initialize(binary, bundler_path, max_builds: MAX_BUILDS, max_memory: MAX_MEMORY)
       @binary = binary
       @bundler_path = bundler_path
+      @max_builds = max_builds
+      @max_memory = max_memory
       @lock = Mutex.new
       @next_build = 0
+      self.class.track(self)
     end
 
     # Yields each hook request as (method, args) and returns the build's
     # 'done' or 'error' message. An exception from the block is re-raised
     # once the build has finished.
-    def build(config, logger:, max_builds:, max_memory:)
+    def build(config, logger:, &block)
+      return throwaway_build(config, logger: logger, &block) if @lock.owned?
+
       @lock.synchronize do
-        start if @pid.nil? || @version != Condenser::RolldownProcessor.read_version(@bundler_path)
+        start if @pid.nil? || @owner != Process.pid || @version != Condenser::RolldownProcessor.read_version(@bundler_path)
         io = @io
         id = (@next_build += 1)
         finished = false
@@ -173,7 +161,7 @@ class Condenser::RolldownProcessor
         ensure
           if !finished
             kill
-          elsif @builds >= max_builds || @rss.to_i > max_memory
+          elsif @builds >= @max_builds || @rss.to_i > @max_memory
             stop
           end
         end
@@ -186,20 +174,22 @@ class Condenser::RolldownProcessor
       return unless pid
 
       io.close rescue nil
-      reap(pid)
+      reap(pid) if @owner == Process.pid
     end
 
     def kill
-      Process.kill('TERM', @pid) rescue nil if @pid
+      Process.kill('TERM', @pid) rescue nil if @pid && @owner == Process.pid
       stop
     end
 
-    def abandon
-      @io&.close rescue nil
-      @io = @pid = nil
-    end
-
     private
+
+    def throwaway_build(config, logger:, &block)
+      worker = Worker.new(@binary, @bundler_path)
+      worker.build(config, logger: logger, &block)
+    ensure
+      worker.stop
+    end
 
     def start
       stop
@@ -213,6 +203,7 @@ class Condenser::RolldownProcessor
         child_io.close
       end
       @io = io
+      @owner = Process.pid
       @version = Condenser::RolldownProcessor.read_version(@bundler_path)
       @builds = 0
       @rss = nil
@@ -238,15 +229,13 @@ class Condenser::RolldownProcessor
   end
 
   class Runner < Condenser::NodeProcessor
-    def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, aliases: {}, platform: 'neutral', max_builds: MAX_BUILDS, max_memory: MAX_MEMORY)
+    def initialize(dir = nil, worker:, prefix: nil, dynamic_imports: :inline, aliases: {}, platform: 'neutral')
       super(dir)
+      @worker = worker
       @prefix = prefix
       @dynamic_imports = dynamic_imports
       @aliases = aliases
       @platform = platform
-      @max_builds = max_builds
-      @max_memory = max_memory
-      @bundler_path = bundler_path || (dir && npm_module_path('rolldown')) || 'rolldown'
     end
 
     def call(environment, input)
@@ -259,7 +248,6 @@ class Condenser::RolldownProcessor
       config = {
         entry: @entry,
         entryDigest: digest_for(@entry),
-        bundlerPath: @bundler_path,
         cwd: environment.base || Dir.pwd,
         modules: npm_path ? [npm_module_path] : [],
         aliases: @aliases,
@@ -274,11 +262,7 @@ class Condenser::RolldownProcessor
     def exec_runtime(config)
       attempts = 0
       message = begin
-        Worker.checkout(binary, @bundler_path) do |worker|
-          worker.build(config, logger: @environment.logger, max_builds: @max_builds, max_memory: @max_memory) do |method, args|
-            answer(method, *args)
-          end
-        end
+        @worker.build(config, logger: @environment.logger) { |method, args| answer(method, *args) }
       rescue WorkerDied => e
         retry if (attempts += 1) == 1
         raise exec_runtime_error(e.message)

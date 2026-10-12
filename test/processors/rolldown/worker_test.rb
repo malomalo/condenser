@@ -10,6 +10,13 @@ class RolldownWorkerTest < ActiveSupport::TestCase
   end
   Condenser::RolldownProcessor::Runner.prepend(AnswerSpy)
 
+  module SpawnSpy
+    def spawn(*args, **kwargs)
+      super.tap { |pid| Thread.current[:rolldown_worker_spawns]&.push(pid) }
+    end
+  end
+  Process.singleton_class.prepend(SpawnSpy)
+
   class << self
     attr_accessor :on_answer
   end
@@ -51,8 +58,8 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     processor.call(@env, input)[:source]
   end
 
-  def worker_pids
-    Condenser::RolldownProcessor::Worker.workers.filter_map(&:pid)
+  def worker_pid(processor = @processor)
+    processor.worker.pid
   end
 
   def alive?(pid)
@@ -83,25 +90,27 @@ class RolldownWorkerTest < ActiveSupport::TestCase
   test 'exports reuse one worker' do
     reference = export('main.js')
     assert_includes reference, 'x * x * x'
-    pids = worker_pids
-    assert_equal 1, pids.size
+    pid = worker_pid
+    assert alive?(pid)
 
     assert_equal reference, export('main.js')
-    assert_equal pids, worker_pids
+    assert_equal pid, worker_pid
   end
 
-  test 'a processor registered as a class shares the worker' do
+  test 'a processor registered as a class reuses one instance per npm path' do
     register_rolldown(Condenser::RolldownProcessor)
+    workers = []
+    on_answer { |_, _, runner| workers << runner.instance_variable_get(:@worker) }
     reference = export('main.js')
-    pids = worker_pids
+    pid = workers.first.pid
 
     assert_equal reference, export('main.js')
-    assert_equal reference, export('main.js', processor: Condenser::RolldownProcessor.new(@env.npm_path))
-    assert_equal pids, worker_pids
-    assert_equal 1, pids.size
+    assert_equal 1, workers.uniq.size
+    assert_equal pid, workers.first.pid
+    assert alive?(pid)
   end
 
-  test 'differently configured processors share the worker' do
+  test 'each instance has its own worker' do
     file 'main.js', <<~JS
       import value from 'condenser-alias';
 
@@ -114,7 +123,9 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     assert_includes export('main.js', processor: aliased), '"aliased"'
     assert_includes export('main.js', processor: plain), 'from "condenser-alias"'
     assert_includes export('main.js', processor: aliased), '"aliased"'
-    assert_equal 1, worker_pids.size
+    assert_not_equal worker_pid(plain), worker_pid(aliased)
+    assert alive?(worker_pid(plain))
+    assert alive?(worker_pid(aliased))
   end
 
   test 'the worker options are not part of the options' do
@@ -130,11 +141,11 @@ class RolldownWorkerTest < ActiveSupport::TestCase
 
   test 'a worker killed between exports is restarted' do
     reference = export('main.js')
-    pid = worker_pids.first
+    pid = worker_pid
     Process.kill('KILL', pid)
 
     assert_equal reference, export('main.js')
-    assert_not_equal [pid], worker_pids
+    assert_not_equal pid, worker_pid
     assert_not alive?(pid)
   end
 
@@ -143,14 +154,14 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     killed = []
     on_answer do |method, _, _|
       if method == 'resolve' && killed.empty?
-        killed << worker_pids.first
+        killed << worker_pid
         Process.kill('KILL', killed.first)
       end
     end
 
     assert_equal reference, export('main.js')
     assert_equal 1, killed.size
-    assert_not_equal killed, worker_pids
+    assert_not_equal killed.first, worker_pid
     assert_not alive?(killed.first)
   end
 
@@ -159,7 +170,7 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     killed = []
     on_answer do |method, _, _|
       if method == 'resolve'
-        killed << worker_pids.first
+        killed << worker_pid
         Process.kill('KILL', killed.last)
       end
     end
@@ -167,7 +178,7 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     error = assert_raises(RuntimeError) { export('main.js') }
     assert_match(/\Arolldown exited with pid \d+ SIGKILL/, error.message)
     assert_equal 2, killed.size
-    assert_empty worker_pids
+    assert_nil worker_pid
     killed.each { |pid| assert_not alive?(pid) }
   end
 
@@ -188,21 +199,21 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     ENV['NODE_OPTIONS'] = "--require #{File.join(@path, 'partial.js')}"
     error = assert_raises(RuntimeError) { export('main.js') }
     assert_match(/\Arolldown exited with pid \d+ exit 1/, error.message)
-    assert_empty worker_pids
+    assert_nil worker_pid
   ensure
     ENV['NODE_OPTIONS'] = node_options
   end
 
   test 'stop_workers stops the worker' do
     reference = export('main.js')
-    pid = worker_pids.first
+    pid = worker_pid
 
     Condenser::RolldownProcessor.stop_workers
     assert_not alive?(pid)
-    assert_empty worker_pids
+    assert_nil worker_pid
 
     assert_equal reference, export('main.js')
-    assert_not_equal [pid], worker_pids
+    assert_not_equal pid, worker_pid
   end
 
   test 'a ruby exception while answering re-raises the original exception and keeps the worker' do
@@ -220,12 +231,12 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     end
     error = assert_raises(ArgumentError) { export('main.js') }
     assert_equal 'boom', error.message
-    pid = worker_pids.first
-    assert_equal [pid], worker_pids
+    pid = worker_pid
+    assert alive?(pid)
 
     RolldownWorkerTest.on_answer = nil
     assert_equal reference, export('main.js')
-    assert_equal [pid], worker_pids
+    assert_equal pid, worker_pid
   end
 
   test 'a request from an earlier build is not answered by the current one' do
@@ -258,12 +269,12 @@ class RolldownWorkerTest < ActiveSupport::TestCase
 
   test 'an exception that abandons a build stops the worker' do
     reference = export('main.js')
-    pid = worker_pids.first
+    pid = worker_pid
 
     on_answer { |method, _, _| raise Abort if method == 'resolve' }
     assert_raises(Abort) { export('main.js') }
     assert_not alive?(pid)
-    assert_empty worker_pids
+    assert_nil worker_pid
 
     RolldownWorkerTest.on_answer = nil
     assert_equal reference, export('main.js')
@@ -302,17 +313,18 @@ class RolldownWorkerTest < ActiveSupport::TestCase
       console.log( cube( 6 ) );
     JS
     references = { 'main.js' => export('main.js'), 'other.js' => export('other.js') }
-    pids = worker_pids
+    pid = worker_pid
 
     results = 4.times.map { |i| Thread.new { export(i.even? ? 'main.js' : 'other.js') } }.map(&:value)
     assert_equal 4.times.map { |i| references[i.even? ? 'main.js' : 'other.js'] }, results
-    assert_equal pids, worker_pids
+    assert_equal pid, worker_pid
   end
 
-  test 'an export started while answering a build uses another worker' do
+  test 'an export started while answering a build uses a throwaway worker' do
     file 'other.js', <<~JS
       console.log( 'other' );
     JS
+    spawned = Thread.current[:rolldown_worker_spawns] = []
     nested = nil
     on_answer do |method, args, _|
       if method == 'load' && args[0].end_with?('math.js') && nested.nil?
@@ -322,30 +334,35 @@ class RolldownWorkerTest < ActiveSupport::TestCase
 
     assert_includes export('main.js'), 'x * x * x'
     assert_includes nested, 'console.log("other")'
-    assert_equal 2, worker_pids.size
+    assert_equal 2, spawned.size
+    assert_equal spawned.first, worker_pid
+    assert alive?(worker_pid)
+    assert_not alive?(spawned.last)
+  ensure
+    Thread.current[:rolldown_worker_spawns] = nil
   end
 
   test 'max_builds: restarts the worker after that many builds' do
     register_rolldown(max_builds: 2)
     reference = export('main.js')
-    first = worker_pids
+    first = worker_pid
 
     assert_equal reference, export('main.js')
-    assert_empty worker_pids
-    assert_not alive?(first.first)
+    assert_nil worker_pid
+    assert_not alive?(first)
 
     assert_equal reference, export('main.js')
-    assert_equal 1, worker_pids.size
-    assert_not_equal first, worker_pids
+    assert alive?(worker_pid)
+    assert_not_equal first, worker_pid
   end
 
   test 'max_memory: restarts the worker once it uses more memory' do
     register_rolldown(max_memory: 1)
     reference = export('main.js')
-    assert_empty worker_pids
+    assert_nil worker_pid
 
     assert_equal reference, export('main.js')
-    assert_empty worker_pids
+    assert_nil worker_pid
   end
 
   test 'the worker is restarted when the Rolldown install changes' do
@@ -355,26 +372,26 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     register_rolldown(bundler_path: File.join(@path, 'wrapped-rolldown'))
 
     reference = export('main.js')
-    pid = worker_pids.first
+    pid = worker_pid
     assert_equal reference, export('main.js')
-    assert_equal [pid], worker_pids
+    assert_equal pid, worker_pid
 
     file 'wrapped-rolldown/package.json', JSON.generate({ name: 'rolldown', version: '0.0.2', main: './index.js' })
     assert_equal reference, export('main.js')
     assert_not alive?(pid)
-    assert_equal 1, worker_pids.size
-    assert_not_equal [pid], worker_pids
+    assert alive?(worker_pid)
+    assert_not_equal pid, worker_pid
   end
 
   test 'a forked child starts its own worker' do
     reference = export('main.js')
-    parent = worker_pids
+    parent = worker_pid
 
     reader, writer = IO.pipe
     child = fork do
       reader.close
       source = export('main.js')
-      writer.write(JSON.generate({ pids: worker_pids, same: source == reference }))
+      writer.write(JSON.generate({ pid: worker_pid, same: source == reference }))
       writer.close
       exit!(0)
     end
@@ -384,14 +401,14 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     Process.wait(child)
 
     assert result['same']
-    assert_equal 1, result['pids'].size
-    assert_not_equal parent, result['pids']
-    assert wait_until { !alive?(result['pids'].first) }
+    assert result['pid']
+    assert_not_equal parent, result['pid']
+    assert wait_until { !alive?(result['pid']) }
 
-    assert_equal parent, worker_pids
-    assert alive?(parent.first)
+    assert_equal parent, worker_pid
+    assert alive?(parent)
     assert_equal reference, export('main.js')
-    assert_equal parent, worker_pids
+    assert_equal parent, worker_pid
   end
 
   ['TERM', 'KILL'].each do |signal|
@@ -402,9 +419,10 @@ class RolldownWorkerTest < ActiveSupport::TestCase
         env = Condenser.new(#{@path.inspect}, logger: Logger.new(File::NULL), npm_path: #{@npm_dir.inspect}, base: #{@path.inspect})
         env.unregister_minifier('application/javascript')
         env.unregister_exporter('application/javascript')
-        env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(#{@npm_dir.inspect}))
+        processor = Condenser::RolldownProcessor.new(#{@npm_dir.inspect})
+        env.register_exporter('application/javascript', processor)
         env.find('main.js').export
-        puts Condenser::RolldownProcessor::Worker.workers.map(&:pid).join(' ')
+        puts processor.worker.pid
         $stdout.flush
         sleep
       RUBY
