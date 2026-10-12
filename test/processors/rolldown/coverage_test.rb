@@ -167,7 +167,7 @@ class RolldownCoverageTest < ActiveSupport::TestCase
     assert_equal "wrapped\n", run_bundle('main.js')
   end
 
-  test 'node exits on its own after a build error' do
+  test 'node keeps running after a build error and builds the next export' do
     file 'main.js', <<~JS
       import x from './missing.js';
 
@@ -181,7 +181,11 @@ class RolldownCoverageTest < ActiveSupport::TestCase
 
     assert_includes error.message, '[UNRESOLVED_IMPORT]'
     assert_equal 1, pids.size
-    assert_raises(Errno::ESRCH) { Process.kill(0, pids.first) }
+    assert_equal 1, Process.kill(0, pids.first)
+
+    file 'missing.js', "export default 'found';\n"
+    assert_equal "found\n", run_bundle('main.js')
+    assert_equal 1, pids.size
   ensure
     Thread.current[:rolldown_coverage_pids] = nil
     pids&.each { |pid| Process.kill('KILL', pid) rescue nil }

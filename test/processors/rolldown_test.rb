@@ -300,7 +300,7 @@ class RolldownTest < ActiveSupport::TestCase
     assert_not_equal digest, @env.export_pipeline_digest('application/javascript')
   end
 
-  test 'an error raised in ruby stops the node process' do
+  test 'an error raised in ruby is re-raised and the node process is kept' do
     file 'main.js', <<~JS
       import maths from 'maths/*';
 
@@ -317,7 +317,11 @@ class RolldownTest < ActiveSupport::TestCase
     error = assert_raises(RuntimeError) { @env.find('main.js').export }
     assert_equal 'boom', error.message
     assert_equal 1, pids.size
-    assert_raises(Errno::ESRCH) { Process.kill(0, pids.first) }
+    assert_equal 1, Process.kill(0, pids.first)
+
+    Condenser::Asset.any_instance.unstub(:has_default_export?)
+    assert_includes @env.find('main.js').export.source, 'x * x * x'
+    assert_equal 1, pids.size
   ensure
     Thread.current[:spawn_pids] = nil
     pids&.each { |pid| Process.kill('KILL', pid) rescue nil }
