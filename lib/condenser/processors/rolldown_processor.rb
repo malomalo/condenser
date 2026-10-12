@@ -295,9 +295,9 @@ class Condenser::RolldownProcessor
       when 'load'
         id = args.first
         if id == @entry
-          { code: utf8(@input[:source]), map: @input[:map], digest: digest_for(@entry) }
+          { code: utf8(@input[:source]), digest: digest_for(@entry) }
         elsif (asset = @environment.find(id, accept: @accept))
-          { code: utf8(asset.source), map: asset.sourcemap, digest: asset.hexdigest }
+          { code: utf8(asset.source), digest: asset.hexdigest }
         end
       when 'glob'
         glob_module(args.first)

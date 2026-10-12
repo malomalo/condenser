@@ -3,6 +3,10 @@ require 'test_helper'
 class RolldownWorkerTest < ActiveSupport::TestCase
 
   module AnswerSpy
+    def exec_runtime(config)
+      super(config.merge(RolldownWorkerTest.config || {}))
+    end
+
     def answer(method, *args)
       RolldownWorkerTest.on_answer&.call(method, args, self)
       super
@@ -18,7 +22,7 @@ class RolldownWorkerTest < ActiveSupport::TestCase
   Process.singleton_class.prepend(SpawnSpy)
 
   class << self
-    attr_accessor :on_answer
+    attr_accessor :on_answer, :config
   end
 
   class Abort < Exception; end
@@ -41,6 +45,7 @@ class RolldownWorkerTest < ActiveSupport::TestCase
 
   def teardown
     RolldownWorkerTest.on_answer = nil
+    RolldownWorkerTest.config = nil
     super
   end
 
@@ -685,6 +690,23 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     assert_equal [File.join(@path, 'lazy.js'), File.join(@path, 'maths/b.js')], loads { source = export('main.js') }.sort
     assert_includes source, 'x + 3'
     assert_includes source, '"lazier"'
+  end
+
+  test 'the cache evicts the least recently used modules over its limit' do
+    RolldownWorkerTest.config = { codeCacheLimit: 2500 }
+    %w[a b c].each do |name|
+      file "#{name}.js", "export default '#{name * 1000}';\n"
+      file "entry_#{name}.js", "import #{name} from './#{name}.js';\n\nconsole.log( #{name} );\n"
+    end
+    loaded = ->(name) { loads { export("entry_#{name}.js") }.map { |f| File.basename(f) }.sort }
+
+    assert_equal %w[a.js entry_a.js], loaded.('a')
+    assert_equal %w[b.js entry_b.js], loaded.('b')
+    assert_equal %w[c.js entry_c.js], loaded.('c')
+    assert_empty loaded.('b')
+    assert_equal %w[a.js entry_a.js], loaded.('a')
+    assert_empty loaded.('b')
+    assert_equal %w[c.js entry_c.js], loaded.('c')
   end
 
   test 'a restarted worker starts with an empty cache' do
