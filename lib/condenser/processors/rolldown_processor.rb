@@ -160,15 +160,11 @@ class Condenser::RolldownProcessor
               end
             end
           end
-          raise WorkerDied, "rolldown exited with #{kill}"
+          raise WorkerDied, "rolldown exited with #{stop}"
         rescue Errno::EPIPE, Errno::ECONNRESET, IOError
-          raise WorkerDied, "rolldown exited with #{kill}"
+          raise WorkerDied, "rolldown exited with #{stop}"
         ensure
-          if !finished
-            kill
-          elsif @builds >= @max_builds || @rss.to_i > @max_memory
-            stop
-          end
+          stop if !finished || @builds >= @max_builds || @rss.to_i > @max_memory
         end
       end
     end
@@ -176,15 +172,8 @@ class Condenser::RolldownProcessor
     def stop
       io, pid = @io, @pid
       @io = @pid = nil
-      return unless pid
-
-      io.close rescue nil
-      reap(pid) if @owner == Process.pid
-    end
-
-    def kill
-      Process.kill('TERM', @pid) rescue nil if @pid && @owner == Process.pid
-      stop
+      io&.close
+      reap(pid) if pid && @owner == Process.pid
     end
 
     private
@@ -219,6 +208,7 @@ class Condenser::RolldownProcessor
     end
 
     def reap(pid)
+      Process.kill('TERM', pid)
       deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 3
       until (_, status = Process.wait2(pid, Process::WNOHANG))
         if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline

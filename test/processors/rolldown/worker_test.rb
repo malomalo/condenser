@@ -216,6 +216,22 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     assert_not_equal pid, worker_pid
   end
 
+  test 'a forked child that never exports does not slow down stopping the worker' do
+    export('main.js')
+    pid = worker_pid
+    child = fork { sleep }
+
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    Condenser::RolldownProcessor.stop_workers
+    assert_operator Process.clock_gettime(Process::CLOCK_MONOTONIC) - started, :<, 1
+    assert_not alive?(pid)
+  ensure
+    if child
+      Process.kill('KILL', child)
+      Process.wait(child)
+    end
+  end
+
   test 'a ruby exception while answering re-raises the original exception and keeps the worker' do
     file 'main.js', <<~JS
       import maths from 'maths/*';
