@@ -21,6 +21,14 @@ class RolldownWorkerTest < ActiveSupport::TestCase
   end
   Process.singleton_class.prepend(SpawnSpy)
 
+  module ReadSpy
+    def read(path, *args, **kwargs)
+      Thread.current[:rolldown_file_reads]&.push(path)
+      super
+    end
+  end
+  File.singleton_class.prepend(ReadSpy)
+
   class << self
     attr_accessor :on_answer, :config
   end
@@ -513,12 +521,40 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     pid = worker_pid
     assert_equal reference, export('main.js')
     assert_equal pid, worker_pid
+    assert_equal '0.0.1', @processor.options[:rolldown]
 
+    package = File.join(@path, 'wrapped-rolldown', 'package.json')
+    mtime = File.stat(package).mtime
     file 'wrapped-rolldown/package.json', JSON.generate({ name: 'rolldown', version: '0.0.2', main: './index.js' })
+    File.utime(mtime + 1, mtime + 1, package)
+    assert_equal '0.0.2', @processor.options[:rolldown]
     assert_equal reference, export('main.js')
     assert_not alive?(pid)
     assert alive?(worker_pid)
     assert_not_equal pid, worker_pid
+  end
+
+  test 'the Rolldown package.json is only re-read when it changes' do
+    rolldown = File.realpath(File.join(@npm_dir, 'node_modules', 'rolldown'))
+    file 'wrapped-rolldown/package.json', JSON.generate({ name: 'rolldown', version: '0.0.1', main: './index.js' })
+    file 'wrapped-rolldown/index.js', "module.exports = require(#{JSON.generate(rolldown)});\n"
+    register_rolldown(bundler_path: File.join(@path, 'wrapped-rolldown'))
+    package = File.join(@path, 'wrapped-rolldown', 'package.json')
+    reference = export('main.js')
+    pid = worker_pid
+
+    Thread.current[:rolldown_file_reads] = reads = []
+    assert_equal reference, export('main.js')
+    @processor.options
+    assert_equal pid, worker_pid
+    assert_not_includes reads, package
+
+    mtime = File.stat(package).mtime
+    File.utime(mtime + 1, mtime + 1, package)
+    @processor.options
+    assert_includes reads, package
+  ensure
+    Thread.current[:rolldown_file_reads] = nil
   end
 
   test 'a forked child starts its own worker' do
