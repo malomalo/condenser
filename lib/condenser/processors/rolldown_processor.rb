@@ -7,7 +7,6 @@ class Condenser::RolldownProcessor
 
   SCRIPT = File.expand_path('rolldown_processor.js', __dir__)
   DYNAMIC_IMPORTS = %i[inline keep].freeze
-  MAX_BUILDS = 100
   MAX_MEMORY = 1536 * 1024 * 1024
 
   class WorkerDied < RuntimeError; end
@@ -54,14 +53,12 @@ class Condenser::RolldownProcessor
     end
   end
 
-  def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, aliases: {}, platform: 'neutral', max_builds: MAX_BUILDS, max_memory: MAX_MEMORY)
+  def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, aliases: {}, platform: 'neutral', max_memory: MAX_MEMORY)
     unless DYNAMIC_IMPORTS.include?(dynamic_imports)
       raise ArgumentError, "dynamic_imports must be :inline or :keep, got #{dynamic_imports.inspect}"
     end
-    { max_builds: max_builds, max_memory: max_memory }.each do |name, value|
-      unless value.is_a?(Integer) && value.positive?
-        raise ArgumentError, "#{name} must be a positive Integer, got #{value.inspect}"
-      end
+    unless max_memory.is_a?(Integer) && max_memory.positive?
+      raise ArgumentError, "max_memory must be a positive Integer, got #{max_memory.inspect}"
     end
     self.class.install_npm_packages(dir) if bundler_path.nil? && dir
     @npm_dir = dir
@@ -70,7 +67,6 @@ class Condenser::RolldownProcessor
     @bundler_path = bundler_path
     @aliases = aliases
     @platform = platform
-    @max_builds = max_builds
     @max_memory = max_memory
     @lock = Mutex.new
   end
@@ -84,7 +80,6 @@ class Condenser::RolldownProcessor
       @worker ||= Worker.new(
         Condenser::NodeProcessor.new(@npm_dir).binary,
         @bundler_path || (@npm_dir ? File.join(@npm_dir, 'node_modules', 'rolldown') : 'rolldown'),
-        max_builds: @max_builds,
         max_memory: @max_memory
       )
     end
@@ -106,10 +101,9 @@ class Condenser::RolldownProcessor
 
     attr_reader :pid
 
-    def initialize(binary, bundler_path, max_builds: MAX_BUILDS, max_memory: MAX_MEMORY)
+    def initialize(binary, bundler_path, max_memory: MAX_MEMORY)
       @binary = binary
       @bundler_path = bundler_path
-      @max_builds = max_builds
       @max_memory = max_memory
       @lock = Mutex.new
       @next_build = 0
@@ -139,10 +133,9 @@ class Condenser::RolldownProcessor
         raise @failure if @failure
         raise WorkerDied, exited unless message
 
-        @builds += 1
         message
       ensure
-        terminate if !message || @builds >= @max_builds || message['rss'].to_i > @max_memory
+        terminate if !message || message['rss'].to_i > @max_memory
       end
     end
 
@@ -206,7 +199,6 @@ class Condenser::RolldownProcessor
       @io = io
       @owner = Process.pid
       @version = Condenser::RolldownProcessor.read_version(@bundler_path)
-      @builds = 0
     end
 
     def terminate

@@ -135,7 +135,7 @@ class RolldownWorkerTest < ActiveSupport::TestCase
 
   test 'the worker options are not part of the options' do
     default = Condenser::RolldownProcessor.new(@env.npm_path)
-    tuned = Condenser::RolldownProcessor.new(@env.npm_path, max_builds: 3, max_memory: 1024)
+    tuned = Condenser::RolldownProcessor.new(@env.npm_path, max_memory: 1024)
     assert_equal default.options, tuned.options
     assert_equal %i[prefix dynamic_imports aliases rolldown], default.options.keys
 
@@ -487,26 +487,10 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     Thread.current[:rolldown_worker_spawns] = nil
   end
 
-  test 'max_builds: restarts the worker after that many builds' do
-    register_rolldown(max_builds: 2)
-    reference = export('main.js')
-    first = worker_pid
-
-    assert_equal reference, export('main.js')
-    assert_nil worker_pid
-    assert_not alive?(first)
-
-    assert_equal reference, export('main.js')
-    assert alive?(worker_pid)
-    assert_not_equal first, worker_pid
-  end
-
-  test 'max_builds: and max_memory: only accept positive integers' do
+  test 'max_memory: only accepts positive integers' do
     [nil, 0, -1, 1.5, '5'].each do |value|
-      %i[max_builds max_memory].each do |option|
-        error = assert_raises(ArgumentError) { Condenser::RolldownProcessor.new(@env.npm_path, option => value) }
-        assert_equal "#{option} must be a positive Integer, got #{value.inspect}", error.message
-      end
+      error = assert_raises(ArgumentError) { Condenser::RolldownProcessor.new(@env.npm_path, max_memory: value) }
+      assert_equal "max_memory must be a positive Integer, got #{value.inspect}", error.message
     end
   end
 
@@ -754,7 +738,7 @@ class RolldownWorkerTest < ActiveSupport::TestCase
   end
 
   test 'a restarted worker starts with an empty cache' do
-    register_rolldown(max_builds: 1)
+    register_rolldown(max_memory: 1)
     export('main.js')
     assert_equal [File.join(@path, 'main.js'), File.join(@path, 'math.js')], loads { export('main.js') }.sort
   end
