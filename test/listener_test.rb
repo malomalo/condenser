@@ -75,5 +75,28 @@ class ListenerTest < ActiveSupport::TestCase
     FileUtils.remove_entry(root, true) if root
   end
 
+  test 'a file dependency recorded through a symlinked path notices changes' do
+    root = File.realpath(Dir.mktmpdir)
+    link = File.join(File.realpath(Dir.mktmpdir), 'link')
+    File.symlink(root, link)
+    @env.watch(link)
+    @env.register_preprocessor 'text/plain', Class.new {
+      define_singleton_method(:setup) { |env| }
+      define_singleton_method(:name) { 'SymlinkProcessor' }
+      define_singleton_method(:call) do |env, input|
+        input[:file_dependencies] << File.join(link, 'a.html')
+        input[:source] = File.read(File.join(link, 'a.html'))
+      end
+    }
+    file 'a.html', 'a', base: root
+    file 'test.txt', ''
+    assert_equal 'a', @env.find('test.txt').source
+
+    file 'a.html', 'b', base: root
+    assert wait_until { @env.find('test.txt').source == 'b' }, @env.find('test.txt').source
+  ensure
+    FileUtils.remove_entry(root, true) if root
+    FileUtils.remove_entry(File.dirname(link), true) if link
+  end
 
 end

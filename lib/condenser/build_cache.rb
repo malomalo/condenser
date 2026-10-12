@@ -185,10 +185,18 @@ class Condenser
     def record_file_dependencies(asset, files, directories)
       return if !@listening
 
-      files.each { |f| (@file_dependencies[f] ||= Set.new) << asset }
-      directories.each { |d| (@directory_dependencies[d] ||= Set.new) << asset }
+      files.each { |f| (@file_dependencies[real_path(f)] ||= Set.new) << asset }
+      directories.each { |d| (@directory_dependencies[real_path(d)] ||= Set.new) << asset }
     end
 
+    # Listen reports paths with symlinks resolved, e.g. /private/var for
+    # /var on macOS or a Capistrano release for its `current` symlink.
+    def real_path(path)
+      File.realpath(path)
+    rescue SystemCallError
+      dir = File.dirname(path)
+      dir == path ? path : File.join(real_path(dir), File.basename(path))
+    end
 
     # A digest of the file's contents, or nil if it's missing. It's only
     # recomputed when the file's stat changes.
