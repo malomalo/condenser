@@ -370,6 +370,48 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     ENV['NODE_OPTIONS'] = node_options
   end
 
+  test 'a done or warn message from an earlier build is ignored' do
+    file 'stale.js', <<~JS
+      const net = require('net');
+      const write = net.Socket.prototype.write;
+      let first = null, forged = false;
+      net.Socket.prototype.write = function (data, ...rest) {
+        const message = typeof data === 'string' && data.startsWith('{') ? JSON.parse(data) : null;
+        if (message && first === null) first = message.build;
+        if (message && !forged && message.build !== first) {
+          forged = true;
+          write.call(this, JSON.stringify({ method: 'warn', build: first, args: ['stale warning'] }) + "\\n");
+          write.call(this, JSON.stringify({ method: 'done', build: first, args: ['stale output'] }) + "\\n");
+        }
+        return write.call(this, data, ...rest);
+      };
+    JS
+    log = StringIO.new
+    @env.logger = Logger.new(log, level: :warn)
+
+    node_options = ENV['NODE_OPTIONS']
+    ENV['NODE_OPTIONS'] = "--require #{File.join(@path, 'stale.js')}"
+    reference = export('main.js')
+    assert_equal reference, export('main.js')
+    assert_not_includes log.string, 'stale warning'
+  ensure
+    ENV['NODE_OPTIONS'] = node_options
+  end
+
+  test 'a ruby exception while resolving re-raises the original exception and keeps the worker' do
+    reference = export('main.js')
+    pid = worker_pid
+
+    on_answer { |method, _, _| raise ArgumentError, 'boom' if method == 'resolve' }
+    error = assert_raises(ArgumentError) { export('main.js') }
+    assert_equal 'boom', error.message
+    assert_equal pid, worker_pid
+
+    RolldownWorkerTest.on_answer = nil
+    assert_equal reference, export('main.js')
+    assert_equal pid, worker_pid
+  end
+
   test 'an exception that abandons a build stops the worker' do
     reference = export('main.js')
     pid = worker_pid
@@ -539,17 +581,19 @@ class RolldownWorkerTest < ActiveSupport::TestCase
         sleep
       RUBY
 
+      log = File.join(@path, 'child.log')
       reader, writer = IO.pipe
-      child = Process.spawn(Gem.ruby, '-I', File.expand_path('../../../lib', __dir__), '-rbundler/setup', File.join(@path, 'child.rb'), out: writer, err: File::NULL)
+      child = Process.spawn(Gem.ruby, '-I', File.expand_path('../../../lib', __dir__), '-rbundler/setup', File.join(@path, 'child.rb'), out: writer, err: log)
       writer.close
       line = Timeout.timeout(60) { reader.gets }
       reader.close
+      flunk "the child exited without printing its worker's pid:\n#{File.read(log)}" if line.nil?
       worker = Integer(line)
-      assert alive?(worker)
+      assert alive?(worker), File.read(log)
 
       Process.kill(signal, child)
       Process.wait(child)
-      assert wait_until { !alive?(worker) }, "worker #{worker} is still running"
+      assert wait_until { !alive?(worker) }, "worker #{worker} is still running:\n#{File.read(log)}"
     ensure
       Process.kill('KILL', child) rescue nil if child
       Process.kill('KILL', worker) rescue nil if worker
