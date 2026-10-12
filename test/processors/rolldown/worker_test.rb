@@ -317,6 +317,26 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     assert_equal pid, worker_pid
   end
 
+  test 'a ruby exception is re-raised when the worker then dies' do
+    export('main.js')
+    pid = worker_pid
+    on_answer do |method, _, _|
+      if method == 'resolve'
+        Process.kill('KILL', pid)
+        Process.wait(pid)
+        raise ArgumentError, 'boom'
+      end
+    end
+
+    spawned = Thread.current[:rolldown_worker_spawns] = []
+    error = assert_raises(ArgumentError) { export('main.js') }
+    assert_equal 'boom', error.message
+    assert_empty spawned
+    assert_nil worker_pid
+  ensure
+    Thread.current[:rolldown_worker_spawns] = nil
+  end
+
   test 'a request from an earlier build is not answered by the current one' do
     file 'stale.js', <<~JS
       const net = require('net');

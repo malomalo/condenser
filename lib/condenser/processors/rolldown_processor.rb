@@ -118,7 +118,7 @@ class Condenser::RolldownProcessor
 
     # Yields each hook request as (method, args) and returns the build's
     # 'done' or 'error' message. An exception from the block is re-raised
-    # once the build has finished.
+    # once the build has finished or the worker has died.
     def build(config, logger:, &block)
       return throwaway_build(config, logger: logger, &block) if @lock.owned?
 
@@ -136,10 +136,10 @@ class Condenser::RolldownProcessor
         rescue Errno::EPIPE, Errno::ECONNRESET, IOError
           nil
         end
+        raise @failure if @failure
         raise WorkerDied, exited unless message
 
         @builds += 1
-        raise @failure if @failure
         message
       ensure
         terminate if !message || @builds >= @max_builds || message['rss'].to_i > @max_memory
