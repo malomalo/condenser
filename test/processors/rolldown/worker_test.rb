@@ -232,6 +232,68 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     end
   end
 
+  test 'stop waits for the build in flight' do
+    reference = export('main.js')
+    pid = worker_pid
+    answering = Queue.new
+    release = Queue.new
+    on_answer do |method, _, _|
+      if method == 'resolve' && release
+        answering << true
+        release.pop
+        release = nil
+      end
+    end
+
+    build = Thread.new { export('main.js') }
+    answering.pop
+    stopper = Thread.new { @processor.worker.stop }
+    assert wait_until { stopper.status == 'sleep' }
+    assert alive?(pid)
+
+    release << true
+    assert_equal reference, build.value
+    stopper.join
+    assert_not alive?(pid)
+    assert_nil worker_pid
+  end
+
+  test 'a build whose worker dies while it is being stopped is not retried' do
+    export('main.js')
+    pid = worker_pid
+    stopper = nil
+    on_answer do |method, _, _|
+      if method == 'resolve' && stopper.nil?
+        stopper = Thread.new { @processor.worker.stop }
+        wait_until { stopper.status == 'sleep' }
+        Process.kill('KILL', pid)
+      end
+    end
+
+    spawned = Thread.current[:rolldown_worker_spawns] = []
+    error = assert_raises(RuntimeError) { export('main.js') }
+    assert_match(/\Arolldown exited with pid #{pid} SIGKILL/, error.message)
+    assert_empty spawned
+    stopper.join
+    assert_nil worker_pid
+  ensure
+    Thread.current[:rolldown_worker_spawns] = nil
+  end
+
+  test 'a worker reaped elsewhere exits with an unknown status' do
+    export('main.js')
+    on_answer do |method, _, _|
+      if method == 'resolve'
+        pid = worker_pid
+        Process.kill('KILL', pid)
+        Process.wait(pid)
+      end
+    end
+
+    error = assert_raises(RuntimeError) { export('main.js') }
+    assert_equal 'rolldown exited with an unknown status', error.message
+  end
+
   test 'a ruby exception while answering re-raises the original exception and keeps the worker' do
     file 'main.js', <<~JS
       import maths from 'maths/*';

@@ -142,15 +142,17 @@ class Condenser::RolldownProcessor
         raise @failure if @failure
         message
       ensure
-        stop if !message || @builds >= @max_builds || message['rss'].to_i > @max_memory
+        terminate if !message || @builds >= @max_builds || message['rss'].to_i > @max_memory
       end
     end
 
     def stop
-      io, pid = @io, @pid
-      @io = @pid = nil
-      io&.close
-      reap(pid) if pid && @owner == Process.pid
+      @stopping = true
+      @lock.synchronize { terminate }
+    end
+
+    def stopping?
+      @stopping
     end
 
     private
@@ -179,7 +181,7 @@ class Condenser::RolldownProcessor
     end
 
     def exited
-      "rolldown exited with #{stop}"
+      "rolldown exited with #{terminate || 'an unknown status'}"
     end
 
     def throwaway_build(config, logger:, &block)
@@ -190,7 +192,8 @@ class Condenser::RolldownProcessor
     end
 
     def start
-      stop
+      terminate
+      @stopping = false
       io, child_io = UNIXSocket.pair
       begin
         @pid = Process.spawn(@binary, '--max_old_space_size=5120', SCRIPT, @bundler_path, in: File::NULL, 3 => child_io)
@@ -204,6 +207,13 @@ class Condenser::RolldownProcessor
       @owner = Process.pid
       @version = Condenser::RolldownProcessor.read_version(@bundler_path)
       @builds = 0
+    end
+
+    def terminate
+      io, pid = @io, @pid
+      @io = @pid = nil
+      io&.close
+      reap(pid) if pid && @owner == Process.pid
     end
 
     def write(message)
@@ -262,7 +272,7 @@ class Condenser::RolldownProcessor
       message = begin
         @worker.build(config, logger: @environment.logger) { |method, args| answer(method, *args) }
       rescue WorkerDied => e
-        retry if (attempts += 1) == 1
+        retry if (attempts += 1) == 1 && !@worker.stopping?
         raise exec_runtime_error(e.message)
       end
 
