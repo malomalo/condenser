@@ -202,6 +202,19 @@ class FileDependenciesTest < ActiveSupport::TestCase
     assert_equal 3, calls
   end
 
+  test 'a recursive and a non-recursive dependency on the same directory' do
+    file 'content/a.html', 'a'
+    FileDependencyProcessor.directories = [
+      [@content, { glob: '*.html', recursive: true }],
+      [@content, { glob: '*.html' }]
+    ]
+
+    assert_includes build(new_env), 'content: a.html'
+    assert_equal [[@content, ['*.html'], true]], new_env.find('test.txt').directory_dependencies
+    file 'content/sub/b.html', 'b'
+    assert_includes build(new_env), 'content: a.html,sub/b.html'
+  end
+
   test 'file dependencies of a dependency invalidate the dependent' do
     file 'content/a.html', 'one'
     FileDependencyProcessor.files = [File.join(@content, 'a.html')]
