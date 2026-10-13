@@ -120,7 +120,7 @@ class CondenserErubiTest < ActiveSupport::TestCase
 
     asset = @env.find('test.js')
     assert_equal ['img.png'], asset.linked_assets.map(&:filename)
-    assert_equal @env.find('img.png'), asset.environment.new_context_class.link_asset('img.png')
+    assert_nil @env.new_context_class.link_asset('img.png')
 
     dir = Dir.mktmpdir
     Condenser::Manifest.new(@env, File.join(dir, 'manifest.json')).compile('test.js')
@@ -129,6 +129,26 @@ class CondenserErubiTest < ActiveSupport::TestCase
     assert File.exist?(File.join(dir, @env.find('img.png').path))
   ensure
     FileUtils.remove_entry(dir, true) if dir
+  end
+
+  test 'link_asset raises when the asset is missing' do
+    file 'test.js.erb', "<% link_asset('missing.png') %>console.log(1);\n"
+
+    error = assert_raises(Condenser::FileNotFound) { @env.find('test.js').source }
+    assert_includes error.message, "'missing.png'"
+    assert_includes error.message, File.join(@path, 'test.js.erb')
+  end
+
+  test 'link_asset and depend_on_asset are relative to the template' do
+    file 'sibling.png', 'top'
+    file 'dir/sibling.png', 'dir'
+    file 'dir/other.png', 'other'
+    file 'dir/test.txt.erb', "<% link_asset('./sibling.png') %><%= depend_on_asset('./other.png').source %>\n"
+
+    asset = @env.find('dir/test.txt')
+    assert_equal "other\n", asset.source
+    assert_equal ['dir/sibling.png'], asset.linked_assets.map(&:filename)
+    assert_equal ['dir/other.png', 'dir/sibling.png'], asset.process_dependencies.map(&:filename).sort
   end
 
 end

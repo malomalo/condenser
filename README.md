@@ -226,7 +226,9 @@ else, such as a database, must manually invalidate the cache to see the change.
 
 `depend_on(path)` declares a dependency on another asset like the `depends_on`
 directive, `depend_on_asset(path)` does the same and returns the asset, and
-`link_asset(path)` also adds it to the precompiled manifest.
+`link_asset(path)` also adds it to the precompiled manifest. Those two raise
+`Condenser::FileNotFound` if the asset is missing, and paths starting with `./`
+are relative to the template.
 
 If you're using Rails, there are helpers you can use such as `asset_url`
 that will cause a recompile if the value changes.

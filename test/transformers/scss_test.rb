@@ -645,8 +645,8 @@ class CondenserSCSSTest < ActiveSupport::TestCase
     CSS
 
     asset = @env.find('test.css')
-    assert_equal ["a.scss", "foo.svg", "foo.png", "foo.mov", "foo.mp3", "foo.woff2", "foo.woff", "foo.js", "foo.css"], asset.process_dependencies.map(&:filename)
-    assert_equal ["a.scss", "foo.svg", "foo.png", "foo.mov", "foo.mp3", "foo.woff2", "foo.woff", "foo.js", "foo.css"], asset.export_dependencies.map(&:filename)
+    assert_equal ["a.scss", "foo.css", "foo.js", "foo.mov", "foo.mp3", "foo.png", "foo.svg", "foo.woff", "foo.woff2"], asset.process_dependencies.map(&:filename).sort
+    assert_equal ["a.scss", "foo.css", "foo.js", "foo.mov", "foo.mp3", "foo.png", "foo.svg", "foo.woff", "foo.woff2"], asset.export_dependencies.map(&:filename).sort
   end
 
   test "path functions" do
@@ -894,6 +894,23 @@ class CondenserSCSSTest < ActiveSupport::TestCase
   ensure
     ENV.delete('CONDENSER_SCSS_TEST')
     FileUtils.remove_entry(cache_dir, true) if cache_dir
+  end
+
+  test "a missing asset in a url function raises" do
+    @env.context_class.class_eval do
+      def asset_path(path, options = {})
+        asset = environment.find(path)
+        asset ? "/assets/#{asset.path}" : "/#{path}"
+      end
+    end
+
+    %w(image-url asset-url).each do |function|
+      file 'test.scss', "div { background: #{function}(\"missing.png\"); }"
+
+      error = assert_raises(::Sass::CompileError) { @env.find('test.css').source }
+      assert_includes error.message, "'missing.png'"
+      assert_includes error.message, File.join(@path, 'test.scss')
+    end
   end
 
 end

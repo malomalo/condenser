@@ -95,7 +95,7 @@ class Condenser::SassTransformer
   end
 
   def call(environment, input)
-    context = environment.new_context_class
+    context = environment.new_context_class(source_file: input[:source_file])
     importer = @importer_class.new(environment, input)
     functions = @function_context.new(context: context, environment: environment, asset: input)
 
