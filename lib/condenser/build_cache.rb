@@ -19,6 +19,23 @@ class Condenser
     # Ignored under every watched path, on top of Listen's defaults.
     WATCH_IGNORES = [%r{(?:\A|/)node_modules(?:/|\z)}, %r{\A(?:\.git|tmp|log)(?:/|\z)}].freeze
 
+    # rb-inotify watches a new directory only after Listen has scanned it, so
+    # a file written in between is never reported. Watching it before the
+    # scan means the scan or an event catches every file.
+    module WatchNewDirectoriesFirst
+      private
+
+      def _process_event(dir, event)
+        if _dir_event?(event) && (event.flags & [:create, :moved_to]).any? && @callbacks&.key?(dir)
+          begin
+            @worker.watch(event.absolute_name, *options.events, &@callbacks[dir])
+          rescue SystemCallError
+          end
+        end
+        super
+      end
+    end
+
     def initialize(path, logger:, listen: {})
       @logger = logger
       @path = path
@@ -33,6 +50,7 @@ class Condenser
       @watch_listeners = []
       @listening = if listen
         require 'listen'
+        Listen::Adapter::Linux.prepend(WatchNewDirectoriesFirst)
         Listen::Adapter.select != Listen::Adapter::Polling
       else
         false
