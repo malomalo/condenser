@@ -305,12 +305,13 @@ it isn't there, and its version is read for the cache keys. Without an npm
 path, `rolldown` is loaded with Node's own module lookup (for example from
 `NODE_PATH`).
 
-`RolldownProcessor` is registered as an instance. To register one yourself,
-for example with options, create it with the environment's npm path:
+`RolldownProcessor` is registered as an instance, and uses the npm path it's
+created with. Pass `npm_path:` to `Condenser.new` so the default one gets it,
+or, if the npm path is set afterwards, register your own once it's set:
 
 ```ruby
 condenser.unregister_exporter('application/javascript')
-condenser.register_exporter('application/javascript', Condenser::RolldownProcessor.new(condenser.npm_path, platform: 'browser'))
+condenser.register_exporter('application/javascript', Condenser::RolldownProcessor.new(condenser.npm_path))
 ```
 
 Since the version is read once, upgrading Rolldown takes effect when the

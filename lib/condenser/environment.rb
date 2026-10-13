@@ -75,7 +75,6 @@ class Condenser
         raise ArgumentError, "Path \"#{path}\" does not exists" if !File.directory?(path)
         @npm_path = path
       end
-      npm_path_changed!
       load_path_changed!
     end
   

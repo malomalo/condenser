@@ -34,21 +34,11 @@ class RolldownDefaultTest < ActiveSupport::TestCase
     JS
   end
 
-  test 'an npm path set after construction rebuilds the default RolldownProcessor' do
+  test 'the default RolldownProcessor uses the npm path passed to Condenser.new' do
     with_node_path(@path)
-    env = new_env
-    env.append_npm_path(@npm_dir)
+    env = new_env(npm_path: @npm_dir)
     assert_equal File.join(@npm_dir, 'node_modules', 'rolldown'), env.exporters['application/javascript'].first.rolldown_path
     assert_includes env.find('main.js').export.source, 'console.log("main");'
-  end
-
-  test 'an npm path set after construction leaves a RolldownProcessor registered in its place' do
-    env = new_env
-    processor = Condenser::RolldownProcessor.new(nil, platform: 'browser')
-    env.unregister_exporter('application/javascript')
-    env.register_exporter('application/javascript', processor)
-    env.append_npm_path(@npm_dir)
-    assert_equal [processor], env.exporters['application/javascript']
   end
 
   test 'without an npm path rolldown is loaded with node module resolution' do
