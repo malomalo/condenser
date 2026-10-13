@@ -14,10 +14,12 @@ class Condenser::Erubi
     }).src
     
     source = eval("proc { #{source} }", nil, data[:filename] || "(erubi)")
-    context = environment.new_context_class
+    context = environment.new_context_class(source_file: data[:source_file], content_type: data[:content_type].last)
     source = context.instance_eval(&source)
 
     data[:source] = source
+    data[:linked_assets].merge(context.links)
+    data[:process_dependencies].merge(context.dependencies)
     data[:file_dependencies].merge(context.file_dependencies)
     data[:directory_dependencies].merge(context.directory_dependencies)
   end

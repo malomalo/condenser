@@ -36,10 +36,15 @@ class Condenser
       end
     end
 
-    attr_reader :environment, :filename, :links, :dependencies, :file_dependencies, :directory_dependencies
+    attr_reader :environment, :filename, :source_file, :links, :dependencies, :file_dependencies, :directory_dependencies
 
-    def initialize(environment)
+    # The characters that make a path a glob for Dir.glob.
+    GLOB = /[*?\[{]/
+
+    def initialize(environment, source_file: nil, content_type: nil)
       @environment  = environment
+      @source_file  = source_file
+      @content_type = content_type
       @dependencies = Set.new
       @file_dependencies = Set.new
       @directory_dependencies = Set.new
@@ -79,48 +84,49 @@ class Condenser
     #
     attr_reader :content_type
 
-    # Public: Given a logical path, `resolve` will find and return an Asset URI.
-    # Relative paths will also be resolved. An accept type maybe given to
+    # Public: Finds the asset at a path, which may be relative to the source
+    # file, and records it as a dependency. An accept type maybe given to
     # restrict the search.
     #
     #     resolve("foo.js")
-    #     # => "file:///path/to/app/javascripts/foo.js?type=application/javascript"
+    #     # => #<Condenser::Asset @filename=foo.js ...>
     #
-    #     resolve("./bar.js")
-    #     # => "file:///path/to/app/javascripts/bar.js?type=application/javascript"
-    #
-    # path   - String logical or absolute path
-    # accept - String content accept type
-    #
-    # Returns an Asset URI String.
+    # Returns an Asset, or raises FileNotFound.
     def resolve(path, **kargs)
-      uri, deps = environment.resolve!(path, @dirname, **kargs)
-      @dependencies.merge(deps)
-      uri
+      depend_on(find_asset!(path, **kargs))
     end
+    alias_method :load, :resolve
 
-    # Public: Load Asset by AssetURI and track it as a dependency.
-    #
-    # uri - AssetURI
-    #
-    # Returns Asset.
-    def load(uri)
-      asset = environment.load(uri)
-      @dependencies.merge(asset.metadata[:dependencies])
-      asset
-    end
-
-    # `depend_on` allows you to state a dependency on a file without
+    # `depend_on` allows you to state a dependency on an asset without
     # including it.
     #
     # This is used for caching purposes. Any changes that would
     # invalidate the dependency asset will invalidate the source
-    # file.
-    def depend_on(path)
-      d = environment.decompose_path(path)
-      @dependencies << [File.join(*d[0], d[1]), [d[3]]]
+    # file. Like the `depends_on` directive, +path+ may be relative to the
+    # source file, and without an extension it matches the type of the
+    # source file.
+    #
+    #     depend_on('logo.png')                  # => Asset, or raises FileNotFound
+    #     depend_on('logo.png', required: false) # => Asset or nil
+    #     depend_on('**/*.png')                  # => Array of Assets
+    #     depend_on(asset)                       # => asset
+    #
+    # A glob, or a missing path that isn't required, is recorded as the path,
+    # so a matching file added later invalidates the source file.
+    def depend_on(path, required: true)
+      if path.is_a?(Asset)
+        @dependencies << asset_dependency(path)
+        return path
+      end
 
-      nil
+      if path.match?(GLOB)
+        @dependencies << path
+        return resolve_assets(path)
+      end
+
+      asset = required ? find_asset!(path) : find_asset(path)
+      @dependencies << (asset ? asset_dependency(asset) : path)
+      asset
     end
 
     # `depend_on_file` states a dependency on the contents of a file that
@@ -147,19 +153,25 @@ class Condenser
     # variable.
     #
     # This is used for caching purposes. Any changes in the value of the
-    # environment variable will invalidate the cache of the source file.
+    # environment variable will invalidate the cache of the source file. It's
+    # recorded as "env:KEY"; the value is checked when the cache is, so a new
+    # process sees a change but a running one doesn't watch ENV.
     def depend_on_env(key)
       @dependencies << "env:#{key}"
+
+      nil
     end
 
     # `link_asset` declares an external dependency on an asset without directly
-    # including it. The target asset is returned from this function making it
-    # easy to construct a link to it.
+    # including it, so it's compiled along with the source file. It takes the
+    # same paths as `depend_on`.
     #
-    # Returns an Asset or nil.
+    # Raises FileNotFound if there's no such asset.
     def link_asset(path)
-      depend_on(path)
-      @links << path
+      found = depend_on(path)
+      @links << (found.is_a?(Asset) ? asset_dependency(found) : path)
+
+      nil
     end
 
     # Returns a `data:` URI with the contents of the asset at the specified
@@ -174,7 +186,7 @@ class Condenser
     #     $('<img>').attr('src', '<%= asset_data_uri 'avatar.jpg' %>')
     #
     def asset_data_uri(path)
-      asset = depend_on_asset(path)
+      asset = depend_on(path)
       if asset.content_type == 'image/svg+xml'
         svg_asset_data_uri(asset)
       else
@@ -245,7 +257,7 @@ Extend your environment context with a custom method.
 
     # Returns a Base64-encoded data URI.
     def base64_asset_data_uri(asset)
-      data = URI.encode_www_form_component(EncodingUtils.base64(asset.source))
+      data = URI.encode_www_form_component([asset.source].pack('m0'))
       "data:#{asset.content_type};base64,#{data}"
     end
 
@@ -275,6 +287,32 @@ Extend your environment context with a custom method.
       escaped.gsub!('%2F', '/')
       escaped.gsub!('%27', "'")
       escaped.tr!('+', ' ')
+    end
+
+    private
+
+    # The assets at +path+, resolved like the dependencies the asset records:
+    # relative to the source file, and without an extension, of its type.
+    def resolve_assets(path, accept: nil)
+      dirname, basename, _, mime_types = environment.decompose_path(path, @source_file)
+      accept ||= mime_types.empty? ? @content_type : mime_types
+      environment.resolve(dirname ? File.join(dirname, basename) : basename, @source_file, accept: accept)
+    end
+
+    # The asset at +path+, or nil.
+    def find_asset(path, **kargs)
+      resolve_assets(path, **kargs).first
+    end
+
+    # The asset at +path+, or raises FileNotFound.
+    def find_asset!(path, **kargs)
+      find_asset(path, **kargs) or raise FileNotFound, "couldn't find file '#{path}'#{" from #{@source_file}" if @source_file}"
+    end
+
+    # The [path, accept] dependency on +asset+ with its own type.
+    def asset_dependency(asset)
+      dirname, basename = environment.decompose_path(asset.source_file)
+      [File.join(dirname, basename), [asset.content_types]]
     end
   end
 end

@@ -32,6 +32,7 @@ class Condenser
       @export_dependencies  = Set.new
       @file_dependencies    = Set.new
       @directory_dependencies = Set.new
+      @env_dependencies     = []
       @default_export       = nil
       @exports              = nil
       @processed            = false
@@ -77,9 +78,23 @@ class Condenser
         {
           assets: @process_dependencies.map { |fn| [normalize_filename_base(fn[0]), fn[1]] }.sort_by { |d| d[0] },
           files: @file_dependencies.map { |f| normalize_filename_base(f) }.sort,
-          directories: @directory_dependencies.map { |d, *rest| [normalize_filename_base(d), *rest] }.sort_by { |d, globs, recursive| [d, globs, recursive ? 1 : 0] }
+          directories: @directory_dependencies.map { |d, *rest| [normalize_filename_base(d), *rest] }.sort_by { |d, globs, recursive| [d, globs, recursive ? 1 : 0] },
+          env: @env_dependencies
         }
       end
+    end
+
+    # The names of the environment variables recorded while processing.
+    def env_dependencies
+      direct_dependency_names[:env] || []
+    end
+
+    # A digest of the values of the #env_dependencies, or nil if there are
+    # none. It's read when the cache is checked, so a new process sees the
+    # change; a running one doesn't watch ENV.
+    def env_dependencies_digest
+      keys = env_dependencies
+      Digest::SHA1.base64digest(JSON.generate(keys.map { |k| [k, ENV[k]] })) if !keys.empty?
     end
 
     def process_dependencies
@@ -362,10 +377,11 @@ class Condenser
 
       f = []
       f << ['files', file_dependencies_digest] if file_dependencies_digest
+      f << ['env', env_dependencies_digest] if env_dependencies_digest
       all_dependenies(process_dependencies, Set.new, :process_dependencies) do |dep|
         # A dependency's cache key covers its contents and the part of the
         # pipeline that processes it
-        f << [normalize_filename_base(dep.source_file), dep.cache_key, dep.file_dependencies_digest].compact
+        f << [normalize_filename_base(dep.source_file), dep.cache_key, dep.file_dependencies_digest, dep.env_dependencies_digest].compact
       end
       
       @pcv = Digest::SHA1.base64digest(JSON.generate(f))
@@ -376,10 +392,11 @@ class Condenser
 
       f = []
       f << ['files', file_dependencies_digest] if file_dependencies_digest
+      f << ['env', env_dependencies_digest] if env_dependencies_digest
       all_dependenies(export_dependencies, Set.new, :export_dependencies) do |dep|
         # A dependency's cache key covers its contents and the part of the
         # pipeline that processes it
-        f << [normalize_filename_base(dep.source_file), dep.cache_key, dep.file_dependencies_digest].compact
+        f << [normalize_filename_base(dep.source_file), dep.cache_key, dep.file_dependencies_digest, dep.env_dependencies_digest].compact
       end
       f << ["npm", npm_digest] if npm_digest
 
@@ -483,6 +500,8 @@ class Condenser
       
           data[:digest] = @environment.digestor.digest(data[:source])
           data[:digest_name] = @environment.digestor.name.sub(/^.*::/, '').downcase
+          env, data[:process_dependencies] = data[:process_dependencies].partition { |d| d.is_a?(String) && d.start_with?('env:') }
+          data[:env_dependencies] = env.map { |d| d.delete_prefix('env:') }.uniq.sort
           data[:process_dependencies] = normialize_dependency_names(data[:process_dependencies])
           data[:export_dependencies] = normialize_dependency_names(data[:export_dependencies])
           data[:linked_assets] = normialize_dependency_names(data[:linked_assets])
@@ -502,6 +521,7 @@ class Condenser
           @export_dependencies = Set.new(data[:export_dependencies])
           @file_dependencies = Set.new(data[:file_dependencies])
           @directory_dependencies = Set.new(data[:directory_dependencies])
+          @env_dependencies = data[:env_dependencies]
           @default_export = data[:default_export]
           @exports = data[:exports]
           @processors = data[:processors]
@@ -532,6 +552,7 @@ class Condenser
       @export_dependencies  = Set.new(result[:export_dependencies])
       @file_dependencies = Set.new(result[:file_dependencies])
       @directory_dependencies = Set.new(result[:directory_dependencies])
+      @env_dependencies = result[:env_dependencies] || []
       @default_export = result[:default_export]
       @exports = result[:exports]
       @processors = result[:processors]

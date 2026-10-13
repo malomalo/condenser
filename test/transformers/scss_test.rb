@@ -645,8 +645,8 @@ class CondenserSCSSTest < ActiveSupport::TestCase
     CSS
 
     asset = @env.find('test.css')
-    assert_equal ["a.scss", "foo.svg", "foo.png", "foo.mov", "foo.mp3", "foo.woff2", "foo.woff", "foo.js", "foo.css"], asset.process_dependencies.map(&:filename)
-    assert_equal ["a.scss", "foo.svg", "foo.png", "foo.mov", "foo.mp3", "foo.woff2", "foo.woff", "foo.js", "foo.css"], asset.export_dependencies.map(&:filename)
+    assert_equal ["a.scss", "foo.css", "foo.js", "foo.mov", "foo.mp3", "foo.png", "foo.svg", "foo.woff", "foo.woff2"], asset.process_dependencies.map(&:filename).sort
+    assert_equal ["a.scss", "foo.css", "foo.js", "foo.mov", "foo.mp3", "foo.png", "foo.svg", "foo.woff", "foo.woff2"], asset.export_dependencies.map(&:filename).sort
   end
 
   test "path functions" do
@@ -853,6 +853,64 @@ class CondenserSCSSTest < ActiveSupport::TestCase
     asset = @env.find('c.css')
     assert_equal ["a.scss", "b.scss", "d.scss"], asset.process_dependencies.map(&:filename)
     assert_equal ["a.scss", "b.scss", "d.scss"], asset.export_dependencies.map(&:filename)
+  end
+
+  test "dependencies recorded on the context as a plain path or an environment variable" do
+    functions = Module.new do
+      def contents(path)
+        condenser_context.depend_on_env('CONDENSER_SCSS_TEST')
+        ::Sass::Value::String.new("#{condenser_context.plain_dependency(path.text)} #{ENV['CONDENSER_SCSS_TEST']}", quoted: true)
+      end
+    end
+    cache_dir = File.realpath(Dir.mktmpdir)
+    new_env = lambda do
+      env = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: @npm_dir, base: @path, cache: Condenser::Cache::FileStore.new(cache_dir))
+      env.unregister_minifier('text/css')
+      env.register_transformer 'text/scss', 'text/css', Condenser::ScssTransformer.new(functions: functions)
+      env.context_class.class_eval do
+        def plain_dependency(path)
+          source_file = environment.find!(path).source_file
+          @dependencies << source_file
+          File.read(source_file).strip
+        end
+      end
+      env
+    end
+    ENV['CONDENSER_SCSS_TEST'] = 'one'
+    file 'a.txt', 'a'
+    file 'test.scss', 'div { content: contents("a.txt"); }'
+
+    asset = new_env.call.find('test.css')
+    assert_includes asset.source, '"a one"'
+    assert_equal [["!a", ["text/plain"]]], asset.direct_dependency_names[:assets]
+    assert_equal ['CONDENSER_SCSS_TEST'], asset.env_dependencies
+    assert_equal ['a.txt'], asset.process_dependencies.map(&:filename)
+
+    file 'a.txt', 'b'
+    assert_includes new_env.call.find('test.css').source, '"b one"'
+
+    ENV['CONDENSER_SCSS_TEST'] = 'two'
+    assert_includes new_env.call.find('test.css').source, '"b two"'
+  ensure
+    ENV.delete('CONDENSER_SCSS_TEST')
+    FileUtils.remove_entry(cache_dir, true) if cache_dir
+  end
+
+  test "a missing asset in a url function raises" do
+    @env.context_class.class_eval do
+      def asset_path(path, options = {})
+        asset = environment.find(path)
+        asset ? "/assets/#{asset.path}" : "/#{path}"
+      end
+    end
+
+    %w(image-url asset-url).each do |function|
+      file 'test.scss', "div { background: #{function}(\"missing.png\"); }"
+
+      error = assert_raises(::Sass::CompileError) { @env.find('test.css').source }
+      assert_includes error.message, "'missing.png'"
+      assert_includes error.message, File.join(@path, 'test.scss')
+    end
   end
 
 end

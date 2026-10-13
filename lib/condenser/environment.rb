@@ -89,8 +89,8 @@ class Condenser
       build_cache.clear_lookups if instance_variable_defined?(:@build_cache)
     end
     
-    def new_context_class
-      context_class.new(self)
+    def new_context_class(source_file: nil, content_type: nil)
+      context_class.new(self, source_file: source_file, content_type: content_type)
     end
     
     # This class maybe mutated and mixed in with custom helpers.
