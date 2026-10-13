@@ -124,7 +124,7 @@ class Condenser
         return resolve_assets(path)
       end
 
-      asset = required ? find_asset!(path) : resolve_assets(path).first
+      asset = required ? find_asset!(path) : find_asset(path)
       @dependencies << (asset ? asset_dependency(asset) : path)
       asset
     end
@@ -299,9 +299,14 @@ Extend your environment context with a custom method.
       environment.resolve(dirname ? File.join(dirname, basename) : basename, @source_file, accept: accept)
     end
 
+    # The asset at +path+, or nil.
+    def find_asset(path, **kargs)
+      resolve_assets(path, **kargs).first
+    end
+
     # The asset at +path+, or raises FileNotFound.
     def find_asset!(path, **kargs)
-      resolve_assets(path, **kargs).first or raise FileNotFound, "couldn't find file '#{path}'#{" from #{@source_file}" if @source_file}"
+      find_asset(path, **kargs) or raise FileNotFound, "couldn't find file '#{path}'#{" from #{@source_file}" if @source_file}"
     end
 
     # The [path, accept] dependency on +asset+ with its own type.
