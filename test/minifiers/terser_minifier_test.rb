@@ -4,7 +4,7 @@ class TerserMinifierTest < ActiveSupport::TestCase
 
   def setup
     super
-    @env.unregister_exporter('application/javascript', Condenser::RollupProcessor)
+    @env.unregister_exporter('application/javascript')
     @env.register_minifier('application/javascript', Condenser::TerserMinifier)
   end
 

@@ -5,6 +5,8 @@ class RollupTest < ActiveSupport::TestCase
   def setup
     super
     @env.unregister_minifier('application/javascript')
+    @env.unregister_exporter('application/javascript')
+    @env.register_exporter('application/javascript', Condenser::RollupProcessor)
   end
   
   test 'file is exported as module' do
@@ -200,6 +202,27 @@ class RollupTest < ActiveSupport::TestCase
 
       console.log( Base, Lower );
     FILE
+  end
+
+  test 'using RollupProcessor logs a deprecation warning once' do
+    Condenser::RollupProcessor.instance_variable_set(:@deprecation_warned, false)
+    file 'a.js', "console.log( 'a' );\n"
+    file 'b.js', "console.log( 'b' );\n"
+
+    @env.logger.expects(:warn).with('Condenser::RollupProcessor is deprecated and will be removed in condenser 3.0; use Condenser::RolldownProcessor instead').once
+    @env.find('a.js').export
+    @env.unregister_exporter('application/javascript')
+    @env.register_exporter('application/javascript', Condenser::RollupProcessor.new(@npm_dir))
+    @env.find('b.js').export
+  end
+
+  test 'the deprecation warning goes to Kernel#warn without a logger' do
+    Condenser::RollupProcessor.instance_variable_set(:@deprecation_warned, false)
+
+    assert_output('', "#{Condenser::RollupProcessor::DEPRECATION}\n") do
+      Condenser::RollupProcessor.warn_deprecated(nil)
+      Condenser::RollupProcessor.warn_deprecated(nil)
+    end
   end
 
 end

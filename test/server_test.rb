@@ -74,7 +74,7 @@ class ServerTest < ActiveSupport::TestCase
   test "serve source with etag headers" do
     get "/assets/foo.js"
 
-    digest = '32b4e17cd87c7355cebc434cc453c8c988724c1675a2b7286d51161f1e8bfb1f'
+    digest = '15fbbe2506c748099c10df7bebd10dc4ca5f1041e5e14d19507cf02fb1189ceb'
     assert_equal "\"#{digest}\"", last_response.headers['ETag']
   end
 
@@ -108,7 +108,7 @@ class ServerTest < ActiveSupport::TestCase
       'HTTP_IF_NONE_MATCH' => "nope"
 
     assert_equal 200, last_response.status
-    assert_equal '"32b4e17cd87c7355cebc434cc453c8c988724c1675a2b7286d51161f1e8bfb1f"', last_response.headers['ETag']
+    assert_equal '"15fbbe2506c748099c10df7bebd10dc4ca5f1041e5e14d19507cf02fb1189ceb"', last_response.headers['ETag']
     assert_equal '15', last_response.headers['Content-Length']
   end
 
@@ -168,7 +168,7 @@ class ServerTest < ActiveSupport::TestCase
       'HTTP_IF_MATCH' => etag
 
     assert_equal 200, last_response.status
-    assert_equal '"32b4e17cd87c7355cebc434cc453c8c988724c1675a2b7286d51161f1e8bfb1f"', last_response.headers['ETag']
+    assert_equal '"15fbbe2506c748099c10df7bebd10dc4ca5f1041e5e14d19507cf02fb1189ceb"', last_response.headers['ETag']
     assert_equal '15', last_response.headers['Content-Length']
   end
 
@@ -254,7 +254,7 @@ class ServerTest < ActiveSupport::TestCase
     JS
     get "/assets/%E6%97%A5%E6%9C%AC%E8%AA%9E.js"
     assert_equal <<~JS.strip, last_response.body
-      var japanese="日本語";console.log(japanese);
+      console.log("日本語");
     JS
   end
 

@@ -105,13 +105,13 @@ class CacheTest < ActiveSupport::TestCase
     asset = assert_exported_file 'main.js', 'application/javascript', <<~JS
       function cube(c){return c*c}console.log(cube(5));
     JS
-    assert_equal '5235f6c47918b953feb8f0369e70f0808515f73f840efe33571852f07a3cf8da', asset.etag
+    assert_equal '4c45aa82780c013661864de7a8150a52939a6a0b20a51244bc636c67bfd457cb', asset.etag
     
 
     asset = assert_exported_file 'main.js', 'application/javascript', <<~JS
       function cube(c){return c*c}console.log(cube(5));
     JS
-    assert_equal '5235f6c47918b953feb8f0369e70f0808515f73f840efe33571852f07a3cf8da', asset.etag
+    assert_equal '4c45aa82780c013661864de7a8150a52939a6a0b20a51244bc636c67bfd457cb', asset.etag
     
     file 'math.js', <<-JS
       export function cube ( x ) {
@@ -122,7 +122,7 @@ class CacheTest < ActiveSupport::TestCase
     asset = assert_exported_file 'main.js', 'application/javascript', <<~CSS
       function cube(c){return c*c*c}console.log(cube(5));
     CSS
-    assert_equal '7342732e96be8a59d27f4266cdc13e048d81ad56f2f0e32e905f253f2f39dba9', asset.etag
+    assert_equal 'ed49bdbd302c40b8c905e4f1f1a80b4e509097cf28a9a2633973108b561b713f', asset.etag
   end
 
   test 'changing a scss dependency reflects in the next call' do
@@ -494,7 +494,7 @@ class CacheTest < ActiveSupport::TestCase
 
     # Computing main.js's cache key resolves 'helper', which is only on the
     # path once PathAddingProcessor is set up
-    Condenser::RollupProcessor.expects(:call).never
+    Condenser::RolldownProcessor.expects(:call).never
     assert_equal source, build.call.source
   ensure
     FileUtils.remove_entry(PathAddingProcessor.path, true) if PathAddingProcessor.path

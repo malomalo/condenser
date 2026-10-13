@@ -95,22 +95,21 @@ class CondenserBabelTest < ActiveSupport::TestCase
 
     # core-js's Object.assign polyfill is bundled once and shared by a and b
     assert_equal 1, source.scan("(store.versions || (store.versions = [])).push").size
-    assert_equal 1, source.scan(/^const _Object\$assign = /).size
+    assert_equal 1, source.scan(/^var import_assign = /).size
     assert source.rstrip.end_with?(<<~JS.rstrip)
-      function a () {
-        console.log(_Object$assign({}, {
-          a: 1
-        }));
+      function a_default() {
+      \tconsole.log((0, import_assign.default)({}, { a: 1 }));
       }
-
-      function b () {
-        console.log(_Object$assign({}, {
-          b: 1
-        }));
+      //#endregion
+      //#region b.js
+      function b_default() {
+      \tconsole.log((0, import_assign.default)({}, { b: 1 }));
       }
-
-      a();
-      b();
+      //#endregion
+      //#region c.js
+      a_default();
+      b_default();
+      //#endregion
     JS
   end
   
@@ -127,12 +126,15 @@ class CondenserBabelTest < ActiveSupport::TestCase
     JS
   
     assert_exported_file 'name.js', 'application/javascript', <<~JS
+      //#region module/name.js
       function x(y) {
-        return y === null || y === void 0 ? void 0 : y.z;
+      \treturn y === null || y === void 0 ? void 0 : y.z;
       }
-
+      //#endregion
+      //#region name.js
       var d = {};
       console.log(x(d === null || d === void 0 ? void 0 : d.z));
+      //#endregion
     JS
   
   end
