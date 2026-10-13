@@ -77,7 +77,7 @@ class Condenser
         {
           assets: @process_dependencies.map { |fn| [normalize_filename_base(fn[0]), fn[1]] }.sort_by { |d| d[0] },
           files: @file_dependencies.map { |f| normalize_filename_base(f) }.sort,
-          directories: @directory_dependencies.map { |d, *rest| [normalize_filename_base(d), *rest] }.sort
+          directories: @directory_dependencies.map { |d, *rest| [normalize_filename_base(d), *rest] }.sort_by { |d, globs, recursive| [d, globs, recursive ? 1 : 0] }
         }
       end
     end
@@ -555,11 +555,13 @@ class Condenser
     # Directory dependencies are a path, or a Hash with a :path, the :glob
     # (or globs) that the names of the files to watch match (default "*")
     # and whether it's :recursive. They're stored as [path, globs, recursive].
+    # A recursive dependency covers a non-recursive one on the same directory.
     def normalize_directory_dependencies(deps)
-      deps.map do |dep|
+      deps = deps.map do |dep|
         dep = { path: dep } if dep.is_a?(String)
         [File.expand_path(dep[:path]), Array(dep[:glob] || '*').map(&:to_s).sort, !!dep[:recursive]]
       end.uniq
+      deps.reject { |d, globs, recursive| !recursive && deps.include?([d, globs, true]) }
     end
 
     def export
