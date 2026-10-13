@@ -38,9 +38,13 @@ class Condenser
 
     attr_reader :environment, :filename, :source_file, :links, :dependencies, :file_dependencies, :directory_dependencies
 
-    def initialize(environment, source_file: nil)
+    # The characters that make a path a glob for Dir.glob.
+    GLOB = /[*?\[{]/
+
+    def initialize(environment, source_file: nil, content_type: nil)
       @environment  = environment
       @source_file  = source_file
+      @content_type = content_type
       @dependencies = Set.new
       @file_dependencies = Set.new
       @directory_dependencies = Set.new
@@ -89,35 +93,39 @@ class Condenser
     #
     # Returns an Asset, or raises FileNotFound.
     def resolve(path, **kargs)
-      depend_on_asset(find_asset!(path, **kargs))
+      depend_on(find_asset!(path, **kargs))
     end
     alias_method :load, :resolve
 
-    # `depend_on` allows you to state a dependency on a file without
+    # `depend_on` allows you to state a dependency on an asset without
     # including it.
     #
     # This is used for caching purposes. Any changes that would
     # invalidate the dependency asset will invalidate the source
     # file. Like the `depends_on` directive, +path+ may be relative to the
-    # source file or a glob, and without an extension it matches the type of
-    # the source file.
+    # source file, and without an extension it matches the type of the
+    # source file.
     #
-    # Dependencies are recorded as a path String or a [path, accept] pair;
-    # the asset normalizes them when it's processed.
-    def depend_on(path)
-      @dependencies << path
-
-      nil
-    end
-
-    # `depend_on_asset` states a dependency on an asset, given as an Asset or
-    # a path that may be relative to the source file, and returns it.
+    #     depend_on('logo.png')                  # => Asset, or raises FileNotFound
+    #     depend_on('logo.png', required: false) # => Asset or nil
+    #     depend_on('**/*.png')                  # => Array of Assets
+    #     depend_on(asset)                       # => asset
     #
-    # Raises FileNotFound if there's no such asset.
-    def depend_on_asset(path)
-      asset = path.is_a?(Asset) ? path : find_asset!(path)
-      @dependencies << asset_dependency(asset)
+    # A glob, or a missing path that isn't required, is recorded as the path,
+    # so a matching file added later invalidates the source file.
+    def depend_on(path, required: true)
+      if path.is_a?(Asset)
+        @dependencies << asset_dependency(path)
+        return path
+      end
 
+      if path.match?(GLOB)
+        @dependencies << path
+        return resolve_assets(path)
+      end
+
+      asset = required ? find_asset!(path) : resolve_assets(path).first
+      @dependencies << (asset ? asset_dependency(asset) : path)
       asset
     end
 
@@ -155,12 +163,13 @@ class Condenser
     end
 
     # `link_asset` declares an external dependency on an asset without directly
-    # including it, so it's compiled along with the source file. +path+ may be
-    # relative to the source file.
+    # including it, so it's compiled along with the source file. It takes the
+    # same paths as `depend_on`.
     #
     # Raises FileNotFound if there's no such asset.
     def link_asset(path)
-      @links << asset_dependency(depend_on_asset(path))
+      found = depend_on(path)
+      @links << (found.is_a?(Asset) ? asset_dependency(found) : path)
 
       nil
     end
@@ -177,7 +186,7 @@ class Condenser
     #     $('<img>').attr('src', '<%= asset_data_uri 'avatar.jpg' %>')
     #
     def asset_data_uri(path)
-      asset = depend_on_asset(path)
+      asset = depend_on(path)
       if asset.content_type == 'image/svg+xml'
         svg_asset_data_uri(asset)
       else
@@ -282,10 +291,17 @@ Extend your environment context with a custom method.
 
     private
 
-    # Finds the asset at +path+, relative to the source file like the
-    # dependencies the asset records, or raises FileNotFound.
+    # The assets at +path+, resolved like the dependencies the asset records:
+    # relative to the source file, and without an extension, of its type.
+    def resolve_assets(path, accept: nil)
+      dirname, basename, _, mime_types = environment.decompose_path(path, @source_file)
+      accept ||= mime_types.empty? ? @content_type : mime_types
+      environment.resolve(dirname ? File.join(dirname, basename) : basename, @source_file, accept: accept)
+    end
+
+    # The asset at +path+, or raises FileNotFound.
     def find_asset!(path, **kargs)
-      environment.find(path, @source_file, **kargs) or raise FileNotFound, "couldn't find file '#{path}'#{" from #{@source_file}" if @source_file}"
+      resolve_assets(path, **kargs).first or raise FileNotFound, "couldn't find file '#{path}'#{" from #{@source_file}" if @source_file}"
     end
 
     # The [path, accept] dependency on +asset+ with its own type.

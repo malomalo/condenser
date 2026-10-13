@@ -139,16 +139,56 @@ class CondenserErubiTest < ActiveSupport::TestCase
     assert_includes error.message, File.join(@path, 'test.js.erb')
   end
 
-  test 'link_asset and depend_on_asset are relative to the template' do
+  test 'link_asset and depend_on are relative to the template' do
     file 'sibling.png', 'top'
     file 'dir/sibling.png', 'dir'
     file 'dir/other.png', 'other'
-    file 'dir/test.txt.erb', "<% link_asset('./sibling.png') %><%= depend_on_asset('./other.png').source %>\n"
+    file 'dir/test.txt.erb', "<% link_asset('./sibling.png') %><%= depend_on('./other.png').source %>\n"
 
     asset = @env.find('dir/test.txt')
     assert_equal "other\n", asset.source
     assert_equal ['dir/sibling.png'], asset.linked_assets.map(&:filename)
     assert_equal ['dir/other.png', 'dir/sibling.png'], asset.process_dependencies.map(&:filename).sort
+  end
+
+  test 'depend_on returns the asset and raises when it is missing' do
+    file 'logo.png', 'png'
+    file 'test.txt.erb', "<%= depend_on('logo.png').filename %> <%= depend_on(environment.find('logo.png')).filename %>\n"
+    assert_equal "logo.png logo.png\n", @env.find('test.txt').source
+
+    file 'missing.txt.erb', "<% depend_on('missing.png') %>\n"
+    error = assert_raises(Condenser::FileNotFound) { @env.find('missing.txt').source }
+    assert_includes error.message, "'missing.png'"
+    assert_includes error.message, File.join(@path, 'missing.txt.erb')
+  end
+
+  test 'depend_on without an extension defaults to the type of the template' do
+    file 'logo.png', 'png'
+    file 'logo.js', "console.log(1);\n"
+    file 'test.js.erb', "console.log(<%= depend_on('logo').filename.inspect %>);\n"
+
+    assert_includes @env.find('test.js').source, '"logo.js"'
+    assert_equal ['logo.js'], @env.find('test.js').process_dependencies.map(&:filename)
+  end
+
+  test 'depend_on a missing asset that is not required invalidates once it is added' do
+    file 'test.txt.erb', "<%= depend_on('logo.png', required: false)&.filename.inspect %>\n"
+    assert_equal "nil\n", new_env.find('test.txt').source
+
+    file 'logo.png', 'png'
+    assert_equal "\"logo.png\"\n", new_env.find('test.txt').source
+  end
+
+  test 'depend_on a glob returns the matching assets and invalidates once one is added' do
+    file 'test.txt.erb', "<%= depend_on('icons/*.png').map(&:filename).inspect %>\n"
+    assert_equal "[]\n", new_env.find('test.txt').source
+
+    file 'icons/a.png', 'a'
+    assert_equal "[\"icons/a.png\"]\n", new_env.find('test.txt').source
+
+    file 'icons/b.png', 'b'
+    file 'icons/c.svg', 'c'
+    assert_equal "[\"icons/a.png\", \"icons/b.png\"]\n", new_env.find('test.txt').source
   end
 
 end

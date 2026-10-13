@@ -224,11 +224,13 @@ the asset will be forced to recompile in the next process. This behavior is
 only true for environment variables, if you are pulling a value from somewhere
 else, such as a database, must manually invalidate the cache to see the change.
 
-`depend_on(path)` declares a dependency on another asset like the `depends_on`
-directive, `depend_on_asset(path)` does the same and returns the asset, and
-`link_asset(path)` also adds it to the precompiled manifest. Those two raise
-`Condenser::FileNotFound` if the asset is missing, and paths starting with `./`
-are relative to the template.
+`depend_on(path)` declares a dependency on another asset and returns it, and
+`link_asset(path)` also adds it to the precompiled manifest. Paths starting
+with `./` are relative to the template, and without an extension they match the
+template's type. A missing asset raises `Condenser::FileNotFound`, unless it's
+`depend_on(path, required: false)`, which returns nil. A glob like
+`depend_on('icons/*.png')` returns the matching assets and never raises. Both
+of those also invalidate the template when a matching file is added later.
 
 If you're using Rails, there are helpers you can use such as `asset_url`
 that will cause a recompile if the value changes.
