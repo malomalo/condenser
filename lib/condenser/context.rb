@@ -79,48 +79,43 @@ class Condenser
     #
     attr_reader :content_type
 
-    # Public: Given a logical path, `resolve` will find and return an Asset URI.
-    # Relative paths will also be resolved. An accept type maybe given to
-    # restrict the search.
+    # Public: Finds the asset at a logical path and records it as a
+    # dependency. An accept type maybe given to restrict the search.
     #
     #     resolve("foo.js")
-    #     # => "file:///path/to/app/javascripts/foo.js?type=application/javascript"
+    #     # => #<Condenser::Asset @filename=foo.js ...>
     #
-    #     resolve("./bar.js")
-    #     # => "file:///path/to/app/javascripts/bar.js?type=application/javascript"
-    #
-    # path   - String logical or absolute path
-    # accept - String content accept type
-    #
-    # Returns an Asset URI String.
+    # Returns an Asset, or raises FileNotFound.
     def resolve(path, **kargs)
-      uri, deps = environment.resolve!(path, @dirname, **kargs)
-      @dependencies.merge(deps)
-      uri
+      depend_on_asset(environment.find!(path, **kargs))
     end
-
-    # Public: Load Asset by AssetURI and track it as a dependency.
-    #
-    # uri - AssetURI
-    #
-    # Returns Asset.
-    def load(uri)
-      asset = environment.load(uri)
-      @dependencies.merge(asset.metadata[:dependencies])
-      asset
-    end
+    alias_method :load, :resolve
 
     # `depend_on` allows you to state a dependency on a file without
     # including it.
     #
     # This is used for caching purposes. Any changes that would
     # invalidate the dependency asset will invalidate the source
-    # file.
+    # file. Like the `depends_on` directive, +path+ may be relative to the
+    # source file or a glob, and without an extension it matches the type of
+    # the source file.
+    #
+    # Dependencies are recorded as a path String or a [path, accept] pair;
+    # the asset normalizes them when it's processed.
     def depend_on(path)
-      d = environment.decompose_path(path)
-      @dependencies << [File.join(*d[0], d[1]), [d[3]]]
+      @dependencies << path
 
       nil
+    end
+
+    # `depend_on_asset` states a dependency on an asset, given as an Asset or
+    # a logical path, and returns it.
+    def depend_on_asset(path)
+      asset = path.is_a?(Asset) ? path : environment.find!(path)
+      dirname, basename = environment.decompose_path(asset.source_file)
+      @dependencies << [File.join(dirname, basename), [asset.content_types]]
+
+      asset
     end
 
     # `depend_on_file` states a dependency on the contents of a file that
@@ -160,6 +155,7 @@ class Condenser
     def link_asset(path)
       depend_on(path)
       @links << path
+      environment.find(path)
     end
 
     # Returns a `data:` URI with the contents of the asset at the specified
@@ -245,7 +241,7 @@ Extend your environment context with a custom method.
 
     # Returns a Base64-encoded data URI.
     def base64_asset_data_uri(asset)
-      data = URI.encode_www_form_component(EncodingUtils.base64(asset.source))
+      data = URI.encode_www_form_component([asset.source].pack('m0'))
       "data:#{asset.content_type};base64,#{data}"
     end
 

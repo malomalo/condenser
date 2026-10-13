@@ -18,6 +18,8 @@ class Condenser::Erubi
     source = context.instance_eval(&source)
 
     data[:source] = source
+    data[:linked_assets].merge(context.links)
+    data[:process_dependencies].merge(context.dependencies)
     data[:file_dependencies].merge(context.file_dependencies)
     data[:directory_dependencies].merge(context.directory_dependencies)
   end
