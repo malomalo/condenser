@@ -4,7 +4,7 @@ class UglifyMinifierTest < ActiveSupport::TestCase
 
   def setup
     super
-    @env.unregister_exporter('application/javascript', Condenser::RollupProcessor)
+    @env.unregister_exporter('application/javascript')
   end
 
   test 'simple example' do

@@ -273,7 +273,7 @@ convert `foo.scss` to `foo.css`.
 
 Condenser transforms Javascript for the browser by transpiling all the files
 `.js` through [babel](https://babeljs.io) and bundled together via
-[rollup.js](https://rollupjs.org/).
+[Rolldown](https://rolldown.rs/).
 
 ```js
 // app/assets/javascript/application.js
@@ -293,6 +293,23 @@ var square = function square(n) {
 };
 
 console.log(square);
+```
+
+### Bundling with Rolldown
+
+`Condenser.new`'s default pipeline bundles JavaScript with
+`Condenser::RolldownProcessor`, which needs [Node.js](https://nodejs.org/).
+Rolldown runs in a node process that's kept running between builds, and is
+installed with `npm` into the environment's `npm_path` the first time it's
+used. Without an `npm_path`, `rolldown` is loaded with Node's own module
+lookup (for example from `NODE_PATH`).
+
+`Condenser::RollupProcessor` is deprecated and will be removed in condenser
+3.0. Until then it can still be used by registering it in place of Rolldown:
+
+```ruby
+condenser.unregister_exporter('application/javascript')
+condenser.register_exporter('application/javascript', Condenser::RollupProcessor)
 ```
 
 

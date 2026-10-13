@@ -4,7 +4,7 @@ class CondenserEJSTest < ActiveSupport::TestCase
 
   def setup
     super
-    @env.unregister_exporter('application/javascript', Condenser::RollupProcessor)
+    @env.unregister_exporter('application/javascript')
   end
   
   test 'find' do
@@ -57,7 +57,7 @@ class CondenserEJSTest < ActiveSupport::TestCase
       pipeline: false,
       npm_path: @npm_dir
     )
-    @env.register_exporter('application/javascript', Condenser::RollupProcessor)
+    @env.register_exporter('application/javascript', Condenser::RolldownProcessor)
     
     assert_exported_file 'render.js', 'application/javascript'
   end

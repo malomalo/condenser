@@ -66,7 +66,7 @@ class Condenser
       self.configure do
         register_preprocessor 'application/javascript', Condenser::JSAnalyzer
         # register_preprocessor 'application/javascript', Condenser::BabelProcessor
-        register_exporter     'application/javascript', Condenser::RollupProcessor
+        register_exporter     'application/javascript', Condenser::RolldownProcessor
         register_minifier     'application/javascript', Condenser::UglifyMinifier
         
         register_minifier  'text/css', Condenser::SassMinifier

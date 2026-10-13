@@ -29,6 +29,19 @@ class Condenser::RollupProcessor
     new(environment.npm_path).call(environment, input)
   end
 
+  DEPRECATION = 'Condenser::RollupProcessor is deprecated and will be removed in condenser 3.0; use Condenser::RolldownProcessor instead'
+  @deprecation_lock = Mutex.new
+  @deprecation_warned = false
+
+  def self.warn_deprecated(logger)
+    @deprecation_lock.synchronize do
+      return if @deprecation_warned
+      @deprecation_warned = true
+    end
+
+    logger ? logger.warn(DEPRECATION) : Kernel.warn(DEPRECATION)
+  end
+
   def name
     self.class.name
   end
@@ -48,6 +61,7 @@ class Condenser::RollupProcessor
   end
 
   def call(environment, input)
+    self.class.warn_deprecated(environment.logger)
     Runner.new(@npm_dir, prefix: @prefix, dynamic_imports: @dynamic_imports).call(environment, input)
   end
   
