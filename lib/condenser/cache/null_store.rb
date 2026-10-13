@@ -11,7 +11,7 @@ class Condenser::Cache
       value
     end
 
-    def fetch(key)
+    def fetch(key, force: false)
       value = get(key)
       
       if value.nil?

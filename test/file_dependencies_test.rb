@@ -4,7 +4,7 @@ require 'test_helper'
 # appends what it finds in them to the source.
 class FileDependencyProcessor
   class << self
-    attr_accessor :files, :directories, :calls
+    attr_accessor :files, :directories, :calls, :switches
   end
 
   def self.setup(environment)
@@ -21,6 +21,12 @@ class FileDependencyProcessor
       glob = options[:recursive] ? "**/#{options[:glob] || '*'}" : (options[:glob] || '*')
       lines << "#{File.basename(dir)}: #{Dir.glob(glob, base: dir).select { |f| File.file?(File.join(dir, f)) }.sort.join(',')}"
     end
+    if config = switches[input[:filename]]
+      input[:file_dependencies] << config
+      name = File.read(config).strip
+      input[:process_dependencies] << name
+      lines << "#{name}: #{environment.find(name).source.strip}"
+    end
     input[:source] = input[:source] + lines.join("\n")
   end
 end
@@ -34,6 +40,7 @@ class FileDependenciesTest < ActiveSupport::TestCase
     FileDependencyProcessor.files = []
     FileDependencyProcessor.directories = {}
     FileDependencyProcessor.calls = Hash.new(0)
+    FileDependencyProcessor.switches = {}
     @env.register_preprocessor 'text/plain', FileDependencyProcessor
     file 'test.txt', "test\n"
   end
@@ -226,6 +233,85 @@ class FileDependenciesTest < ActiveSupport::TestCase
 
     file 'content/a.html', 'two'
     assert_includes new_env.find('ctx.txt').source, 'two'
+  end
+
+  def switching_file_dependency
+    file 'content/config', "a.html\n"
+    file 'content/a.html', 'one'
+    file 'content/b.html', 'two'
+    file 'ctx.txt.erb', <<~ERB
+      <% depend_on_file '#{@content}/config' %><% name = '#{@content}/' + File.read('#{@content}/config').strip %><% depend_on_file name %><%= File.read(name) %>
+    ERB
+  end
+
+  test 'a persistent cache is not used by a new process after a file dependency changed the file dependencies' do
+    switching_file_dependency
+
+    assert_includes new_env.find('ctx.txt').export.source, 'one'
+    file 'content/config', "b.html\n"
+    assert_includes new_env.find('ctx.txt').export.source, 'two'
+    assert_equal 2, FileDependencyProcessor.calls['ctx.txt']
+
+    asset = new_env.find('ctx.txt')
+    assert_includes asset.export.source, 'two'
+    assert_equal [File.join(@content, 'b.html'), File.join(@content, 'config')], asset.file_dependencies.sort
+    assert_equal 2, FileDependencyProcessor.calls['ctx.txt']
+
+    file 'content/b.html', 'three'
+    asset = new_env.find('ctx.txt')
+    assert_includes asset.export.source, 'three'
+    assert_equal [File.join(@content, 'b.html'), File.join(@content, 'config')], asset.file_dependencies.sort
+  end
+
+  test 'a persistent cache is not used by a new process after a file dependency changed the process dependencies' do
+    file 'content/config', "a.txt\n"
+    file 'a.txt', 'one'
+    file 'b.txt', 'two'
+    FileDependencyProcessor.switches = { 'test.txt' => File.join(@content, 'config') }
+
+    assert_includes build(new_env), 'a.txt: one'
+    file 'content/config', "b.txt\n"
+    assert_includes build(new_env), 'b.txt: two'
+
+    file 'b.txt', 'three'
+    asset = new_env.find('test.txt')
+    assert_includes asset.export.source, 'b.txt: three'
+    assert_equal [File.join(@path, 'b.txt')], asset.process_dependencies.map(&:source_file)
+  end
+
+  test 'a persistent cache is not used by a new process after a file dependency changed the imports' do
+    file 'content/config', "a\n"
+    file 'a.js', "export default 'one';\n"
+    file 'b.js', "export default 'two';\n"
+    file 'main.js.erb', <<~ERB
+      <% depend_on_file '#{@content}/config' %>import x from './<%= File.read('#{@content}/config').strip %>';
+      console.log(x);
+    ERB
+
+    assert_includes new_env.find('main.js').export.source, 'one'
+    file 'content/config', "b\n"
+    assert_includes new_env.find('main.js').export.source, 'two'
+
+    file 'b.js', "export default 'three';\n"
+    assert_includes new_env.find('main.js').export.source, 'three'
+  end
+
+  test 'a file dependency that changes the file dependencies is listened to' do
+    skip 'needs a listener' if !@env.build_cache.listening
+    switching_file_dependency
+
+    assert_includes @env.find('ctx.txt').source, 'one'
+    file 'content/config', "b.html\n"
+    assert wait_until { @env.find('ctx.txt').source.include?('two') }
+
+    file 'content/b.html', 'three'
+    assert wait_until { @env.find('ctx.txt').source.include?('three') }, "expected the new file dependency to reprocess the asset"
+    calls = FileDependencyProcessor.calls['ctx.txt']
+
+    file 'content/a.html', 'changed'
+    flush_listener
+    assert_includes @env.find('ctx.txt').source, 'three'
+    assert_equal calls, FileDependencyProcessor.calls['ctx.txt']
   end
 
 end
