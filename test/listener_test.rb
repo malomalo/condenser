@@ -2,6 +2,50 @@ require 'test_helper'
 
 class ListenerTest < ActiveSupport::TestCase
 
+  # Stands in for rb-inotify and the kernel: an event only reaches a watched
+  # directory, and like rb-inotify a new directory is watched after its event
+  # is handled. +between+ runs just before that watch is added.
+  class FakeNotifier
+    Watcher = Struct.new(:path)
+    Event = Struct.new(:watcher, :name, :flags, :cookie) do
+      def absolute_name
+        File.join(watcher.path, name)
+      end
+    end
+
+    attr_reader :started
+
+    def initialize
+      @watches = {}
+      @started = Queue.new
+    end
+
+    def watch(path, *flags, &callback)
+      Dir.each_child(path) do |name|
+        child = File.join(path, name)
+        watch(child, *flags, &callback) if File.directory?(child)
+      end
+      @watches[path] = callback
+    end
+
+    def run
+      @started << true
+    end
+
+    def close
+    end
+
+    def created(path, between: nil)
+      callback = @watches[File.dirname(path)] or return
+      dir = File.directory?(path)
+      callback.call(Event.new(Watcher.new(File.dirname(path)), File.basename(path), dir ? [:create, :isdir] : [:create], 0))
+      return if !dir
+
+      between&.call
+      watch(path, &callback)
+    end
+  end
+
   def setup
     super
     @env.unregister_minifier('text/css')
@@ -22,6 +66,41 @@ class ListenerTest < ActiveSupport::TestCase
 
     file 'dir/new/deeper/c.scss', '.c { color: red; }'
     assert wait_until { css.include?('.c') }, css
+  end
+
+  test 'a file written to a new directory before inotify watches it is noticed' do
+    file 'dir/a.scss', '.a { color: green; }'
+    file 'test.scss', '@import "dir/**/*";'
+    assert_includes css, '.a'
+    @env.build_cache.instance_variable_get(:@listener).stop
+
+    notifier = FakeNotifier.new
+    adapter = Listen::Adapter::Linux.new(Listen::Adapter::Config.new([@path], queue = Queue.new, Listen::Silencer.new, {}))
+    adapter.instance_variable_set(:@worker, notifier)
+    adapter.define_singleton_method(:_configure) { |dir, &callback| @worker.watch(dir.to_s, *options.events, &callback) }
+    adapter.start
+    notifier.started.pop
+
+    FileUtils.mkdir_p(File.join(@path, 'dir/new'))
+    notifier.created(File.join(@path, 'dir/new'), between: -> {
+      File.write(File.join(@path, 'dir/new/b.scss'), '.b { color: blue; }')
+      notifier.created(File.join(@path, 'dir/new/b.scss'))
+      FileUtils.mkdir_p(File.join(@path, 'dir/new/deeper'))
+      File.write(File.join(@path, 'dir/new/deeper/c.scss'), '.c { color: red; }')
+      notifier.created(File.join(@path, 'dir/new/deeper/c.scss'))
+      notifier.created(File.join(@path, 'dir/new/deeper'))
+    })
+
+    added = []
+    added << queue.pop until queue.empty?
+    added = added.select { |_, change| change == :added }.map { |_, _, dir, path| File.join(dir, path) }
+    assert_equal %w(dir/new/b.scss dir/new/deeper/c.scss).map { |f| File.join(@path, f) }, added.uniq.sort
+
+    @env.build_cache.instance_variable_get(:@on_change).call([], added, [])
+    assert_includes css, '.b'
+    assert_includes css, '.c'
+  ensure
+    adapter&.stop
   end
 
   test 'a recursive glob import notices a file removed from a subdirectory' do
