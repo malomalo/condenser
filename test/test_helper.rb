@@ -63,6 +63,17 @@ class ActiveSupport::TestCase
     sleep 0.25 if @env.build_cache.listening
   end
   
+  # Waits for the listener, which is asynchronous, until the block is truthy
+  # or +timeout+ seconds have passed.
+  def wait_until(timeout: 5)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
+    until (result = yield)
+      return false if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+      sleep 0.05
+    end
+    result
+  end
+
   def rm(name)
     File.delete(File.join(@path, name))
   end

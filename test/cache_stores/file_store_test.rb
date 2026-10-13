@@ -34,4 +34,16 @@ class CacheFileStoreTest < ActiveSupport::TestCase
     end
   end
 
+  test 'fetch with force stores the new value only if it changed' do
+    store = @env.cache
+    assert_equal [1], store.fetch('key') { [1] }
+
+    store.expects(:set).never
+    assert_equal [1], store.fetch('key', force: true) { [1] }
+
+    store.unstub(:set)
+    assert_equal [2], store.fetch('key', force: true) { [2] }
+    assert_equal [2], Condenser::Cache::FileStore.new(@cachepath).fetch('key') { [3] }
+  end
+
 end

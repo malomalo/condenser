@@ -16,6 +16,9 @@ class Condenser
       bun.lockb
     ).freeze
 
+    # Ignored under every watched path, on top of Listen's defaults.
+    WATCH_IGNORES = [%r{(?:\A|/)node_modules(?:/|\z)}, %r{\A(?:\.git|tmp|log)(?:/|\z)}].freeze
+
     def initialize(path, logger:, listen: {})
       @logger = logger
       @path = path
@@ -23,6 +26,11 @@ class Condenser
       @lookup_cache = {}
       @process_dependencies = {}
       @export_dependencies = {}
+      @file_dependencies = {}
+      @directory_dependencies = {}
+      @file_digests = {}
+      @directory_digests = {}
+      @watch_listeners = []
       @listening = if listen
         require 'listen'
         Listen::Adapter.select != Listen::Adapter::Polling
@@ -34,7 +42,7 @@ class Condenser
         @polling = false
       else
         @semaphore = Mutex.new
-        @listener = Listen.to(*path) do |modified, added, removed|
+        @on_change = lambda do |modified, added, removed|
           modified = Set.new(modified)
           added = Set.new(added)
           removed = Set.new(removed)
@@ -49,7 +57,8 @@ class Condenser
               ).join("\n")
             end
 
-            globs = []
+            globs = Set.new
+            dirs = Set.new
             (added + removed + modified).each do |file|
               globs << file.match(/([^\.]+)(\.|$)/).to_a[1]
               if path_match = @path.find { |p| file.start_with?(p) }
@@ -58,6 +67,17 @@ class Condenser
               
                 globs << a << a.delete_prefix('/')
                 globs << b << b.delete_prefix('/')
+
+                # Adding or removing a file, which may be in a new directory,
+                # changes the recursive globs of every directory above it
+                if !modified.include?(file)
+                  dir = File.dirname(a)
+                  until dir == (dir = File.dirname(dir))
+                    break unless dirs.add?(dir)
+                    c = File.join(dir, '**')
+                    globs << c << c.delete_prefix('/')
+                  end
+                end
               end
             end
 
@@ -93,8 +113,15 @@ class Condenser
             @lookup_cache&.delete_if do |k,v|
               others.any?{ |a| k.starts_with?(a) || k.starts_with?("/" + a) }
             end
-            
 
+            (added + removed + modified).each do |file|
+              @file_dependencies[file]&.each { |asset| modified << asset.source_file }
+              dir = File.dirname(file)
+              loop do
+                @directory_dependencies[dir]&.each { |asset| modified << asset.source_file }
+                break if dir == (dir = File.dirname(dir))
+              end
+            end
             
             removed.each do |file|
               dependents(@process_dependencies, file).each do |asset|
@@ -115,8 +142,26 @@ class Condenser
             @logger.debug { "build cache semaphore unlocked by #{Thread.current.object_id}" }
           end
         end
+        @listener = Listen.to(*path, &@on_change)
         @listener.start
       end
+    end
+
+    # Listens for changes under +path+, which isn't on the load path, so the
+    # file dependencies there invalidate the assets that depend on them.
+    # +ignore+ is a list of Regexps matched against the paths relative to
+    # +path+, or Strings that are directories (or files) relative to it. The
+    # load paths under +path+ are already watched, so they're ignored too.
+    def watch(path, ignore: [])
+      return if !@listening
+
+      prefix = File.join(path, '')
+      ignores = WATCH_IGNORES + (Array(ignore) + @path.select { |p| p.start_with?(prefix) }.map { |p| p.delete_prefix(prefix) }).map do |i|
+        i.is_a?(Regexp) ? i : %r{\A#{Regexp.escape(i.delete_suffix('/'))}(?:/|\z)}
+      end
+      listener = Listen.to(path, ignore: ignores, &@on_change)
+      listener.start
+      @watch_listeners << listener
     end
     
     def map(key)
@@ -137,6 +182,57 @@ class Condenser
     
     def record_export_dependencies(asset, deps)
       record_dependencies(@export_dependencies, asset, deps)
+    end
+
+    def record_file_dependencies(asset, files, directories)
+      return if !@listening
+
+      files.each { |f| (@file_dependencies[real_path(f)] ||= Set.new) << asset }
+      directories.each { |d| (@directory_dependencies[real_path(d)] ||= Set.new) << asset }
+    end
+
+    # Listen reports paths with symlinks resolved, e.g. /private/var for
+    # /var on macOS or a Capistrano release for its `current` symlink.
+    def real_path(path)
+      File.realpath(path)
+    rescue SystemCallError
+      dir = File.dirname(path)
+      dir == path ? path : File.join(real_path(dir), File.basename(path))
+    end
+
+    # A digest of the file's contents, or nil if it's missing. It's only
+    # recomputed when the file's stat changes.
+    def file_digest(path)
+      stat = File.stat(path)
+      return if !stat.file?
+
+      signature = [stat.mtime.to_r, stat.ctime.to_r, stat.size, stat.ino]
+      cached = @file_digests[path]
+      return cached[1] if cached && cached[0] == signature
+
+      (@file_digests[path] = [signature, Digest::SHA256.file(path).base64digest])[1]
+    rescue Errno::ENOENT, Errno::ENOTDIR
+      @file_digests.delete(path)
+      nil
+    end
+
+    # A digest of the names of the files in +path+ that match +globs+ and of
+    # its subdirectories (and, if +recursive+, the same for each
+    # subdirectory), or nil if it's missing. Adding, removing or renaming a
+    # matching file or a subdirectory changes it. It's only recomputed when
+    # the mtime of a directory it lists changes.
+    def directory_digest(path, globs: ['*'], recursive: false)
+      key = [path, globs, recursive]
+      cached = @directory_digests[key]
+      if cached && cached[0].all? { |dir, mtime| (File.stat(dir).mtime.to_r rescue nil) == mtime }
+        return cached[1]
+      end
+
+      mtimes = []
+      names = []
+      return if !list_directory(path, '', globs, recursive, mtimes, names)
+
+      (@directory_digests[key] = [mtimes, Digest::SHA256.base64digest(names.join("\0"))])[1]
     end
     
     # Returns the assets that depend on +source_file+, either directly or
@@ -178,6 +274,8 @@ class Condenser
       @lookup_cache.clear
       @process_dependencies.clear
       @export_dependencies.clear
+      @file_dependencies.clear
+      @directory_dependencies.clear
       @npm_packages = nil
       @npm_digests = nil
     end
@@ -265,6 +363,23 @@ class Condenser
     end
     
     private
+
+    def list_directory(dir, prefix, globs, recursive, mtimes, names)
+      mtimes << [dir, File.stat(dir).mtime.to_r]
+      Dir.children(dir).sort.each do |name|
+        full = File.join(dir, name)
+        if File.lstat(full).directory?
+          next if name.start_with?('.')
+          names << "#{prefix}#{name}/"
+          list_directory(full, "#{prefix}#{name}/", globs, recursive, mtimes, names) if recursive
+        elsif globs.any? { |g| File.fnmatch?(g, name, File::FNM_EXTGLOB) }
+          names << "#{prefix}#{name}"
+        end
+      end
+      true
+    rescue Errno::ENOENT, Errno::ENOTDIR
+      false
+    end
     
     def record_dependencies(index, asset, deps)
       return if !@listening

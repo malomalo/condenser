@@ -109,8 +109,10 @@ class Condenser::SassTransformer
     }.merge(@sass_config))
 
     input[:source] = result.css
-    input[:linked_assets]         += context.links
-    input[:process_dependencies]  += context.dependencies
+    input[:linked_assets].merge(context.links)
+    input[:process_dependencies].merge(context.dependencies)
+    input[:file_dependencies].merge(context.file_dependencies)
+    input[:directory_dependencies].merge(context.directory_dependencies)
   rescue ::Sass::CompileError => e
     raise Condenser::Sass.compile_error(e, input[:filename])
   end

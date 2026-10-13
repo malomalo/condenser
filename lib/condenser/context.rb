@@ -36,11 +36,13 @@ class Condenser
       end
     end
 
-    attr_reader :environment, :filename, :links, :dependencies
+    attr_reader :environment, :filename, :links, :dependencies, :file_dependencies, :directory_dependencies
 
     def initialize(environment)
       @environment  = environment
       @dependencies = Set.new
+      @file_dependencies = Set.new
+      @directory_dependencies = Set.new
       @links = Set.new
     end
 
@@ -117,6 +119,26 @@ class Condenser
     def depend_on(path)
       d = environment.decompose_path(path)
       @dependencies << [File.join(*d[0], d[1]), [d[3]]]
+
+      nil
+    end
+
+    # `depend_on_file` states a dependency on the contents of a file that
+    # isn't processed as an asset, like a template a stylesheet is generated
+    # from. It doesn't need to be on the load path.
+    def depend_on_file(path)
+      @file_dependencies << File.expand_path(path)
+
+      nil
+    end
+
+    # `depend_on_directory` states a dependency on the names of the files in
+    # a directory that match +glob+ (a `File.fnmatch` pattern, or an Array of
+    # them) and of its subdirectories, so adding or removing a matching file
+    # or a subdirectory invalidates the cache. With +recursive+ it covers the
+    # subdirectories too.
+    def depend_on_directory(path, glob: '*', recursive: false)
+      @directory_dependencies << { path: File.expand_path(path), glob: glob, recursive: recursive }
 
       nil
     end

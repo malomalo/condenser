@@ -12,6 +12,8 @@ class Condenser
     def build_cache
       return @build_cache if instance_variable_defined?(:@build_cache)
       @build_cache = BuildCache.new(path, logger: logger)
+      @watched_paths.each { |p, ignore| @build_cache.watch(p, ignore: ignore) }
+      @build_cache
     end
     
     def resolve(filename, base=nil, accept: nil, npm: false)

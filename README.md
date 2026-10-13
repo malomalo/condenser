@@ -172,6 +172,40 @@ what assets need to be re-compiled when a file changes. Files are considered
 In Rails you can force a "clean" install by clearing the `public/assets` and
 `tmp/cache/assets` directories.
 
+### Depending on files that aren't assets
+
+A processor whose output depends on files that aren't assets, like the
+templates a utility CSS framework scans for class names, records them as file
+and directory dependencies. They're digested rather than processed, so they
+don't have to be on the load path or have an extension Condenser knows.
+
+```ruby
+def call(environment, input)
+  input[:file_dependencies] << '/app/views/layouts/application.html.erb'
+  # The names of the matching files in a directory, and its subdirectories
+  input[:directory_dependencies] << { path: '/app/views', glob: '*.erb', recursive: true }
+end
+```
+
+In ERB templates (and through `condenser_context` in Sass functions)
+`depend_on_file(path)` and `depend_on_directory(path, glob:, recursive:)` do
+the same.
+
+A file dependency invalidates the asset when its contents change and a
+directory dependency when a matching file or a subdirectory is added, removed
+or renamed. Both are checked against the cache when a new process starts. A
+running process notices them through the file listener, so they need to be on
+the load path or a watched path. A watched path is listened to but assets
+aren't resolved from it:
+
+```ruby
+env.watch(Rails.root, ignore: ['public/assets', 'storage', /\.log\z/])
+```
+
+`ignore` takes directories relative to the watched path, or Regexps matched
+against the relative paths. `node_modules`, `.git`, `tmp` and `log` are always
+ignored.
+
 ### Invoking Ruby with ERB
 
 Condenser provides an ERB engine for preprocessing assets using embedded Ruby
