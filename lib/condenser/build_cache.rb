@@ -57,7 +57,8 @@ class Condenser
               ).join("\n")
             end
 
-            globs = []
+            globs = Set.new
+            dirs = Set.new
             (added + removed + modified).each do |file|
               globs << file.match(/([^\.]+)(\.|$)/).to_a[1]
               if path_match = @path.find { |p| file.start_with?(p) }
@@ -72,6 +73,7 @@ class Condenser
                 if !modified.include?(file)
                   dir = File.dirname(a)
                   until dir == (dir = File.dirname(dir))
+                    break unless dirs.add?(dir)
                     c = File.join(dir, '**')
                     globs << c << c.delete_prefix('/')
                   end
