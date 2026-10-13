@@ -103,6 +103,36 @@ class ListenerTest < ActiveSupport::TestCase
     adapter&.stop
   end
 
+  test 'a file added to a load path that shares a prefix with another is noticed' do
+    root = File.realpath(Dir.mktmpdir)
+    FileUtils.mkdir_p([File.join(root, 'assets'), File.join(root, 'assets2')])
+    env = Condenser.new(File.join(root, 'assets'), File.join(root, 'assets2'), logger: Logger.new('/dev/null'), npm_path: @npm_dir, base: root)
+    skip 'needs a listener' if !env.build_cache.listening
+    assert_nil env.find('b.txt')
+
+    File.write(File.join(root, 'assets2', 'b.txt'), 'b')
+    env.build_cache.instance_variable_get(:@on_change).call([], [File.join(root, 'assets2', 'b.txt')], [])
+    assert env.find('b.txt')
+  ensure
+    FileUtils.remove_entry(root, true) if root
+  end
+
+  test 'a file added under nested load paths is noticed by both' do
+    root = File.realpath(Dir.mktmpdir)
+    FileUtils.mkdir_p(File.join(root, 'assets', 'js'))
+    env = Condenser.new(File.join(root, 'assets'), File.join(root, 'assets', 'js'), logger: Logger.new('/dev/null'), npm_path: @npm_dir, base: root)
+    skip 'needs a listener' if !env.build_cache.listening
+    assert_nil env.find('x.txt')
+    assert_nil env.find('js/x.txt')
+
+    File.write(File.join(root, 'assets', 'js', 'x.txt'), 'x')
+    env.build_cache.instance_variable_get(:@on_change).call([], [File.join(root, 'assets', 'js', 'x.txt')], [])
+    assert env.find('js/x.txt')
+    assert env.find('x.txt')
+  ensure
+    FileUtils.remove_entry(root, true) if root
+  end
+
   test 'a recursive glob import notices a file removed from a subdirectory' do
     file 'dir/a.scss', '.a { color: green; }'
     file 'dir/sub/deeper/b.scss', '.b { color: blue; }'
