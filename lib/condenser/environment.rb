@@ -49,13 +49,19 @@ class Condenser
     # Watches +paths+ for changes to file dependencies, without adding them to
     # the load path, so assets aren't resolved from them. +ignore+ lists
     # Regexps matched against the paths relative to each path, or directories
-    # relative to it; node_modules, .git, tmp and log are always ignored.
+    # relative to it; node_modules, .git, tmp and log are always ignored. A
+    # path that's already watched, as or under a watched path, is skipped.
     #
     #     env.watch(Rails.root, ignore: ['public/assets', 'storage'])
     def watch(*paths, ignore: [])
       paths.flatten.each do |path|
         path = File.expand_path(path)
         raise ArgumentError, "Path \"#{path}\" does not exists" if !File.directory?(path)
+        real = BuildCache.real_path(path)
+        next if @watched_paths.any? { |watched, watched_ignore|
+          BuildCache.covers?(BuildCache.real_path(watched), real, ignore: watched_ignore)
+        }
+
         @watched_paths << [path, ignore]
         build_cache.watch(path, ignore: ignore) if instance_variable_defined?(:@build_cache)
       end

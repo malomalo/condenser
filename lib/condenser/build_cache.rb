@@ -48,6 +48,7 @@ class Condenser
       @file_digests = {}
       @directory_digests = {}
       @watch_listeners = []
+      @watched_paths = []
       @listening = if listen
         require 'listen'
         Listen::Adapter::Linux.prepend(WatchNewDirectoriesFirst)
@@ -160,6 +161,7 @@ class Condenser
             @logger.debug { "build cache semaphore unlocked by #{Thread.current.object_id}" }
           end
         end
+        @listened_paths = path.map { |p| self.class.real_path(p) }
         @listener = Listen.to(*path, &@on_change)
         @listener.start
       end
@@ -168,18 +170,42 @@ class Condenser
     # Listens for changes under +path+, which isn't on the load path, so the
     # file dependencies there invalidate the assets that depend on them.
     # +ignore+ is a list of Regexps matched against the paths relative to
-    # +path+, or Strings that are directories (or files) relative to it. The
-    # load paths under +path+ are already watched, so they're ignored too.
+    # +path+, or Strings that are directories (or files) relative to it. A
+    # path already listened to, as or under a load path or a watched path, is
+    # skipped, and the ones under +path+ are ignored.
     def watch(path, ignore: [])
       return if !@listening
 
+      path = self.class.real_path(path)
+      return if @listened_paths.any? { |root| self.class.covers?(root, path) }
+      return if @watched_paths.any? { |root, ignores| self.class.covers?(root, path, ignore: ignores) }
+
       prefix = File.join(path, '')
-      ignores = WATCH_IGNORES + (Array(ignore) + @path.select { |p| p.start_with?(prefix) }.map { |p| p.delete_prefix(prefix) }).map do |i|
-        i.is_a?(Regexp) ? i : %r{\A#{Regexp.escape(i.delete_suffix('/'))}(?:/|\z)}
-      end
-      listener = Listen.to(path, ignore: ignores, &@on_change)
+      ignore = Array(ignore) + (@listened_paths + @watched_paths.map(&:first))
+        .select { |p| p.start_with?(prefix) }
+        .map { |p| p.delete_prefix(prefix) }
+      listener = Listen.to(path, ignore: self.class.watch_ignores(ignore), &@on_change)
       listener.start
       @watch_listeners << listener
+      @watched_paths << [path, ignore]
+    end
+
+    # The Regexps Listen ignores under a watched path for +ignore+.
+    def self.watch_ignores(ignore)
+      WATCH_IGNORES + Array(ignore).map do |i|
+        i.is_a?(Regexp) ? i : %r{\A#{Regexp.escape(i.delete_suffix('/'))}(?:/|\z)}
+      end
+    end
+
+    # Whether a listener on +root+ that ignores +ignore+ hears about the
+    # directory +path+, both real paths.
+    def self.covers?(root, path, ignore: nil)
+      return true if path == root
+      return false if !path.start_with?(File.join(root, ''))
+      return true if ignore.nil?
+
+      relative = path.delete_prefix(File.join(root, ''))
+      watch_ignores(ignore).none? { |i| i.match?(relative) }
     end
     
     def map(key)
@@ -205,17 +231,20 @@ class Condenser
     def record_file_dependencies(asset, files, directories)
       return if !@listening
 
-      files.each { |f| (@file_dependencies[real_path(f)] ||= Set.new) << asset }
-      directories.each { |d| (@directory_dependencies[real_path(d)] ||= Set.new) << asset }
+      files.each { |f| (@file_dependencies[self.class.real_path(f)] ||= Set.new) << asset }
+      directories.each { |d| (@directory_dependencies[self.class.real_path(d)] ||= Set.new) << asset }
     end
 
     # Listen reports paths with symlinks resolved, e.g. /private/var for
     # /var on macOS or a Capistrano release for its `current` symlink.
-    def real_path(path)
+    # A missing path resolves through its nearest existing parent.
+    def self.real_path(path)
       File.realpath(path)
-    rescue SystemCallError
-      dir = File.dirname(path)
-      dir == path ? path : File.join(real_path(dir), File.basename(path))
+    rescue Errno::ENOENT, Errno::ENOTDIR
+      parent = File.dirname(path)
+      return path if parent == path
+
+      File.join(real_path(parent), File.basename(path))
     end
 
     # A digest of the file's contents, or nil if it's missing. It's only

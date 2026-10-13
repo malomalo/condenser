@@ -206,6 +206,11 @@ env.watch(Rails.root, ignore: ['public/assets', 'storage', /\.log\z/])
 against the relative paths. `node_modules`, `.git`, `tmp` and `log` are always
 ignored.
 
+Watching a path that's already listened to (the same path, including through a
+symlink, or a path under a load path or under a watched path that doesn't
+ignore it) does nothing, so the first `ignore` for it applies. A watched path
+that contains another one ignores it, since that one has its own listener.
+
 ### Invoking Ruby with ERB
 
 Condenser provides an ERB engine for preprocessing assets using embedded Ruby
