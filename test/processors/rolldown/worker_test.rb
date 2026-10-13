@@ -110,19 +110,6 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     assert_equal pid, worker_pid
   end
 
-  test 'a processor registered as a class reuses one instance per npm path' do
-    register_rolldown(Condenser::RolldownProcessor)
-    workers = []
-    on_answer { |_, _, runner| workers << runner.instance_variable_get(:@worker) }
-    reference = export('main.js')
-    pid = workers.first.pid
-
-    assert_equal reference, export('main.js')
-    assert_equal 1, workers.uniq.size
-    assert_equal pid, workers.first.pid
-    assert alive?(pid)
-  end
-
   test 'each instance has its own worker' do
     file 'main.js', <<~JS
       import value from 'condenser-alias';
@@ -511,48 +498,23 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     assert_nil worker_pid
   end
 
-  test 'the worker is restarted when the Rolldown install changes' do
+  test 'the Rolldown version is read once, when the processor is created' do
     rolldown = File.realpath(File.join(@npm_dir, 'node_modules', 'rolldown'))
     file 'wrapped-rolldown/package.json', JSON.generate({ name: 'rolldown', version: '0.0.1', main: './index.js' })
     file 'wrapped-rolldown/index.js', "module.exports = require(#{JSON.generate(rolldown)});\n"
     register_rolldown(bundler_path: File.join(@path, 'wrapped-rolldown'))
-
+    package = File.join(@path, 'wrapped-rolldown', 'package.json')
     reference = export('main.js')
     pid = worker_pid
-    assert_equal reference, export('main.js')
-    assert_equal pid, worker_pid
-    assert_equal '0.0.1', @processor.options[:rolldown]
 
-    package = File.join(@path, 'wrapped-rolldown', 'package.json')
-    mtime = File.stat(package).mtime
     file 'wrapped-rolldown/package.json', JSON.generate({ name: 'rolldown', version: '0.0.2', main: './index.js' })
-    File.utime(mtime + 1, mtime + 1, package)
-    assert_equal '0.0.2', @processor.options[:rolldown]
-    assert_equal reference, export('main.js')
-    assert_not alive?(pid)
-    assert alive?(worker_pid)
-    assert_not_equal pid, worker_pid
-  end
-
-  test 'the Rolldown package.json is only re-read when it changes' do
-    rolldown = File.realpath(File.join(@npm_dir, 'node_modules', 'rolldown'))
-    file 'wrapped-rolldown/package.json', JSON.generate({ name: 'rolldown', version: '0.0.1', main: './index.js' })
-    file 'wrapped-rolldown/index.js', "module.exports = require(#{JSON.generate(rolldown)});\n"
-    register_rolldown(bundler_path: File.join(@path, 'wrapped-rolldown'))
-    package = File.join(@path, 'wrapped-rolldown', 'package.json')
-    reference = export('main.js')
-    pid = worker_pid
-
     Thread.current[:rolldown_file_reads] = reads = []
     assert_equal reference, export('main.js')
-    @processor.options
+    assert_equal '0.0.1', @processor.options[:rolldown]
     assert_equal pid, worker_pid
     assert_not_includes reads, package
 
-    mtime = File.stat(package).mtime
-    File.utime(mtime + 1, mtime + 1, package)
-    @processor.options
-    assert_includes reads, package
+    assert_equal '0.0.2', Condenser::RolldownProcessor.new(@env.npm_path, bundler_path: File.join(@path, 'wrapped-rolldown')).options[:rolldown]
   ensure
     Thread.current[:rolldown_file_reads] = nil
   end

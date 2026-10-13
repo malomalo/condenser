@@ -12,10 +12,6 @@ class Condenser::RolldownProcessor
   class WorkerDied < RuntimeError; end
 
   @@setup = []
-  @instances = {}
-  @lock = Mutex.new
-  @versions = {}
-  @versions_lock = Mutex.new
 
   def self.install_npm_packages(npm_path)
     return if @@setup.include?(npm_path)
@@ -24,34 +20,12 @@ class Condenser::RolldownProcessor
     @@setup << npm_path
   end
 
-  def self.call(environment, input)
-    instance_for(environment).call(environment, input)
-  end
-
-  def self.options_for(environment)
-    instance_for(environment).options
-  end
-
-  def self.instance_for(environment)
-    @lock.synchronize { @instances[environment.npm_path] ||= new(environment.npm_path) }
-  end
-
   def self.stop_workers
     Worker.stop_all
   end
 
   def self.read_version(bundler_path)
-    package = File.join(bundler_path, 'package.json')
-    stat = File.stat(package)
-    key = [stat.mtime, stat.size, stat.ino]
-    @versions_lock.synchronize do
-      cached = @versions[package]
-      return cached[1] if cached && cached[0] == key
-
-      version = JSON.parse(File.read(package))['version']
-      @versions[package] = [key, version]
-      version
-    end
+    JSON.parse(File.read(File.join(bundler_path, 'package.json')))['version']
   rescue Errno::ENOENT
     nil
   end
@@ -61,15 +35,9 @@ class Condenser::RolldownProcessor
   end
 
   def options
-    options = {prefix: @prefix, dynamic_imports: @dynamic_imports, aliases: @aliases, rolldown: rolldown_version}
+    options = {prefix: @prefix, dynamic_imports: @dynamic_imports, aliases: @aliases, rolldown: @rolldown_version}
     options[:platform] = @platform if @platform != 'neutral'
     options
-  end
-
-  def rolldown_version
-    ensure_installed
-    path = @bundler_path || (@npm_dir && File.join(@npm_dir, 'node_modules', 'rolldown'))
-    self.class.read_version(path) if path
   end
 
   def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, aliases: {}, platform: 'neutral', max_memory: MAX_MEMORY)
@@ -79,6 +47,7 @@ class Condenser::RolldownProcessor
     unless max_memory.is_a?(Integer) && max_memory.positive?
       raise ArgumentError, "max_memory must be a positive Integer, got #{max_memory.inspect}"
     end
+    self.class.install_npm_packages(dir) if bundler_path.nil? && dir
     @npm_dir = dir
     @prefix = prefix
     @dynamic_imports = dynamic_imports
@@ -87,10 +56,10 @@ class Condenser::RolldownProcessor
     @platform = platform
     @max_memory = max_memory
     @lock = Mutex.new
+    @rolldown_version = self.class.read_version(rolldown_path) if bundler_path || dir
   end
 
   def call(environment, input)
-    ensure_installed
     Runner.new(@npm_dir, worker: worker, prefix: @prefix, dynamic_imports: @dynamic_imports, aliases: @aliases, platform: @platform).call(environment, input)
   end
 
@@ -98,16 +67,14 @@ class Condenser::RolldownProcessor
     @lock.synchronize do
       @worker ||= Worker.new(
         Condenser::NodeProcessor.new(@npm_dir).binary,
-        @bundler_path || (@npm_dir ? File.join(@npm_dir, 'node_modules', 'rolldown') : 'rolldown'),
+        rolldown_path,
         max_memory: @max_memory
       )
     end
   end
 
-  private
-
-  def ensure_installed
-    self.class.install_npm_packages(@npm_dir) if @bundler_path.nil? && @npm_dir
+  def rolldown_path
+    @bundler_path || (@npm_dir ? File.join(@npm_dir, 'node_modules', 'rolldown') : 'rolldown')
   end
 
   # A node process with Rolldown loaded that runs one build at a time.
@@ -142,7 +109,7 @@ class Condenser::RolldownProcessor
       return throwaway_build(config, logger: logger, &block) if @lock.owned?
 
       @lock.synchronize do
-        start if @pid.nil? || @owner != Process.pid || @version != Condenser::RolldownProcessor.read_version(@bundler_path)
+        start if @pid.nil? || @owner != Process.pid
         id = (@next_build += 1)
         @failure = nil
         message = nil
@@ -223,7 +190,6 @@ class Condenser::RolldownProcessor
       end
       @io = io
       @owner = Process.pid
-      @version = Condenser::RolldownProcessor.read_version(@bundler_path)
     end
 
     def terminate

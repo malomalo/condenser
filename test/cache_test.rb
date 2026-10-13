@@ -459,6 +459,7 @@ class CacheTest < ActiveSupport::TestCase
 
   test 'the build cache is cleared when the npm packages change' do
     npm_dir = File.realpath(Dir.mktmpdir)
+    Condenser::RolldownProcessor.stubs(:install_npm_packages)
     env = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: npm_dir, base: @path)
     lockfile = File.join(npm_dir, 'package-lock.json')
     npm_file = File.join(npm_dir, 'node_modules', 'pkg', 'index.js')
@@ -495,7 +496,7 @@ class CacheTest < ActiveSupport::TestCase
 
     # Computing main.js's cache key resolves 'helper', which is only on the
     # path once PathAddingProcessor is set up
-    Condenser::RolldownProcessor.expects(:call).never
+    Condenser::RolldownProcessor.any_instance.expects(:call).never
     assert_equal source, build.call.source
   ensure
     FileUtils.remove_entry(PathAddingProcessor.path, true) if PathAddingProcessor.path

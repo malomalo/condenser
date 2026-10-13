@@ -66,7 +66,7 @@ class Condenser
       self.configure do
         register_preprocessor 'application/javascript', Condenser::JSAnalyzer
         # register_preprocessor 'application/javascript', Condenser::BabelProcessor
-        register_exporter     'application/javascript', Condenser::RolldownProcessor
+        register_exporter     'application/javascript', @default_rolldown = Condenser::RolldownProcessor.new(npm_path)
         register_minifier     'application/javascript', Condenser::UglifyMinifier
         
         register_minifier  'text/css', Condenser::SassMinifier
@@ -82,6 +82,16 @@ class Condenser
   
   def configure(&block)
     instance_eval(&block)
+  end
+
+  private
+
+  # Rebuilds the default pipeline's RolldownProcessor for a new npm path, if
+  # it's still registered.
+  def npm_path_changed!
+    exporters = @exporters['application/javascript'] if @default_rolldown
+    index = exporters&.index(@default_rolldown)
+    @default_rolldown = exporters[index] = Condenser::RolldownProcessor.new(npm_path) if index
   end
 end
 

@@ -163,46 +163,31 @@ class PipelineDigestTest < ActiveSupport::TestCase
   end
 
   def bump_rolldown(npm_dir, version)
-    package = File.join(npm_dir, 'node_modules', 'rolldown', 'package.json')
-    mtime = File.stat(package).mtime
     file 'npm/node_modules/rolldown/package.json', JSON.generate({ name: 'rolldown', version: version })
-    File.utime(mtime + 1, mtime + 1, package)
   end
 
-  test 'a class-registered RolldownProcessor puts the Rolldown version in the export digest and etag' do
+  test 'the Rolldown version is read when the RolldownProcessor is created and is in the digest and etag' do
     file 'main.js', "console.log(1);\n"
     npm_dir = rolldown_npm_dir('0.0.1')
     environment = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: npm_dir, base: @path)
-    assert_equal Condenser::RolldownProcessor, environment.exporters['application/javascript'].first
+    processor = environment.exporters['application/javascript'].first
+    assert_instance_of Condenser::RolldownProcessor, processor
+    assert_equal '0.0.1', processor.options[:rolldown]
 
     digest = environment.export_pipeline_digest('application/javascript')
     etag = environment.find('main.js').etag
-    assert_equal '0.0.1', Condenser::RolldownProcessor.options_for(environment)[:rolldown]
-
     unchanged = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: npm_dir, base: @path)
     assert_equal digest, unchanged.export_pipeline_digest('application/javascript')
     assert_equal etag, unchanged.find('main.js').etag
 
     bump_rolldown(npm_dir, '0.0.2')
-    assert_not_equal digest, environment.export_pipeline_digest('application/javascript')
+    assert_equal '0.0.1', processor.options[:rolldown]
+    assert_equal digest, environment.export_pipeline_digest('application/javascript')
 
     upgraded = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: npm_dir, base: @path)
+    assert_equal '0.0.2', upgraded.exporters['application/javascript'].first.options[:rolldown]
     assert_not_equal digest, upgraded.export_pipeline_digest('application/javascript')
     assert_not_equal etag, upgraded.find('main.js').etag
-  end
-
-  test 'a class-registered and an instance-registered RolldownProcessor give the same options and digest' do
-    npm_dir = rolldown_npm_dir('0.0.1')
-    by_class = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: npm_dir, base: @path)
-    by_instance = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: npm_dir, base: @path)
-    by_instance.unregister_exporter('application/javascript')
-    by_instance.register_exporter('application/javascript', Condenser::RolldownProcessor.new(npm_dir))
-
-    assert_equal Condenser::RolldownProcessor.new(npm_dir).options, Condenser::RolldownProcessor.options_for(by_class)
-    assert_equal by_instance.export_pipeline_digest('application/javascript'), by_class.export_pipeline_digest('application/javascript')
-
-    bump_rolldown(npm_dir, '0.0.2')
-    assert_equal by_instance.export_pipeline_digest('application/javascript'), by_class.export_pipeline_digest('application/javascript')
   end
 
   # Records npm installs instead of running them, installing a fake Rolldown
@@ -222,45 +207,15 @@ class PipelineDigestTest < ActiveSupport::TestCase
     super
   end
 
-  test 'a class-registered RolldownProcessor installs Rolldown once, when a digest first needs its version' do
-    file 'main.js', "console.log(1);\n"
+  test 'creating a RolldownProcessor installs Rolldown if it is missing, once per npm path' do
     npm_dir = File.realpath(Dir.mktmpdir)
     installs = spy_npm_installs
     environment = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: npm_dir, base: @path)
-    assert_empty installs
-
-    etag = environment.find('main.js').etag
     assert_equal [[npm_dir, ['rolldown']]], installs
-    assert_equal '1.2.3', Condenser::RolldownProcessor.options_for(environment)[:rolldown]
+    assert_equal '1.2.3', environment.exporters['application/javascript'].first.options[:rolldown]
 
-    assert_equal etag, Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: npm_dir, base: @path).find('main.js').etag
+    Condenser::RolldownProcessor.new(npm_dir)
     assert_equal 1, installs.size
-  ensure
-    FileUtils.remove_entry(npm_dir, true)
-  end
-
-  test 'an instance-registered RolldownProcessor installs Rolldown on its first digest, not when constructed' do
-    npm_dir = File.realpath(Dir.mktmpdir)
-    installs = spy_npm_installs
-    processor = Condenser::RolldownProcessor.new(npm_dir)
-    assert_empty installs
-
-    assert_equal '1.2.3', processor.options[:rolldown]
-    processor.options
-    assert_equal [[npm_dir, ['rolldown']]], installs
-  ensure
-    FileUtils.remove_entry(npm_dir, true)
-  end
-
-  test 'a RolldownProcessor installs Rolldown before its first build' do
-    file 'main.js', "console.log(1);\n"
-    npm_dir = File.realpath(Dir.mktmpdir)
-    installs = spy_npm_installs
-    environment = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: npm_dir, base: @path)
-    Condenser::RolldownProcessor::Runner.any_instance.expects(:call).once.with { installs.size == 1 }.returns({})
-
-    Condenser::RolldownProcessor.call(environment, {})
-    assert_equal [[npm_dir, ['rolldown']]], installs
   ensure
     FileUtils.remove_entry(npm_dir, true)
   end

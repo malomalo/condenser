@@ -416,6 +416,7 @@ class CondenserSCSSTest < ActiveSupport::TestCase
 
   test 'npm package style fallback' do
     npm = File.realpath(Dir.mktmpdir)
+    Condenser::RolldownProcessor.stubs(:install_npm_packages)
     env = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: npm, base: @path)
     file 'node_modules/stylish/package.json', '{"name": "stylish", "style": "dist/stylish.css"}', base: npm
     file 'node_modules/stylish/dist/stylish.css', '.stylish { color: pink; }', base: npm
@@ -439,6 +440,7 @@ class CondenserSCSSTest < ActiveSupport::TestCase
 
   test 'changing an npm package style fallback reprocesses the importing file' do
     npm = File.realpath(Dir.mktmpdir)
+    Condenser::RolldownProcessor.stubs(:install_npm_packages)
     file 'node_modules/stylish/package.json', '{"name": "stylish", "style": "s.css"}', base: npm
     file 'node_modules/stylish/s.css', '.v1 { color: pink; }', base: npm
     file 'test.scss', '@import "stylish";'
