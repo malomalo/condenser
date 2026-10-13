@@ -142,9 +142,13 @@ class Condenser
     # variable.
     #
     # This is used for caching purposes. Any changes in the value of the
-    # environment variable will invalidate the cache of the source file.
+    # environment variable will invalidate the cache of the source file. It's
+    # recorded as "env:KEY"; the value is checked when the cache is, so a new
+    # process sees a change but a running one doesn't watch ENV.
     def depend_on_env(key)
       @dependencies << "env:#{key}"
+
+      nil
     end
 
     # `link_asset` declares an external dependency on an asset without directly

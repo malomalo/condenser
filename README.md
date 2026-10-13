@@ -215,14 +215,14 @@ For example if you have an `app/application/javascripts/app_name.js.erb`
 you could have this in the template
 
 ```js
-var app_name = "<%= ENV['APP_NAME'] %>";
+var app_name = "<%= env_proxy['APP_NAME'] %>";
 ```
 
-Generated files are cached. If you're using an `ENV` var then
-when you change then ENV var the asset will be forced to
-recompile. This behavior is only true for environment variables,
-if you are pulling a value from somewhere else, such as a database,
-must manually invalidate the cache to see the change.
+Generated files are cached. If you read an `ENV` var through `env_proxy` (or
+declare it with `depend_on_env('APP_NAME')`) then when you change the ENV var
+the asset will be forced to recompile in the next process. This behavior is
+only true for environment variables, if you are pulling a value from somewhere
+else, such as a database, must manually invalidate the cache to see the change.
 
 `depend_on(path)` declares a dependency on another asset like the `depends_on`
 directive, `depend_on_asset(path)` does the same and returns the asset, and

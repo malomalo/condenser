@@ -89,6 +89,31 @@ class CondenserErubiTest < ActiveSupport::TestCase
     assert_equal ['dir/other.js'], @env.find('dir/test.js').process_dependencies.map(&:filename)
   end
 
+  test 'depend_on_env invalidates the template when the variable changes' do
+    ENV['CONDENSER_ERB_TEST'] = 'one'
+    file 'test.txt.erb', "<% depend_on_env('CONDENSER_ERB_TEST') %><%= ENV['CONDENSER_ERB_TEST'] %>\n"
+
+    assert_equal "one\n", new_env.find('test.txt').source
+    assert_equal ['CONDENSER_ERB_TEST'], new_env.find('test.txt').env_dependencies
+    assert_equal [], new_env.find('test.txt').process_dependencies
+
+    ENV['CONDENSER_ERB_TEST'] = 'two'
+    assert_equal "two\n", new_env.find('test.txt').source
+  ensure
+    ENV.delete('CONDENSER_ERB_TEST')
+  end
+
+  test 'env_proxy depends on the variable it reads' do
+    ENV['CONDENSER_ERB_TEST'] = 'one'
+    file 'test.txt.erb', "<%= env_proxy['CONDENSER_ERB_TEST'] %>\n"
+
+    assert_equal "one\n", new_env.find('test.txt').source
+    ENV['CONDENSER_ERB_TEST'] = 'two'
+    assert_equal "two\n", new_env.find('test.txt').source
+  ensure
+    ENV.delete('CONDENSER_ERB_TEST')
+  end
+
   test 'link_asset adds a linked asset that the manifest compiles' do
     file 'img.png', 'png'
     file 'test.js.erb', "<% link_asset('img.png') %>console.log(1);\n"
