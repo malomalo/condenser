@@ -132,6 +132,23 @@ class PipelineDigestTest < ActiveSupport::TestCase
     assert_not_equal minified.etag, not_minified.etag
   end
 
+  test "condenser's version is part of the pipeline digests, cache key and etag" do
+    file 'main.js', "console.log(1);\n"
+    entries = env.find('main.js').pipeline_processors
+    digests = lambda do
+      environment = env
+      asset = environment.find('main.js')
+      [environment.pipline_digest, environment.pipeline_digest_for(entries), environment.export_pipeline_digest('application/javascript'), asset.cache_key, asset.etag]
+    end
+
+    before = digests.call
+    assert_equal before, digests.call
+
+    stub_const(Condenser, :VERSION, '0.0.0') do
+      digests.call.zip(before).each { |after, digest| assert_not_equal digest, after }
+    end
+  end
+
   def rolldown_npm_dir(version)
     file 'npm/node_modules/rolldown/package.json', JSON.generate({ name: 'rolldown', version: version })
     File.join(@path, 'npm')
