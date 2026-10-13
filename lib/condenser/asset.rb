@@ -68,9 +68,9 @@ class Condenser
     
     # The dependencies recorded while processing: the assets, plus the plain
     # files and directories that aren't processed as assets.
-    def direct_dependency_names
+    def direct_dependency_names(refresh: false)
       load_pipeline_processors
-      @environment.cache.fetch "process-deps/#{cache_key}" do
+      @environment.cache.fetch "process-deps/#{cache_key}", force: refresh do
         process
         # Sort so etag and cache key are same irrelevant of ordering of
         # dependencies
@@ -133,9 +133,9 @@ class Condenser
 
     # The imports and other dependencies recorded while processing, as
     # [name, accepted mime types] pairs.
-    def export_dependency_names
+    def export_dependency_names(refresh: false)
       load_pipeline_processors
-      @environment.cache.fetch "export-deps/#{cache_key}" do
+      @environment.cache.fetch "export-deps/#{cache_key}", force: refresh do
         process
         # Sort so etag and cache key are same irrelevant of ordering of
         # dependencies
@@ -187,14 +187,16 @@ class Condenser
       @npm_digest = @environment.build_cache.npm_packages_digest(@environment.npm_path, keys)
     end
     
-    def linked_assets
+    def linked_asset_names(refresh: false)
       load_pipeline_processors
-      deps = @environment.cache.fetch "linked-assets/#{cache_key}" do
+      @environment.cache.fetch "linked-assets/#{cache_key}", force: refresh do
         process
         @linked_assets.map { |fn| [normalize_filename_base(fn[0]), fn[1]] }
       end
-      
-      deps.inject([]) do |memo, i|
+    end
+
+    def linked_assets
+      linked_asset_names.inject([]) do |memo, i|
         i[0] = File.join(@environment.base, i[0].delete_prefix('!')) if i[0].start_with?('!') && @environment.base
         @environment.resolve(i[0], File.dirname(@source_file), accept: i[1]).each do |asset|
           memo << asset
@@ -506,6 +508,15 @@ class Condenser
           @processors_loaded = true
           @processed = true
           @type = data[:type]
+
+          # The dependencies can change without the source changing (e.g. a
+          # file dependency that lists other files), so store the new ones
+          direct_dependency_names(refresh: true)
+          export_dependency_names(refresh: true)
+          linked_asset_names(refresh: true)
+          @pcv = nil
+          @fdd_computed = false
+          needs_reexporting!
           data
         end
       end
