@@ -45,6 +45,14 @@ class GreetingTemplate
   end
 end
 
+module NpmInstallSpy
+  def npm_install(*packages)
+    spy = Thread.current[:npm_install_spy]
+    spy ? spy.call(npm_path, packages.flatten) : super
+  end
+end
+Condenser::NodeProcessor.prepend(NpmInstallSpy)
+
 class PipelineDigestTest < ActiveSupport::TestCase
 
   def setup
@@ -197,14 +205,76 @@ class PipelineDigestTest < ActiveSupport::TestCase
     assert_equal by_instance.export_pipeline_digest('application/javascript'), by_class.export_pipeline_digest('application/javascript')
   end
 
-  test "computing a class-registered RolldownProcessor's digest doesn't install Rolldown" do
+  # Records npm installs instead of running them, installing a fake Rolldown
+  def spy_npm_installs(version: '1.2.3')
+    installs = []
+    Thread.current[:npm_install_spy] = lambda do |npm_path, packages|
+      installs << [npm_path, packages]
+      package = File.join(npm_path, 'node_modules', 'rolldown', 'package.json')
+      FileUtils.mkdir_p(File.dirname(package))
+      File.write(package, JSON.generate({ name: 'rolldown', version: version }))
+    end
+    installs
+  end
+
+  def teardown
+    Thread.current[:npm_install_spy] = nil
+    super
+  end
+
+  test 'a class-registered RolldownProcessor installs Rolldown once, when a digest first needs its version' do
     file 'main.js', "console.log(1);\n"
     npm_dir = File.realpath(Dir.mktmpdir)
+    installs = spy_npm_installs
     environment = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: npm_dir, base: @path)
+    assert_empty installs
 
-    Condenser::NodeProcessor.any_instance.expects(:npm_install).never
-    environment.find('main.js').etag
-    assert_nil Condenser::RolldownProcessor.options_for(environment)[:rolldown]
+    etag = environment.find('main.js').etag
+    assert_equal [[npm_dir, ['rolldown']]], installs
+    assert_equal '1.2.3', Condenser::RolldownProcessor.options_for(environment)[:rolldown]
+
+    assert_equal etag, Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: npm_dir, base: @path).find('main.js').etag
+    assert_equal 1, installs.size
+  ensure
+    FileUtils.remove_entry(npm_dir, true)
+  end
+
+  test 'an instance-registered RolldownProcessor installs Rolldown on its first digest, not when constructed' do
+    npm_dir = File.realpath(Dir.mktmpdir)
+    installs = spy_npm_installs
+    processor = Condenser::RolldownProcessor.new(npm_dir)
+    assert_empty installs
+
+    assert_equal '1.2.3', processor.options[:rolldown]
+    processor.options
+    assert_equal [[npm_dir, ['rolldown']]], installs
+  ensure
+    FileUtils.remove_entry(npm_dir, true)
+  end
+
+  test 'a RolldownProcessor installs Rolldown before its first build' do
+    file 'main.js', "console.log(1);\n"
+    npm_dir = File.realpath(Dir.mktmpdir)
+    installs = spy_npm_installs
+    environment = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: npm_dir, base: @path)
+    Condenser::RolldownProcessor::Runner.any_instance.expects(:call).once.with { installs.size == 1 }.returns({})
+
+    Condenser::RolldownProcessor.call(environment, {})
+    assert_equal [[npm_dir, ['rolldown']]], installs
+  ensure
+    FileUtils.remove_entry(npm_dir, true)
+  end
+
+  test 'a RolldownProcessor with a bundler_path never installs Rolldown' do
+    file 'wrapped-rolldown/package.json', JSON.generate({ name: 'rolldown', version: '0.0.1' })
+    npm_dir = File.realpath(Dir.mktmpdir)
+    installs = spy_npm_installs
+    processor = Condenser::RolldownProcessor.new(npm_dir, bundler_path: File.join(@path, 'wrapped-rolldown'))
+    Condenser::RolldownProcessor::Runner.any_instance.stubs(:call).returns({})
+
+    assert_equal '0.0.1', processor.options[:rolldown]
+    processor.call(@env, {})
+    assert_empty installs
   ensure
     FileUtils.remove_entry(npm_dir, true)
   end

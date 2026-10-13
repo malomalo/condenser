@@ -25,7 +25,6 @@ class Condenser::RolldownProcessor
   end
 
   def self.call(environment, input)
-    install_npm_packages(environment.npm_path) if environment.npm_path
     instance_for(environment).call(environment, input)
   end
 
@@ -34,7 +33,7 @@ class Condenser::RolldownProcessor
   end
 
   def self.instance_for(environment)
-    @lock.synchronize { @instances[environment.npm_path] ||= new(environment.npm_path, install: false) }
+    @lock.synchronize { @instances[environment.npm_path] ||= new(environment.npm_path) }
   end
 
   def self.stop_workers
@@ -68,18 +67,18 @@ class Condenser::RolldownProcessor
   end
 
   def rolldown_version
+    ensure_installed
     path = @bundler_path || (@npm_dir && File.join(@npm_dir, 'node_modules', 'rolldown'))
     self.class.read_version(path) if path
   end
 
-  def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, aliases: {}, platform: 'neutral', max_memory: MAX_MEMORY, install: true)
+  def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, aliases: {}, platform: 'neutral', max_memory: MAX_MEMORY)
     unless DYNAMIC_IMPORTS.include?(dynamic_imports)
       raise ArgumentError, "dynamic_imports must be :inline or :keep, got #{dynamic_imports.inspect}"
     end
     unless max_memory.is_a?(Integer) && max_memory.positive?
       raise ArgumentError, "max_memory must be a positive Integer, got #{max_memory.inspect}"
     end
-    self.class.install_npm_packages(dir) if install && bundler_path.nil? && dir
     @npm_dir = dir
     @prefix = prefix
     @dynamic_imports = dynamic_imports
@@ -91,6 +90,7 @@ class Condenser::RolldownProcessor
   end
 
   def call(environment, input)
+    ensure_installed
     Runner.new(@npm_dir, worker: worker, prefix: @prefix, dynamic_imports: @dynamic_imports, aliases: @aliases, platform: @platform).call(environment, input)
   end
 
@@ -102,6 +102,12 @@ class Condenser::RolldownProcessor
         max_memory: @max_memory
       )
     end
+  end
+
+  private
+
+  def ensure_installed
+    self.class.install_npm_packages(@npm_dir) if @bundler_path.nil? && @npm_dir
   end
 
   # A node process with Rolldown loaded that runs one build at a time.
