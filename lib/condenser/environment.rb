@@ -57,9 +57,9 @@ class Condenser
       paths.flatten.each do |path|
         path = File.expand_path(path)
         raise ArgumentError, "Path \"#{path}\" does not exists" if !File.directory?(path)
-        real = File.realpath(path)
+        real = BuildCache.real_path(path)
         next if @watched_paths.any? { |watched, watched_ignore|
-          BuildCache.covers?((File.realpath(watched) rescue watched), real, ignore: watched_ignore)
+          BuildCache.covers?(BuildCache.real_path(watched), real, ignore: watched_ignore)
         }
 
         @watched_paths << [path, ignore]

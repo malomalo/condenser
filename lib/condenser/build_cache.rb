@@ -161,7 +161,7 @@ class Condenser
             @logger.debug { "build cache semaphore unlocked by #{Thread.current.object_id}" }
           end
         end
-        @listened_paths = path.map { |p| real_path(p) }
+        @listened_paths = path.map { |p| self.class.real_path(p) }
         @listener = Listen.to(*path, &@on_change)
         @listener.start
       end
@@ -176,7 +176,7 @@ class Condenser
     def watch(path, ignore: [])
       return if !@listening
 
-      path = real_path(path)
+      path = self.class.real_path(path)
       return if @listened_paths.any? { |root| self.class.covers?(root, path) }
       return if @watched_paths.any? { |root, ignores| self.class.covers?(root, path, ignore: ignores) }
 
@@ -231,17 +231,20 @@ class Condenser
     def record_file_dependencies(asset, files, directories)
       return if !@listening
 
-      files.each { |f| (@file_dependencies[real_path(f)] ||= Set.new) << asset }
-      directories.each { |d| (@directory_dependencies[real_path(d)] ||= Set.new) << asset }
+      files.each { |f| (@file_dependencies[self.class.real_path(f)] ||= Set.new) << asset }
+      directories.each { |d| (@directory_dependencies[self.class.real_path(d)] ||= Set.new) << asset }
     end
 
     # Listen reports paths with symlinks resolved, e.g. /private/var for
     # /var on macOS or a Capistrano release for its `current` symlink.
-    def real_path(path)
+    # A missing path resolves through its nearest existing parent.
+    def self.real_path(path)
       File.realpath(path)
-    rescue SystemCallError
-      dir = File.dirname(path)
-      dir == path ? path : File.join(real_path(dir), File.basename(path))
+    rescue Errno::ENOENT, Errno::ENOTDIR
+      parent = File.dirname(path)
+      return path if parent == path
+
+      File.join(real_path(parent), File.basename(path))
     end
 
     # A digest of the file's contents, or nil if it's missing. It's only
