@@ -25,8 +25,16 @@ class Condenser::RolldownProcessor
   end
 
   def self.call(environment, input)
-    instance = @lock.synchronize { @instances[environment.npm_path] ||= new(environment.npm_path) }
-    instance.call(environment, input)
+    install_npm_packages(environment.npm_path) if environment.npm_path
+    instance_for(environment).call(environment, input)
+  end
+
+  def self.options_for(environment)
+    instance_for(environment).options
+  end
+
+  def self.instance_for(environment)
+    @lock.synchronize { @instances[environment.npm_path] ||= new(environment.npm_path, install: false) }
   end
 
   def self.stop_workers
@@ -64,14 +72,14 @@ class Condenser::RolldownProcessor
     self.class.read_version(path) if path
   end
 
-  def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, aliases: {}, platform: 'neutral', max_memory: MAX_MEMORY)
+  def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, aliases: {}, platform: 'neutral', max_memory: MAX_MEMORY, install: true)
     unless DYNAMIC_IMPORTS.include?(dynamic_imports)
       raise ArgumentError, "dynamic_imports must be :inline or :keep, got #{dynamic_imports.inspect}"
     end
     unless max_memory.is_a?(Integer) && max_memory.positive?
       raise ArgumentError, "max_memory must be a positive Integer, got #{max_memory.inspect}"
     end
-    self.class.install_npm_packages(dir) if bundler_path.nil? && dir
+    self.class.install_npm_packages(dir) if install && bundler_path.nil? && dir
     @npm_dir = dir
     @prefix = prefix
     @dynamic_imports = dynamic_imports

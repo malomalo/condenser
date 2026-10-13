@@ -639,7 +639,7 @@ class CondenserSCSSTest < ActiveSupport::TestCase
       url: url(/assets/foo-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.mp3);
       url: url(/assets/foo-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.woff2);
       url: url(/assets/foo-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.woff);
-      url: url(/assets/foo-e26d384ce20e27b67bedfd48757a70f282b69f75a115397fdbb466c077b342bd.js);
+      url: url(/assets/#{@env.find('foo.js').path});
       url: url(/assets/#{@env.find('foo.css').path});
     }
     CSS
