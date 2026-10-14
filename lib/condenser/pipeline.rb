@@ -52,21 +52,6 @@ class Condenser
       end
     end
     
-    def pipline_hash
-      JSON.generate(pipline_to_json([
-        @templates,
-        @preprocessors,
-        @transformers,
-        @postprocessors,
-        @minifiers,
-        @exporters
-      ]))
-    end
-    
-    def pipline_digest
-      @pipline_digest ||= versioned_digest(pipline_hash)
-    end
-
     # A digest of just the given part of the pipeline, as [role, mime type,
     # processor] entries (see Asset#pipeline_processors), so an asset's cache
     # only depends on the processors that process it.
