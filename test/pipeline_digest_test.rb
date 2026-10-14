@@ -146,7 +146,7 @@ class PipelineDigestTest < ActiveSupport::TestCase
     digests = lambda do
       environment = env
       asset = environment.find('main.js')
-      [environment.pipline_digest, environment.pipeline_digest_for(entries), environment.export_pipeline_digest('application/javascript'), asset.cache_key, asset.etag]
+      [environment.pipeline_digest_for(entries), environment.export_pipeline_digest('application/javascript'), asset.cache_key, asset.etag]
     end
 
     before = digests.call
