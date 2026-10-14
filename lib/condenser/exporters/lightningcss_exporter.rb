@@ -60,6 +60,10 @@ class Condenser::LightningCSSExporter
   #           (default false), `error_recovery` or `scope`. `filename` and
   #           `css_modules` raise an ArgumentError.
   def initialize(targets: nil, **options)
+    # Condenser doesn't set up exporters, so the gem is loaded (and its
+    # version checked) here instead of in #call.
+    self.class.require_lightningcss!
+
     options.each_key do |key|
       next unless (instead = RESERVED_OPTIONS[key.to_sym])
       raise ArgumentError, "LightningCSSExporter options can't include #{key.inspect}, #{instead}"
@@ -76,7 +80,6 @@ class Condenser::LightningCSSExporter
   end
 
   def call(environment, input)
-    self.class.setup(environment)
     result = ::LightningCSS.transform(input[:source], filename: input[:filename], **@transform_options)
 
     result.warnings.each do |warning|
