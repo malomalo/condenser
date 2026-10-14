@@ -14,12 +14,14 @@ class FileDependencyProcessor
     calls[input[:filename]] += 1
     lines = files.map do |f|
       f, read = Array(f)
+      read = environment.resolve_dependency_path(f) if read == :resolve
       read ||= f
       input[:file_dependencies] << f
       "#{File.basename(f)}: #{File.file?(read) ? File.read(read).strip : 'missing'}"
     end
     directories.each do |dir, options|
       dir, recorded = Array(dir).reverse
+      dir = environment.resolve_dependency_path(recorded, directory: true) || recorded if dir == :resolve
       input[:directory_dependencies] << { path: recorded || dir, **options }
       glob = options[:recursive] ? "**/#{options[:glob] || '*'}" : (options[:glob] || '*')
       lines << "#{File.basename(dir)}: #{Dir.glob(glob, base: dir).select { |f| File.file?(File.join(dir, f)) }.sort.join(',')}"
@@ -68,11 +70,11 @@ class FileDependenciesTest < ActiveSupport::TestCase
 
   # Waits until the listener has seen a change made after the ones before
   # it, by changing an asset that doesn't depend on anything.
-  def flush_listener
+  def flush_listener(env = @env)
     file 'sentinel.txt', "before\n"
-    before = @env.find('sentinel.txt').source
+    before = env.find('sentinel.txt').source
     file 'sentinel.txt', "after\n"
-    assert wait_until { @env.find('sentinel.txt').source != before }
+    assert wait_until { env.find('sentinel.txt').source != before }
   end
 
   def new_env(*paths, base: @path)
@@ -93,16 +95,26 @@ class FileDependenciesTest < ActiveSupport::TestCase
     assert_rebuilds_with 'a.html: two'
   end
 
+  def raises_not_found?(env = @env)
+    build(env)
+    false
+  rescue Condenser::FileNotFound
+    true
+  end
+
   test 'a file dependency that is added or removed reprocesses the asset' do
     skip 'needs a listener' if !@env.build_cache.listening
     FileDependencyProcessor.files = [File.join(@content, 'a.html')]
 
-    assert_includes build, 'a.html: missing'
+    error = assert_raises(Condenser::FileNotFound) { build }
+    assert_equal "couldn't find file '#{File.join(@content, 'a.html')}' from #{File.join(@path, 'test.txt')}", error.message
     file 'content/a.html', 'added'
     assert_rebuilds_with 'a.html: added'
 
     rm 'content/a.html'
-    assert_rebuilds_with 'a.html: missing'
+    assert wait_until { raises_not_found? }, "expected the rebuild to raise FileNotFound"
+    file 'content/a.html', 'added again'
+    assert_rebuilds_with 'a.html: added again'
   end
 
   test 'a file dependency is not processed as an asset' do
@@ -199,7 +211,9 @@ class FileDependenciesTest < ActiveSupport::TestCase
     assert_equal 2, calls
 
     rm 'content/a.html'
-    assert_includes new_env.find('test.txt').export.source, 'a.html: missing'
+    assert_raises(Condenser::FileNotFound) { new_env.find('test.txt').export }
+    file 'content/a.html', 'three'
+    assert_includes new_env.find('test.txt').export.source, 'a.html: three'
   end
 
   test 'a persistent cache is not used by a new process after a directory dependency changed' do
@@ -367,7 +381,8 @@ class FileDependenciesTest < ActiveSupport::TestCase
         File.join(@path, 'a/up.txt'),
         File.join(@content, 'a.html'),
         File.join(@absolute, 'abs.txt')
-      ], asset.file_dependencies
+      ].sort, asset.file_dependencies.sort
+      assert_includes asset.file_dependency_names, 'content/a.html'
       assert_includes asset.source, 'sibling.txt: sibling one'
 
       file 'a/b/sibling.txt', 'sibling two'
@@ -553,6 +568,75 @@ class FileDependenciesTest < ActiveSupport::TestCase
       file 'a/b/sibling.txt', 'two'
       assert_includes new_env.find('a/b/test.txt').export.source, 'sibling.txt: two'
     end
+  end
+
+  test 'a bare file dependency is shadowed by a file added to an earlier load path' do
+    @second = File.realpath(Dir.mktmpdir)
+    file 'config/x.txt', 'second', base: @second
+    FileDependencyProcessor.files = [['config//./x.txt', :resolve]]
+
+    in_other_directory do
+      listening = new_env(@path, @second)
+      assert_includes build(listening), 'x.txt: second'
+      flush_listener(listening) if listening.build_cache.listening
+      assert_equal ['config/x.txt'], listening.find('test.txt').file_dependency_names
+      assert_equal [File.join(@second, 'config/x.txt')], listening.find('test.txt').file_dependencies
+
+      file 'config/x.txt', 'first'
+      assert wait_until { build(listening).include?('x.txt: first') } if listening.build_cache.listening
+      assert_includes build(new_env(@path, @second)), 'x.txt: first'
+
+      rm 'config/x.txt'
+      assert wait_until { build(listening).include?('x.txt: second') } if listening.build_cache.listening
+      assert_includes build(new_env(@path, @second)), 'x.txt: second'
+    end
+  end
+
+  test 'a bare directory dependency is shadowed by a directory added to an earlier load path' do
+    @second = File.realpath(Dir.mktmpdir)
+    file 'pages/a.html', 'a', base: @second
+    FileDependencyProcessor.directories = { ['pages', :resolve] => { glob: '*.html' } }
+
+    in_other_directory do
+      listening = new_env(@path, @second)
+      assert_includes build(listening), 'pages: a.html'
+      flush_listener(listening) if listening.build_cache.listening
+
+      file 'pages/b.html', 'b'
+      assert wait_until { build(listening).include?('pages: b.html') } if listening.build_cache.listening
+      assert_includes build(new_env(@path, @second)), 'pages: b.html'
+
+      FileUtils.rm_r(File.join(@path, 'pages'))
+      assert wait_until { build(listening).include?('pages: a.html') } if listening.build_cache.listening
+      assert_includes build(new_env(@path, @second)), 'pages: a.html'
+    end
+  end
+
+  test 'a bare file dependency that is removed from every load path raises when rebuilt' do
+    file 'config/x.txt', 'one'
+    FileDependencyProcessor.files = [['config/x.txt', :resolve]]
+
+    in_other_directory do
+      listening = new_env
+      assert_includes build(listening), 'x.txt: one'
+      flush_listener(listening) if listening.build_cache.listening
+
+      rm 'config/x.txt'
+      assert wait_until { raises_not_found?(listening) } if listening.build_cache.listening
+      error = assert_raises(Condenser::FileNotFound) { build(new_env) }
+      assert_equal "couldn't find file 'config/x.txt' from #{File.join(@path, 'test.txt')}", error.message
+    end
+  end
+
+  test 'a missing absolute file or directory dependency raises' do
+    FileDependencyProcessor.files = [File.join(@content, 'missing.html')]
+    error = assert_raises(Condenser::FileNotFound) { build(new_env) }
+    assert_equal "couldn't find file '#{File.join(@content, 'missing.html')}' from #{File.join(@path, 'test.txt')}", error.message
+
+    FileDependencyProcessor.files = []
+    FileDependencyProcessor.directories = { File.join(@path, 'missing') => {} }
+    error = assert_raises(Condenser::FileNotFound) { build(new_env) }
+    assert_equal "couldn't find directory '#{File.join(@path, 'missing')}' from #{File.join(@path, 'test.txt')}", error.message
   end
 
 end

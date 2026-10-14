@@ -108,28 +108,43 @@ class Condenser
       end.tap { |assets| @environment.build_cache.record_process_dependencies(self, assets) }
     end
 
-    def file_dependencies
+    # The file dependencies as recorded: absolute paths, or bare paths that
+    # are looked up in the load paths.
+    def file_dependency_names
       direct_dependency_names[:files].map { |f| expand_filename_base(f) }
+    end
+
+    # As [name, globs, recursive]
+    def directory_dependency_names
+      direct_dependency_names[:directories].map { |d, *rest| [expand_filename_base(d), *rest] }
+    end
+
+    # The paths the file dependencies are at now.
+    def file_dependencies
+      file_dependency_names.filter_map { |f| @environment.resolve_dependency_path(f) }
     end
 
     # As [path, globs, recursive]
     def directory_dependencies
-      direct_dependency_names[:directories].map { |d, *rest| [expand_filename_base(d), *rest] }
+      directory_dependency_names.filter_map do |d, *rest|
+        path = @environment.resolve_dependency_path(d, directory: true)
+        [path, *rest] if path
+      end
     end
 
-    # A digest of the contents of the file dependencies and the listings of
-    # the directory dependencies, or nil if there are none.
+    # A digest of where the file dependencies are and their contents, and of
+    # the listings of the directory dependencies, or nil if there are none.
     def file_dependencies_digest
       return @fdd if @fdd_computed
 
-      files = file_dependencies
-      directories = directory_dependencies
-      @environment.build_cache.record_file_dependencies(self, files, directories.map(&:first))
+      files = file_dependency_names.map { |f| [f, @environment.resolve_dependency_path(f)] }
+      directories = directory_dependency_names.map { |d, *rest| [d, @environment.resolve_dependency_path(d, directory: true), *rest] }
+      @environment.build_cache.record_file_dependencies(self, files, directories)
       @fdd = if !files.empty? || !directories.empty?
         build_cache = @environment.build_cache
         Digest::SHA1.base64digest(JSON.generate([
-          files.map { |f| [normalize_filename_base(f), build_cache.file_digest(f)] },
-          directories.map { |d, globs, recursive| [normalize_filename_base(d), globs, recursive, build_cache.directory_digest(d, globs: globs, recursive: recursive)] }
+          files.map { |f, path| [normalize_filename_base(f), path && normalize_filename_base(path), path && build_cache.file_digest(path)] },
+          directories.map { |d, path, globs, recursive| [normalize_filename_base(d), path && normalize_filename_base(path), globs, recursive, path && build_cache.directory_digest(path, globs: globs, recursive: recursive)] }
         ]))
       end
       @fdd_computed = true
@@ -504,7 +519,7 @@ class Condenser
           data[:process_dependencies] = normialize_dependency_names(data[:process_dependencies])
           data[:export_dependencies] = normialize_dependency_names(data[:export_dependencies])
           data[:linked_assets] = normialize_dependency_names(data[:linked_assets])
-          data[:file_dependencies] = data[:file_dependencies].map { |f| @environment.expand_dependency_path(f, source_file: @source_file) }.uniq
+          data[:file_dependencies] = data[:file_dependencies].map { |f| @environment.dependency_name(f, source_file: @source_file) }.uniq
           data[:directory_dependencies] = normalize_directory_dependencies(data[:directory_dependencies])
 
           # Do this here and at the end so cache_key can be calculated if we
@@ -579,7 +594,7 @@ class Condenser
     def normalize_directory_dependencies(deps)
       deps = deps.map do |dep|
         dep = { path: dep } if dep.is_a?(String)
-        [@environment.expand_dependency_path(dep[:path], source_file: @source_file, directory: true), Array(dep[:glob] || '*').map(&:to_s).sort, !!dep[:recursive]]
+        [@environment.dependency_name(dep[:path], source_file: @source_file, directory: true), Array(dep[:glob] || '*').map(&:to_s).sort, !!dep[:recursive]]
       end.uniq
       deps.reject { |d, globs, recursive| !recursive && deps.include?([d, globs, true]) }
     end

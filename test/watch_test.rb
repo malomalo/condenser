@@ -40,6 +40,7 @@ class WatchTest < ActiveSupport::TestCase
     file 'a.txt', "a\n"
     file 'b.txt', "b\n"
     file 'content/a.html', 'one', base: @root
+    file 'b.html', 'one'
     WatchedFilesProcessor.files = { 'a.txt' => ["#{@root}/content/a.html"], 'b.txt' => ["#{@path}/b.html"] }
 
     assert_includes source('a.txt'), 'a.html: one'

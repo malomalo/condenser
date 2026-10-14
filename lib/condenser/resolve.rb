@@ -134,25 +134,45 @@ class Condenser
       end
     end
     
-    # The absolute path of a file (or +directory+) dependency. Paths starting
-    # with "./" or "../" are relative to the directory of +source_file+, other
-    # relative paths to the first load path they're in. Raises FileNotFound
-    # if a relative path doesn't exist.
-    def expand_dependency_path(filename, source_file: nil, directory: false)
-      filename = filename.to_s
-      return File.expand_path(filename) if File.absolute_path?(filename)
+    # The name to record for a file (or +directory+) dependency: an absolute
+    # path, with "./" and "../" relative to the directory of +source_file+,
+    # or a bare path that, like an import, is looked up in the load paths
+    # again when the cache is checked. Raises FileNotFound if it doesn't
+    # exist.
+    def dependency_name(filename, source_file: nil, directory: false)
+      expand_dependency(filename, source_file: source_file, directory: directory)[0]
+    end
 
-      exists = directory ? File.method(:directory?) : File.method(:file?)
-      expanded = if filename.match?(/\A\.\.?(\/|\z)/)
+    # The path a file (or +directory+) dependency is at now. Raises
+    # FileNotFound if it doesn't exist.
+    def expand_dependency_path(filename, source_file: nil, directory: false)
+      expand_dependency(filename, source_file: source_file, directory: directory)[1]
+    end
+
+    def expand_dependency(filename, source_file:, directory:)
+      filename = filename.to_s
+      name = if File.absolute_path?(filename)
+        File.expand_path(filename)
+      elsif filename.match?(/\A\.\.?(\/|\z)/)
         File.expand_path(filename, File.dirname(source_file)) if source_file
       else
-        path.map { |p| File.expand_path(filename, p) }.find(&exists)
+        expand_path(filename)
       end
 
-      if expanded.nil? || !exists.call(expanded)
+      resolved = name && resolve_dependency_path(name, directory: directory)
+      if !resolved || !(directory ? File.directory?(resolved) : File.file?(resolved))
         raise FileNotFound, "couldn't find #{directory ? 'directory' : 'file'} '#{filename}'#{" from #{source_file}" if source_file}"
       end
-      expanded
+      [name, resolved]
+    end
+    private :expand_dependency
+
+    # The path a recorded dependency name is at: an absolute name as is, a
+    # bare one in the first load path that has it, or nil.
+    def resolve_dependency_path(name, directory: false)
+      return name if File.absolute_path?(name)
+
+      path.map { |p| File.join(p, name) }.find { |f| directory ? File.directory?(f) : File.file?(f) }
     end
 
     def find_export(filename, base=nil, **kargs)
