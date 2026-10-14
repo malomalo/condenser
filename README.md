@@ -240,6 +240,16 @@ Lightning CSS as well, pass `minify: true` and unregister the `text/css`
 minifier. The `lightningcss` and `browserslist` npm packages are installed into
 the environment's `npm_path`.
 
+Pass `sourcemap: true` to generate a source map of the CSS, available as the
+export's `sourcemap`. If the CSS arrives with a source map it's chained through
+it. The `text/css` minifier doesn't keep source maps, so minify with
+`minify: true` and unregister it:
+
+``` ruby
+environment.unregister_minifier 'text/css'
+environment.register_exporter 'text/css', Condenser::LightningCSSProcessor.new(environment.npm_path, targets: 'defaults', sourcemap: true, minify: true)
+```
+
 ## Javascript, ES#, & ES Modules
 
 Condenser transforms Javascript for the browser by transpiling all the files

@@ -13,11 +13,16 @@ require 'json'
 #
 # To also minify with Lightning CSS pass `minify: true` and unregister the
 # 'text/css' minifier.
+#
+# With `sourcemap: true` it sets `input[:map]` to a source map (a JSON
+# String) of its output, chained through the incoming `input[:map]` if there
+# is one. The 'text/css' minifier runs after it and doesn't keep the map, so
+# minify with `minify: true` instead.
 class Condenser::LightningCSSProcessor < Condenser::NodeProcessor
 
   PACKAGES = %w(lightningcss browserslist).freeze
 
-  RESERVED_OPTIONS = %i(filename code sourceMap).freeze
+  RESERVED_OPTIONS = %i(filename code sourceMap inputSourceMap).freeze
 
   # The browserslist query used when no targets are given.
   DEFAULT_TARGETS = 'defaults'
@@ -44,11 +49,13 @@ class Condenser::LightningCSSProcessor < Condenser::NodeProcessor
   # dir - String (path to node_modules directory)
   # targets - browserslist query, as a String or Array of Strings, the
   #           browsers to transform the CSS for. Default 'defaults'.
+  # sourcemap - Boolean, whether to generate a source map. Default false.
   # options - Options passed to Lightning CSS's `transform`, e.g. `minify`,
   #           `drafts` or `include` / `exclude` features. See
-  #           https://lightningcss.dev/transpilation.html. `filename`, `code`
-  #           and `sourceMap` are set by condenser and raise an ArgumentError.
-  def initialize(dir = nil, targets: DEFAULT_TARGETS, **options)
+  #           https://lightningcss.dev/transpilation.html. `filename`, `code`,
+  #           `sourceMap` and `inputSourceMap` are set by condenser and raise
+  #           an ArgumentError.
+  def initialize(dir = nil, targets: DEFAULT_TARGETS, sourcemap: false, **options)
     super(dir)
     reserved = RESERVED_OPTIONS & options.keys.map(&:to_sym)
     if reserved.any?
@@ -57,23 +64,32 @@ class Condenser::LightningCSSProcessor < Condenser::NodeProcessor
 
     npm_install(*PACKAGES)
     @targets = targets
+    @sourcemap = sourcemap
     @transform_options = { minify: false }.merge(options).freeze
-    @options = { targets: targets }.merge(@transform_options).merge(package_versions).freeze
+    @options = { targets: targets, sourcemap: sourcemap }.merge(@transform_options).merge(package_versions).freeze
   end
 
   def call(environment, input)
-    result = exec_worker(<<-JS, input[:source], input[:filename], @targets, @transform_options)
+    input_map = (input_source_map(input[:map], input[:filename]) if @sourcemap)
+
+    result = exec_worker(<<-JS, input[:source], input[:filename], @targets, @transform_options, @sourcemap, input_map)
       const lightningcss = require("#{npm_module_path('lightningcss')}");
       const browserslist = require("#{npm_module_path('browserslist')}");
 
-      const handle = (source, filename, targets, options) => {
+      const handle = (source, filename, targets, options, sourceMap, inputSourceMap) => {
         try {
           const result = lightningcss.transform(Object.assign({}, options, {
             filename: filename,
             code: Buffer.from(source),
-            targets: lightningcss.browserslistToTargets(browserslist(targets))
+            targets: lightningcss.browserslistToTargets(browserslist(targets)),
+            sourceMap: sourceMap,
+            inputSourceMap: inputSourceMap || undefined
           }));
-          return { code: result.code.toString(), warnings: result.warnings };
+          return {
+            code: result.code.toString(),
+            map: result.map ? result.map.toString() : null,
+            warnings: result.warnings
+          };
         } catch (e) {
           return { error: { name: e.name, message: e.message, loc: e.loc } };
         }
@@ -90,9 +106,29 @@ class Condenser::LightningCSSProcessor < Condenser::NodeProcessor
     end
 
     input[:source] = result['code']
+    # Without a map of the new source any incoming map would no longer match
+    input[:map] = result['map']
   end
 
   private
+
+  # The incoming source map as a JSON String, or nil. Lightning CSS ignores
+  # an input map it can't parse, so a map that isn't JSON raises here.
+  def input_source_map(map, filename)
+    case map
+    when nil
+      nil
+    when Hash
+      JSON.generate(map)
+    when String
+      JSON.parse(map)
+      map
+    else
+      raise ArgumentError, "#{filename}: source map must be a JSON String or a Hash, got #{map.class}"
+    end
+  rescue JSON::ParserError => e
+    raise ArgumentError, "#{filename}: source map isn't valid JSON (#{e.message})"
+  end
 
   # Lightning CSS's version, and those of browserslist and caniuse-lite, so
   # the output is rebuilt when the browsers a query resolves to change.

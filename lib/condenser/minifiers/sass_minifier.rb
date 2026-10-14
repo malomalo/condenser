@@ -53,6 +53,8 @@ class Condenser::SassMinifier
     }.merge(@sass_options))
 
     input[:source] = result.css
+    # The minified CSS doesn't match an incoming source map
+    input[:map] = nil
   rescue ::Sass::CompileError => e
     raise Condenser::Sass.compile_error(e, input[:filename])
   end
