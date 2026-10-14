@@ -191,6 +191,10 @@ In ERB templates (and through `condenser_context` in Sass functions)
 `depend_on_file(path)` and `depend_on_directory(path, glob:, recursive:)` do
 the same.
 
+Paths starting with `./` or `../` are relative to the directory of the asset's
+source file. Other relative paths, like `'app/views'`, are relative to the
+environment's `base` (or `Dir.pwd` if there's no `base`).
+
 A file dependency invalidates the asset when its contents change and a
 directory dependency when a matching file or a subdirectory is added, removed
 or renamed. Both are checked against the cache when a new process starts. A

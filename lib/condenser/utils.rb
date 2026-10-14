@@ -30,6 +30,18 @@ class Condenser
       File.delete(tmpname) if File.exist?(tmpname)
     end
     
+    # Internal: Expand the path of a file or directory dependency. Paths
+    # starting with "./" or "../" are relative to the directory of
+    # +source_file+, other relative paths to +base+ (or Dir.pwd).
+    def self.expand_dependency_path(path, source_file: nil, base: nil)
+      path = path.to_s
+      if source_file && path.match?(/\A\.\.?(\/|\z)/)
+        File.expand_path(path, File.dirname(source_file))
+      else
+        File.expand_path(path, base || Dir.pwd)
+      end
+    end
+
     # Internal: Inject into target module for the duration of the block.
     #
     # mod - Module

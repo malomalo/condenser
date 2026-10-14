@@ -13,11 +13,14 @@ class FileDependencyProcessor
   def self.call(environment, input)
     calls[input[:filename]] += 1
     lines = files.map do |f|
+      f, read = Array(f)
+      read ||= f
       input[:file_dependencies] << f
-      "#{File.basename(f)}: #{File.file?(f) ? File.read(f).strip : 'missing'}"
+      "#{File.basename(f)}: #{File.file?(read) ? File.read(read).strip : 'missing'}"
     end
     directories.each do |dir, options|
-      input[:directory_dependencies] << { path: dir, **options }
+      dir, recorded = Array(dir).reverse
+      input[:directory_dependencies] << { path: recorded || dir, **options }
       glob = options[:recursive] ? "**/#{options[:glob] || '*'}" : (options[:glob] || '*')
       lines << "#{File.basename(dir)}: #{Dir.glob(glob, base: dir).select { |f| File.file?(File.join(dir, f)) }.sort.join(',')}"
     end
@@ -325,6 +328,150 @@ class FileDependenciesTest < ActiveSupport::TestCase
     flush_listener
     assert_includes @env.find('ctx.txt').source, 'three'
     assert_equal calls, FileDependencyProcessor.calls['ctx.txt']
+  end
+
+  # Runs the block from a directory that isn't the base or the asset's.
+  def in_other_directory
+    pwd = Dir.pwd
+    other = File.realpath(Dir.mktmpdir)
+    Dir.chdir(other)
+    yield other
+  ensure
+    Dir.chdir(pwd)
+    FileUtils.remove_entry(other, true) if other
+  end
+
+  def relative_file_dependencies
+    file 'a/b/test.txt', "test\n"
+    file 'a/b/sibling.txt', 'sibling one'
+    file 'a/up.txt', 'up one'
+    file 'content/a.html', 'a one'
+    @absolute = File.realpath(Dir.mktmpdir)
+    File.write(File.join(@absolute, 'abs.txt'), 'abs one')
+    FileDependencyProcessor.files = [
+      ['./sibling.txt', File.join(@path, 'a/b/sibling.txt')],
+      ['../up.txt', File.join(@path, 'a/up.txt')],
+      ['content/a.html', File.join(@content, 'a.html')],
+      File.join(@absolute, 'abs.txt')
+    ]
+  end
+
+  test 'relative file dependencies of a processor resolve against the source file or base' do
+    relative_file_dependencies
+    in_other_directory do
+      asset = new_env.find('a/b/test.txt')
+      assert_equal [
+        File.join(@path, 'a/b/sibling.txt'),
+        File.join(@path, 'a/up.txt'),
+        File.join(@content, 'a.html'),
+        File.join(@absolute, 'abs.txt')
+      ], asset.file_dependencies
+      assert_includes asset.source, 'sibling.txt: sibling one'
+
+      file 'a/b/sibling.txt', 'sibling two'
+      assert_includes new_env.find('a/b/test.txt').export.source, 'sibling.txt: sibling two'
+      file 'a/up.txt', 'up two'
+      assert_includes new_env.find('a/b/test.txt').export.source, 'up.txt: up two'
+      file 'content/a.html', 'a two'
+      assert_includes new_env.find('a/b/test.txt').export.source, 'a.html: a two'
+      File.write(File.join(@absolute, 'abs.txt'), 'abs two')
+      assert_includes new_env.find('a/b/test.txt').export.source, 'abs.txt: abs two'
+      assert_equal 5, FileDependencyProcessor.calls['a/b/test.txt']
+    end
+  ensure
+    FileUtils.remove_entry(@absolute, true) if @absolute
+  end
+
+  test 'a relative file dependency of a processor is listened to' do
+    skip 'needs a listener' if !@env.build_cache.listening
+    file 'a/b/test.txt', "test\n"
+    file 'a/b/sibling.txt', 'one'
+    FileDependencyProcessor.files = [['./sibling.txt', File.join(@path, 'a/b/sibling.txt')]]
+
+    in_other_directory do
+      assert_includes @env.find('a/b/test.txt').source, 'sibling.txt: one'
+      file 'a/b/sibling.txt', 'two'
+      assert wait_until { @env.find('a/b/test.txt').source.include?('sibling.txt: two') }
+    end
+  end
+
+  test 'relative directory dependencies of a processor resolve against the source file or base' do
+    file 'a/b/test.txt', "test\n"
+    file 'a/b/pages/a.html', 'a'
+    file 'content/a.html', 'a'
+    FileDependencyProcessor.directories = {
+      ['./pages', File.join(@path, 'a/b/pages')] => { glob: '*.html' },
+      ['content', @content] => { glob: '*.html' }
+    }
+
+    in_other_directory do
+      assert_equal [
+        [File.join(@path, 'a/b/pages'), ['*.html'], false],
+        [@content, ['*.html'], false]
+      ], new_env.find('a/b/test.txt').directory_dependencies
+
+      file 'a/b/pages/b.html', 'b'
+      assert_includes new_env.find('a/b/test.txt').export.source, 'pages: a.html,b.html'
+      file 'content/b.html', 'b'
+      assert_includes new_env.find('a/b/test.txt').export.source, 'content: a.html,b.html'
+      assert_equal 3, FileDependencyProcessor.calls['a/b/test.txt']
+    end
+  end
+
+  test 'relative paths for depend_on_file and depend_on_directory in a template' do
+    file 'a/b/sibling.txt', 'sibling one'
+    file 'a/up.txt', 'up one'
+    file 'content/a.html', 'a one'
+    file 'a/b/pages/a.html', 'a'
+    file 'a/b/ctx.txt.erb', <<~ERB
+      <% depend_on_file './sibling.txt' %><% depend_on_file '../up.txt' %><% depend_on_file 'content/a.html' %><% depend_on_directory './pages', glob: '*.html' %><% depend_on_directory 'content', glob: '*.html', recursive: true %><%= %w(a/b/sibling.txt a/up.txt content/a.html).map { |f| File.read(File.join('#{@path}', f)) }.join(',') %>,<%= Dir.children('#{@path}/a/b/pages').sort.join(',') %>
+    ERB
+
+    in_other_directory do
+      asset = new_env.find('a/b/ctx.txt')
+      assert_includes asset.source, 'sibling one,up one,a one,a.html'
+      assert_equal [
+        File.join(@path, 'a/b/sibling.txt'),
+        File.join(@path, 'a/up.txt'),
+        File.join(@content, 'a.html')
+      ], asset.file_dependencies
+      assert_equal [
+        [File.join(@path, 'a/b/pages'), ['*.html'], false],
+        [@content, ['*.html'], true]
+      ], asset.directory_dependencies
+
+      file 'a/b/sibling.txt', 'sibling two'
+      assert_includes new_env.find('a/b/ctx.txt').export.source, 'sibling two'
+      file 'a/up.txt', 'up two'
+      assert_includes new_env.find('a/b/ctx.txt').export.source, 'up two'
+      file 'content/a.html', 'a two'
+      assert_includes new_env.find('a/b/ctx.txt').export.source, 'a two'
+      file 'a/b/pages/b.html', 'b'
+      assert_includes new_env.find('a/b/ctx.txt').export.source, 'a.html,b.html'
+    end
+  end
+
+  test 'relative file dependencies resolve against Dir.pwd without a base' do
+    file 'a/b/test.txt', "test\n"
+    file 'a/b/sibling.txt', 'sibling'
+    @cache_dir = File.realpath(Dir.mktmpdir)
+
+    in_other_directory do |pwd|
+      File.write(File.join(pwd, 'config.txt'), 'one')
+      FileDependencyProcessor.files = [['./sibling.txt', File.join(@path, 'a/b/sibling.txt')], 'config.txt']
+      env = -> {
+        Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: @npm_dir, cache: Condenser::Cache::FileStore.new(@cache_dir)).tap do |e|
+          e.register_preprocessor 'text/plain', FileDependencyProcessor
+        end
+      }
+
+      asset = env.call.find('a/b/test.txt')
+      assert_equal [File.join(@path, 'a/b/sibling.txt'), File.join(pwd, 'config.txt')].sort, asset.file_dependencies.sort
+      assert_includes asset.source, 'config.txt: one'
+
+      File.write(File.join(pwd, 'config.txt'), 'two')
+      assert_includes env.call.find('a/b/test.txt').export.source, 'config.txt: two'
+    end
   end
 
 end
