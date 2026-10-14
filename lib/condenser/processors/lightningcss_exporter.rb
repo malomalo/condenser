@@ -28,10 +28,8 @@ class Condenser::LightningCSSExporter
   MINIMUM_VERSION = '1.33.0.2'
 
   def self.require_lightningcss!
-    return if defined?(::LightningCSS::Backend)
-
     begin
-      require 'lightningcss'
+      require 'lightningcss' unless defined?(::LightningCSS::Backend)
     rescue LoadError
       raise LoadError, "#{name} requires the lightningcss gem, add `gem 'lightningcss', '>= #{MINIMUM_VERSION}'` to your Gemfile"
     end
