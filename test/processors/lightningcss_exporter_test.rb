@@ -137,6 +137,22 @@ class LightningCSSExporterTest < ActiveSupport::TestCase
     assert_equal '/assets/main.css:2', error.backtrace[0]
   end
 
+  test 'raises when the lightningcss gem is missing' do
+    with_lightningcss_constant(:Backend, nil) do
+      Condenser::LightningCSSExporter.stubs(:require).with('lightningcss').raises(LoadError)
+
+      error = assert_raises(LoadError) { Condenser::LightningCSSExporter.new }
+      assert_equal "Condenser::LightningCSSExporter requires the lightningcss gem, add `gem 'lightningcss', '>= 1.33.0.2'` to your Gemfile", error.message
+    end
+  end
+
+  test 'raises when the lightningcss gem is too old' do
+    with_lightningcss_constant(:VERSION, '1.33.0.1') do
+      error = assert_raises(LoadError) { Condenser::LightningCSSExporter.new }
+      assert_equal 'Condenser::LightningCSSExporter requires lightningcss 1.33.0.2 or later, 1.33.0.1 is installed', error.message
+    end
+  end
+
   test 'raises for options condenser sets' do
     assert_raises(ArgumentError) { Condenser::LightningCSSExporter.new(filename: 'x.css') }
     assert_raises(ArgumentError) { Condenser::LightningCSSExporter.new(css_modules: true) }
@@ -169,6 +185,20 @@ class LightningCSSExporterTest < ActiveSupport::TestCase
     @env.unregister_exporter('text/css')
     @env.register_exporter('text/css', Condenser::LightningCSSExporter.new(targets: { safari: 15 }))
     assert_not_equal digest, @env.export_pipeline_digest('text/css')
+  end
+
+  private
+
+  # Replaces LightningCSS::<name> with +value+ (or removes it if nil) for
+  # the block.
+  def with_lightningcss_constant(name, value)
+    original = LightningCSS.const_get(name)
+    LightningCSS.send(:remove_const, name)
+    LightningCSS.const_set(name, value) unless value.nil?
+    yield
+  ensure
+    LightningCSS.send(:remove_const, name) if LightningCSS.const_defined?(name, false)
+    LightningCSS.const_set(name, original)
   end
 
 end

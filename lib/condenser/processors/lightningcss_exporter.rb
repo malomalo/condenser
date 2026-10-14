@@ -23,18 +23,27 @@ class Condenser::LightningCSSExporter
     require_lightningcss!
   end
 
+  # The oldest lightningcss gem that applies targets without minifying,
+  # accepts minor versions and gives errors a location.
+  MINIMUM_VERSION = '1.33.0.2'
+
   def self.require_lightningcss!
-    require 'lightningcss' unless defined?(::LightningCSS::Backend)
-  rescue LoadError
-    raise LoadError, "#{name} requires the lightningcss gem, add `gem 'lightningcss'` to your Gemfile"
+    begin
+      require 'lightningcss' unless defined?(::LightningCSS::Backend)
+    rescue LoadError
+      raise LoadError, "#{name} requires the lightningcss gem, add `gem 'lightningcss', '>= #{MINIMUM_VERSION}'` to your Gemfile"
+    end
+
+    if Gem::Version.new(::LightningCSS::VERSION) < Gem::Version.new(MINIMUM_VERSION)
+      raise LoadError, "#{name} requires lightningcss #{MINIMUM_VERSION} or later, #{::LightningCSS::VERSION} is installed"
+    end
   end
 
-  # The lightningcss gem's version, or nil if it isn't installed. The gem's
-  # version is the version of Lightning CSS it bundles.
+  # The lightningcss gem's version, which is the version of Lightning CSS it
+  # bundles. Raises a LoadError if it isn't installed or is too old.
   def self.version
-    require 'lightningcss/version' unless defined?(::LightningCSS::VERSION)
+    require_lightningcss!
     ::LightningCSS::VERSION
-  rescue LoadError
   end
 
   def self.instance
@@ -71,7 +80,7 @@ class Condenser::LightningCSSExporter
     @transform_options = { minify: false }.merge(options)
     @transform_options[:targets] = targets.transform_keys(&:to_s).sort.to_h if targets
     @transform_options.freeze
-    @options = @transform_options.merge(lightningcss: self.class.version).compact.freeze
+    @options = @transform_options.merge(lightningcss: self.class.version).freeze
   end
 
   def name
