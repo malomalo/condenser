@@ -134,44 +134,29 @@ class Condenser
       end
     end
     
+    # Dependency paths relative to the asset's source file.
+    SOURCE_RELATIVE = /\A\.\.?(\/|\z)/
+
     # The path a processor reads for a file (or +directory+) dependency.
     # Absolute paths are used as they are, "./" and "../" are relative to the
     # directory of +source_file+, and other relative paths are looked up in
     # the load paths, like imports. Raises FileNotFound if it doesn't exist.
     def expand_dependency_path(filename, source_file: nil, directory: false)
-      expand_dependency(filename, source_file: source_file, directory: directory)[1]
-    end
-
-    private
-
-    # The name recorded for a dependency, and the path it's at now. Bare
-    # paths are recorded as written so they're looked up again, like imports.
-    def expand_dependency(filename, source_file: nil, directory: false)
       filename = filename.to_s
-      name = if File.absolute_path?(filename)
+      exists = directory ? File.method(:directory?) : File.method(:file?)
+      expanded = if File.absolute_path?(filename)
         File.expand_path(filename)
-      elsif filename.match?(/\A\.\.?(\/|\z)/)
+      elsif filename.match?(SOURCE_RELATIVE)
         File.expand_path(filename, File.dirname(source_file)) if source_file
-      else
-        expand_path(filename)
+      elsif (name = expand_path(filename))
+        path.map { |p| File.join(p, name) }.find(&exists)
       end
 
-      resolved = name && resolve_dependency_path(name, directory: directory)
-      if !resolved || !(directory ? File.directory?(resolved) : File.file?(resolved))
+      if !expanded || !exists.call(expanded)
         raise FileNotFound, "couldn't find #{directory ? 'directory' : 'file'} '#{filename}'#{" from #{source_file}" if source_file}"
       end
-      [name, resolved]
+      expanded
     end
-
-    # The path a recorded dependency name is at: an absolute name as is, a
-    # bare one in the first load path that has it, or nil.
-    def resolve_dependency_path(name, directory: false)
-      return name if File.absolute_path?(name)
-
-      path.map { |p| File.join(p, name) }.find { |f| directory ? File.directory?(f) : File.file?(f) }
-    end
-
-    public
 
     def find_export(filename, base=nil, **kargs)
       build do

@@ -133,7 +133,8 @@ class Condenser
     # isn't processed as an asset, like a template a stylesheet is generated
     # from. See `Condenser#expand_dependency_path` for how +path+ is resolved.
     def depend_on_file(path)
-      @file_dependencies << environment.send(:expand_dependency, path, source_file: source_file)[0]
+      environment.expand_dependency_path(path, source_file: source_file)
+      @file_dependencies << path
 
       nil
     end
@@ -144,7 +145,8 @@ class Condenser
     # or a subdirectory invalidates the cache. With +recursive+ it covers the
     # subdirectories too.
     def depend_on_directory(path, glob: '*', recursive: false)
-      @directory_dependencies << { path: environment.send(:expand_dependency, path, source_file: source_file, directory: true)[0], glob: glob, recursive: recursive }
+      environment.expand_dependency_path(path, source_file: source_file, directory: true)
+      @directory_dependencies << { path: path, glob: glob, recursive: recursive }
 
       nil
     end

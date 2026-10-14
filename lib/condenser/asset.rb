@@ -599,12 +599,26 @@ class Condenser
       deps.reject { |d, globs, recursive| !recursive && deps.include?([d, globs, true]) }
     end
 
+    # The name recorded for a dependency: an absolute path, or a bare path
+    # that's looked up in the load paths again, like an import. Raises
+    # FileNotFound if it doesn't exist.
     def dependency_name(filename, directory: false)
-      @environment.send(:expand_dependency, filename, source_file: @source_file, directory: directory)[0]
+      filename = filename.to_s
+      expanded = @environment.expand_dependency_path(filename, source_file: @source_file, directory: directory)
+      if File.absolute_path?(filename) || filename.match?(Resolve::SOURCE_RELATIVE)
+        expanded
+      else
+        @environment.expand_path(filename)
+      end
     end
 
+    # The path a recorded dependency name is at now, or nil.
     def resolve_dependency_path(name, directory: false)
-      @environment.send(:resolve_dependency_path, name, directory: directory)
+      return name if File.absolute_path?(name)
+
+      @environment.expand_dependency_path(name, directory: directory)
+    rescue FileNotFound
+      nil
     end
     private :dependency_name, :resolve_dependency_path
 
