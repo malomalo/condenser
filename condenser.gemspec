@@ -27,6 +27,7 @@ Gem::Specification.new do |s|
 
   s.add_development_dependency "ruby-ejs", '~> 1.0'  
   s.add_development_dependency "sass-embedded", "~> 1.80"
+  s.add_development_dependency "lightningcss", "~> 1.33", ">= 1.33.0.2"
   s.add_development_dependency "brotli"
   
   s.add_development_dependency "rake"
