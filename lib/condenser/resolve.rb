@@ -134,6 +134,27 @@ class Condenser
       end
     end
     
+    # The absolute path of a file (or +directory+) dependency. Paths starting
+    # with "./" or "../" are relative to the directory of +source_file+, other
+    # relative paths to the first load path they're in. Raises FileNotFound
+    # if a relative path doesn't exist.
+    def expand_dependency_path(filename, source_file: nil, directory: false)
+      filename = filename.to_s
+      return File.expand_path(filename) if File.absolute_path?(filename)
+
+      exists = directory ? File.method(:directory?) : File.method(:file?)
+      expanded = if filename.match?(/\A\.\.?(\/|\z)/)
+        File.expand_path(filename, File.dirname(source_file)) if source_file
+      else
+        path.map { |p| File.expand_path(filename, p) }.find(&exists)
+      end
+
+      if expanded.nil? || !exists.call(expanded)
+        raise FileNotFound, "couldn't find #{directory ? 'directory' : 'file'} '#{filename}'#{" from #{source_file}" if source_file}"
+      end
+      expanded
+    end
+
     def find_export(filename, base=nil, **kargs)
       build do
         asset = resolve(filename, base, **kargs).first

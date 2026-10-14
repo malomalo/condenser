@@ -192,8 +192,10 @@ In ERB templates (and through `condenser_context` in Sass functions)
 the same.
 
 Paths starting with `./` or `../` are relative to the directory of the asset's
-source file. Other relative paths, like `'app/views'`, are relative to the
-environment's `base` (or `Dir.pwd` if there's no `base`).
+source file. Other relative paths, like `'config/tailwind.css'`, are looked up
+in the load paths, in order, like assets are; they aren't relative to `base`
+or `Dir.pwd`. A relative path that doesn't exist raises
+`Condenser::FileNotFound`, so the build fails until the file is added.
 
 A file dependency invalidates the asset when its contents change and a
 directory dependency when a matching file or a subdirectory is added, removed

@@ -131,9 +131,9 @@ class Condenser
 
     # `depend_on_file` states a dependency on the contents of a file that
     # isn't processed as an asset, like a template a stylesheet is generated
-    # from. It doesn't need to be on the load path.
+    # from. See `Condenser#expand_dependency_path` for how +path+ is resolved.
     def depend_on_file(path)
-      @file_dependencies << Utils.expand_dependency_path(path, source_file: source_file, base: environment.base)
+      @file_dependencies << environment.expand_dependency_path(path, source_file: source_file)
 
       nil
     end
@@ -144,7 +144,7 @@ class Condenser
     # or a subdirectory invalidates the cache. With +recursive+ it covers the
     # subdirectories too.
     def depend_on_directory(path, glob: '*', recursive: false)
-      @directory_dependencies << { path: Utils.expand_dependency_path(path, source_file: source_file, base: environment.base), glob: glob, recursive: recursive }
+      @directory_dependencies << { path: environment.expand_dependency_path(path, source_file: source_file, directory: true), glob: glob, recursive: recursive }
 
       nil
     end

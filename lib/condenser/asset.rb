@@ -504,7 +504,7 @@ class Condenser
           data[:process_dependencies] = normialize_dependency_names(data[:process_dependencies])
           data[:export_dependencies] = normialize_dependency_names(data[:export_dependencies])
           data[:linked_assets] = normialize_dependency_names(data[:linked_assets])
-          data[:file_dependencies] = data[:file_dependencies].map { |f| expand_dependency_path(f) }.uniq
+          data[:file_dependencies] = data[:file_dependencies].map { |f| @environment.expand_dependency_path(f, source_file: @source_file) }.uniq
           data[:directory_dependencies] = normalize_directory_dependencies(data[:directory_dependencies])
 
           # Do this here and at the end so cache_key can be calculated if we
@@ -579,13 +579,9 @@ class Condenser
     def normalize_directory_dependencies(deps)
       deps = deps.map do |dep|
         dep = { path: dep } if dep.is_a?(String)
-        [expand_dependency_path(dep[:path]), Array(dep[:glob] || '*').map(&:to_s).sort, !!dep[:recursive]]
+        [@environment.expand_dependency_path(dep[:path], source_file: @source_file, directory: true), Array(dep[:glob] || '*').map(&:to_s).sort, !!dep[:recursive]]
       end.uniq
       deps.reject { |d, globs, recursive| !recursive && deps.include?([d, globs, true]) }
-    end
-
-    def expand_dependency_path(path)
-      Utils.expand_dependency_path(path, source_file: @source_file, base: @environment.base)
     end
 
     def export
