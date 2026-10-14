@@ -134,22 +134,19 @@ class Condenser
       end
     end
     
-    # The name to record for a file (or +directory+) dependency: an absolute
-    # path, with "./" and "../" relative to the directory of +source_file+,
-    # or a bare path that, like an import, is looked up in the load paths
-    # again when the cache is checked. Raises FileNotFound if it doesn't
-    # exist.
-    def dependency_name(filename, source_file: nil, directory: false)
-      expand_dependency(filename, source_file: source_file, directory: directory)[0]
-    end
-
-    # The path a file (or +directory+) dependency is at now. Raises
-    # FileNotFound if it doesn't exist.
+    # The path a processor reads for a file (or +directory+) dependency.
+    # Absolute paths are used as they are, "./" and "../" are relative to the
+    # directory of +source_file+, and other relative paths are looked up in
+    # the load paths, like imports. Raises FileNotFound if it doesn't exist.
     def expand_dependency_path(filename, source_file: nil, directory: false)
       expand_dependency(filename, source_file: source_file, directory: directory)[1]
     end
 
-    def expand_dependency(filename, source_file:, directory:)
+    private
+
+    # The name recorded for a dependency, and the path it's at now. Bare
+    # paths are recorded as written so they're looked up again, like imports.
+    def expand_dependency(filename, source_file: nil, directory: false)
       filename = filename.to_s
       name = if File.absolute_path?(filename)
         File.expand_path(filename)
@@ -165,7 +162,6 @@ class Condenser
       end
       [name, resolved]
     end
-    private :expand_dependency
 
     # The path a recorded dependency name is at: an absolute name as is, a
     # bare one in the first load path that has it, or nil.
@@ -174,6 +170,8 @@ class Condenser
 
       path.map { |p| File.join(p, name) }.find { |f| directory ? File.directory?(f) : File.file?(f) }
     end
+
+    public
 
     def find_export(filename, base=nil, **kargs)
       build do

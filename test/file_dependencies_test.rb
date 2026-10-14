@@ -14,14 +14,14 @@ class FileDependencyProcessor
     calls[input[:filename]] += 1
     lines = files.map do |f|
       f, read = Array(f)
-      read = environment.resolve_dependency_path(f) if read == :resolve
+      read = (environment.expand_dependency_path(f, source_file: input[:source_file]) rescue nil) if read == :resolve
       read ||= f
       input[:file_dependencies] << f
       "#{File.basename(f)}: #{File.file?(read) ? File.read(read).strip : 'missing'}"
     end
     directories.each do |dir, options|
       dir, recorded = Array(dir).reverse
-      dir = environment.resolve_dependency_path(recorded, directory: true) || recorded if dir == :resolve
+      dir = (environment.expand_dependency_path(recorded, source_file: input[:source_file], directory: true) rescue recorded) if dir == :resolve
       input[:directory_dependencies] << { path: recorded || dir, **options }
       glob = options[:recursive] ? "**/#{options[:glob] || '*'}" : (options[:glob] || '*')
       lines << "#{File.basename(dir)}: #{Dir.glob(glob, base: dir).select { |f| File.file?(File.join(dir, f)) }.sort.join(',')}"

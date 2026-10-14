@@ -197,8 +197,9 @@ in the load paths, in order, like imports; they aren't relative to `base` or
 `Dir.pwd`. Like an import they're looked up again when the cache is checked, so
 a file added to an earlier load path takes over. A path that doesn't exist
 raises `Condenser::FileNotFound`, so the build fails until the file is added.
-`environment.expand_dependency_path(path, source_file:)` gives the path a
-processor should read.
+In a processor, `environment.expand_dependency_path(path, source_file:
+input[:source_file], directory: false)` gives the path to read, or raises
+`Condenser::FileNotFound`.
 
 A file dependency invalidates the asset when its contents change and a
 directory dependency when a matching file or a subdirectory is added, removed

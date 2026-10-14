@@ -121,13 +121,13 @@ class Condenser
 
     # The paths the file dependencies are at now.
     def file_dependencies
-      file_dependency_names.filter_map { |f| @environment.resolve_dependency_path(f) }
+      file_dependency_names.filter_map { |f| resolve_dependency_path(f) }
     end
 
     # As [path, globs, recursive]
     def directory_dependencies
       directory_dependency_names.filter_map do |d, *rest|
-        path = @environment.resolve_dependency_path(d, directory: true)
+        path = resolve_dependency_path(d, directory: true)
         [path, *rest] if path
       end
     end
@@ -137,8 +137,8 @@ class Condenser
     def file_dependencies_digest
       return @fdd if @fdd_computed
 
-      files = file_dependency_names.map { |f| [f, @environment.resolve_dependency_path(f)] }
-      directories = directory_dependency_names.map { |d, *rest| [d, @environment.resolve_dependency_path(d, directory: true), *rest] }
+      files = file_dependency_names.map { |f| [f, resolve_dependency_path(f)] }
+      directories = directory_dependency_names.map { |d, *rest| [d, resolve_dependency_path(d, directory: true), *rest] }
       @environment.build_cache.record_file_dependencies(self, files, directories)
       @fdd = if !files.empty? || !directories.empty?
         build_cache = @environment.build_cache
@@ -519,7 +519,7 @@ class Condenser
           data[:process_dependencies] = normialize_dependency_names(data[:process_dependencies])
           data[:export_dependencies] = normialize_dependency_names(data[:export_dependencies])
           data[:linked_assets] = normialize_dependency_names(data[:linked_assets])
-          data[:file_dependencies] = data[:file_dependencies].map { |f| @environment.dependency_name(f, source_file: @source_file) }.uniq
+          data[:file_dependencies] = data[:file_dependencies].map { |f| dependency_name(f) }.uniq
           data[:directory_dependencies] = normalize_directory_dependencies(data[:directory_dependencies])
 
           # Do this here and at the end so cache_key can be calculated if we
@@ -594,10 +594,19 @@ class Condenser
     def normalize_directory_dependencies(deps)
       deps = deps.map do |dep|
         dep = { path: dep } if dep.is_a?(String)
-        [@environment.dependency_name(dep[:path], source_file: @source_file, directory: true), Array(dep[:glob] || '*').map(&:to_s).sort, !!dep[:recursive]]
+        [dependency_name(dep[:path], directory: true), Array(dep[:glob] || '*').map(&:to_s).sort, !!dep[:recursive]]
       end.uniq
       deps.reject { |d, globs, recursive| !recursive && deps.include?([d, globs, true]) }
     end
+
+    def dependency_name(filename, directory: false)
+      @environment.send(:expand_dependency, filename, source_file: @source_file, directory: directory)[0]
+    end
+
+    def resolve_dependency_path(name, directory: false)
+      @environment.send(:resolve_dependency_path, name, directory: directory)
+    end
+    private :dependency_name, :resolve_dependency_path
 
     def export
       return @export if @export
