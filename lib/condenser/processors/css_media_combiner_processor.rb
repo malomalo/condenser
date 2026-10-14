@@ -1,5 +1,16 @@
 # frozen_string_literal: true
 
+# TODO: See if this is still needed now that Condenser::LightningCSSExporter
+# can minify CSS. Moving every @media block to the end of the file can change
+# which rule wins:
+#
+#     .a { color: red; }
+#     @media (max-width: 100px) { .a { color: blue; } }
+#     .a { color: green; }
+#
+# is green at narrow widths, but after combining the @media block comes after
+# `.a { color: green; }`, so it's blue. Lightning CSS with `minify: true` only
+# merges @media blocks that are next to each other, which keeps the order.
 class Condenser::CSSMediaCombinerProcessor
   
   include Condenser::ParseHelpers
