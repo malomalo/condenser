@@ -102,6 +102,15 @@ class ResolveTest < ActiveSupport::TestCase
     JS
   end
   
+  test 'resolve with npm: true and no npm path searches only the load path' do
+    env = Condenser.new(@path, logger: Logger.new('/dev/null'), pipeline: false)
+    file 'a.js', 'console.log(1);'
+
+    assert_nil env.npm_path
+    assert_equal ['a.js'], env.resolve('a', npm: true).map(&:filename)
+    assert_empty env.resolve('missing', npm: true)
+  end
+
   test 'resolve! raises NotFound' do
     assert_raises Condenser::FileNotFound do
       @env.resolve!('**/*')

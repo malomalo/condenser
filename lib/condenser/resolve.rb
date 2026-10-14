@@ -17,7 +17,7 @@ class Condenser
     end
     
     def resolve(filename, base=nil, accept: nil, npm: false)
-      search_path = if npm
+      search_path = if npm && npm_path
         path + [File.join(npm_path, 'node_modules')]
       else
         path
