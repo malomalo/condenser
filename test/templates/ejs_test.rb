@@ -57,7 +57,7 @@ class CondenserEJSTest < ActiveSupport::TestCase
       pipeline: false,
       npm_path: @npm_dir
     )
-    @env.register_exporter('application/javascript', Condenser::RolldownProcessor)
+    @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@npm_dir))
     
     assert_exported_file 'render.js', 'application/javascript'
   end

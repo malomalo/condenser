@@ -346,7 +346,6 @@ class Condenser
 
     def cache_key
       @cache_key ||= Digest::SHA1.base64digest(JSON.generate([
-        Condenser::VERSION,
         @environment.pipeline_digest_for(pipeline_processors),
         normalize_filename_base(@source_file),
         Digest::SHA256.file(@source_file).hexdigest,

@@ -105,13 +105,13 @@ class CacheTest < ActiveSupport::TestCase
     asset = assert_exported_file 'main.js', 'application/javascript', <<~JS
       function cube(c){return c*c}console.log(cube(5));
     JS
-    assert_equal '4c45aa82780c013661864de7a8150a52939a6a0b20a51244bc636c67bfd457cb', asset.etag
-    
+    etag = asset.etag
+    assert_match(/\A\h{64}\z/, etag)
 
     asset = assert_exported_file 'main.js', 'application/javascript', <<~JS
       function cube(c){return c*c}console.log(cube(5));
     JS
-    assert_equal '4c45aa82780c013661864de7a8150a52939a6a0b20a51244bc636c67bfd457cb', asset.etag
+    assert_equal etag, asset.etag
     
     file 'math.js', <<-JS
       export function cube ( x ) {
@@ -122,7 +122,8 @@ class CacheTest < ActiveSupport::TestCase
     asset = assert_exported_file 'main.js', 'application/javascript', <<~CSS
       function cube(c){return c*c*c}console.log(cube(5));
     CSS
-    assert_equal 'ed49bdbd302c40b8c905e4f1f1a80b4e509097cf28a9a2633973108b561b713f', asset.etag
+    assert_match(/\A\h{64}\z/, asset.etag)
+    assert_not_equal etag, asset.etag
   end
 
   test 'changing a scss dependency reflects in the next call' do
@@ -458,6 +459,7 @@ class CacheTest < ActiveSupport::TestCase
 
   test 'the build cache is cleared when the npm packages change' do
     npm_dir = File.realpath(Dir.mktmpdir)
+    Condenser::RolldownProcessor.stubs(:install_npm_packages)
     env = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: npm_dir, base: @path)
     lockfile = File.join(npm_dir, 'package-lock.json')
     npm_file = File.join(npm_dir, 'node_modules', 'pkg', 'index.js')
@@ -494,7 +496,7 @@ class CacheTest < ActiveSupport::TestCase
 
     # Computing main.js's cache key resolves 'helper', which is only on the
     # path once PathAddingProcessor is set up
-    Condenser::RolldownProcessor.expects(:call).never
+    Condenser::RolldownProcessor.any_instance.expects(:call).never
     assert_equal source, build.call.source
   ensure
     FileUtils.remove_entry(PathAddingProcessor.path, true) if PathAddingProcessor.path

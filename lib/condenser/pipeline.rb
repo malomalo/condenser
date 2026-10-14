@@ -64,14 +64,14 @@ class Condenser
     end
     
     def pipline_digest
-      @pipline_digest ||= Digest::MD5.hexdigest(pipline_hash)
+      @pipline_digest ||= versioned_digest(pipline_hash)
     end
 
     # A digest of just the given part of the pipeline, as [role, mime type,
     # processor] entries (see Asset#pipeline_processors), so an asset's cache
     # only depends on the processors that process it.
     def pipeline_digest_for(entries)
-      Digest::MD5.hexdigest(JSON.generate(entries.map { |role, mime_type, processor|
+      versioned_digest(JSON.generate(entries.map { |role, mime_type, processor|
         [role, mime_type, pipline_to_json(processor)]
       }))
     end
@@ -83,7 +83,13 @@ class Condenser
       minifier = @minifiers[mime_type]
       return if exporters.empty? && minifier.nil?
 
-      Digest::MD5.hexdigest(JSON.generate(pipline_to_json([exporters, minifier])))
+      versioned_digest(JSON.generate(pipline_to_json([exporters, minifier])))
+    end
+
+    # Condenser's version is part of every pipeline digest, since its own
+    # processors can change between releases without their options changing.
+    def versioned_digest(json)
+      Digest::MD5.hexdigest(JSON.generate([Condenser::VERSION, json]))
     end
     
     def register_mime_type(mime_type, extensions: nil, extension: nil, charset: :default)

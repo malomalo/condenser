@@ -6,6 +6,7 @@ class NpmPackagesTest < ActiveSupport::TestCase
     super
     @npm = File.realpath(Dir.mktmpdir)
     @packages = {}
+    Condenser::RolldownProcessor.stubs(:install_npm_packages)
   end
 
   def teardown

@@ -23,8 +23,10 @@ class RolldownDefaultTest < ActiveSupport::TestCase
     ENV['NODE_PATH'] = value
   end
 
-  test 'Condenser.new exports JavaScript with RolldownProcessor' do
-    assert_equal [Condenser::RolldownProcessor], new_env(npm_path: @npm_dir).exporters['application/javascript']
+  test 'Condenser.new exports JavaScript with a RolldownProcessor' do
+    exporters = new_env(npm_path: @npm_dir).exporters['application/javascript']
+    assert_equal [Condenser::RolldownProcessor], exporters.map(&:class)
+    assert_equal File.join(@npm_dir, 'node_modules', 'rolldown'), exporters.first.rolldown_path
     assert_equal <<~JS, new_env(npm_path: @npm_dir).find('main.js').export.source
       //#region main.js
       console.log("main");
@@ -32,10 +34,10 @@ class RolldownDefaultTest < ActiveSupport::TestCase
     JS
   end
 
-  test 'the default RolldownProcessor uses the npm path the environment has when exporting' do
+  test 'the default RolldownProcessor uses the npm path passed to Condenser.new' do
     with_node_path(@path)
-    env = new_env
-    env.append_npm_path(@npm_dir)
+    env = new_env(npm_path: @npm_dir)
+    assert_equal File.join(@npm_dir, 'node_modules', 'rolldown'), env.exporters['application/javascript'].first.rolldown_path
     assert_includes env.find('main.js').export.source, 'console.log("main");'
   end
 

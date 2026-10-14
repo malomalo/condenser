@@ -74,8 +74,8 @@ class ServerTest < ActiveSupport::TestCase
   test "serve source with etag headers" do
     get "/assets/foo.js"
 
-    digest = '15fbbe2506c748099c10df7bebd10dc4ca5f1041e5e14d19507cf02fb1189ceb'
-    assert_equal "\"#{digest}\"", last_response.headers['ETag']
+    assert_match(/\A"\h{64}"\z/, last_response.headers['ETag'])
+    assert_equal "\"#{@env.find('foo.js').etag}\"", last_response.headers['ETag']
   end
 
   test "not modified partial response when if-none-match etags match" do
@@ -108,7 +108,7 @@ class ServerTest < ActiveSupport::TestCase
       'HTTP_IF_NONE_MATCH' => "nope"
 
     assert_equal 200, last_response.status
-    assert_equal '"15fbbe2506c748099c10df7bebd10dc4ca5f1041e5e14d19507cf02fb1189ceb"', last_response.headers['ETag']
+    assert_equal "\"#{@env.find('foo.js').etag}\"", last_response.headers['ETag']
     assert_equal '15', last_response.headers['Content-Length']
   end
 
@@ -168,7 +168,7 @@ class ServerTest < ActiveSupport::TestCase
       'HTTP_IF_MATCH' => etag
 
     assert_equal 200, last_response.status
-    assert_equal '"15fbbe2506c748099c10df7bebd10dc4ca5f1041e5e14d19507cf02fb1189ceb"', last_response.headers['ETag']
+    assert_equal "\"#{@env.find('foo.js').etag}\"", last_response.headers['ETag']
     assert_equal '15', last_response.headers['Content-Length']
   end
 

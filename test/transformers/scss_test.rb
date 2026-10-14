@@ -416,6 +416,7 @@ class CondenserSCSSTest < ActiveSupport::TestCase
 
   test 'npm package style fallback' do
     npm = File.realpath(Dir.mktmpdir)
+    Condenser::RolldownProcessor.stubs(:install_npm_packages)
     env = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: npm, base: @path)
     file 'node_modules/stylish/package.json', '{"name": "stylish", "style": "dist/stylish.css"}', base: npm
     file 'node_modules/stylish/dist/stylish.css', '.stylish { color: pink; }', base: npm
@@ -439,6 +440,7 @@ class CondenserSCSSTest < ActiveSupport::TestCase
 
   test 'changing an npm package style fallback reprocesses the importing file' do
     npm = File.realpath(Dir.mktmpdir)
+    Condenser::RolldownProcessor.stubs(:install_npm_packages)
     file 'node_modules/stylish/package.json', '{"name": "stylish", "style": "s.css"}', base: npm
     file 'node_modules/stylish/s.css', '.v1 { color: pink; }', base: npm
     file 'test.scss', '@import "stylish";'
@@ -639,7 +641,7 @@ class CondenserSCSSTest < ActiveSupport::TestCase
       url: url(/assets/foo-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.mp3);
       url: url(/assets/foo-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.woff2);
       url: url(/assets/foo-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.woff);
-      url: url(/assets/foo-e26d384ce20e27b67bedfd48757a70f282b69f75a115397fdbb466c077b342bd.js);
+      url: url(/assets/#{@env.find('foo.js').path});
       url: url(/assets/#{@env.find('foo.css').path});
     }
     CSS

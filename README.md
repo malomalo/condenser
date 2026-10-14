@@ -297,12 +297,25 @@ console.log(square);
 
 ### Bundling with Rolldown
 
-`Condenser.new`'s default pipeline bundles JavaScript with
+`Condenser.new`'s default pipeline bundles JavaScript with a
 `Condenser::RolldownProcessor`, which needs [Node.js](https://nodejs.org/).
-Rolldown runs in a node process that's kept running between builds, and is
-installed with `npm` into the environment's `npm_path` the first time it's
-used. Without an `npm_path`, `rolldown` is loaded with Node's own module
-lookup (for example from `NODE_PATH`).
+Rolldown runs in a node process that's kept running between builds. When the
+processor is created, Rolldown is installed with `npm` into its npm path if
+it isn't there, and its version is read for the cache keys. Without an npm
+path, `rolldown` is loaded with Node's own module lookup (for example from
+`NODE_PATH`).
+
+`RolldownProcessor` is registered as an instance, and uses the npm path it's
+created with. Pass `npm_path:` to `Condenser.new` so the default one gets it,
+or, if the npm path is set afterwards, register your own once it's set:
+
+```ruby
+condenser.unregister_exporter('application/javascript')
+condenser.register_exporter('application/javascript', Condenser::RolldownProcessor.new(condenser.npm_path))
+```
+
+Since the version is read once, upgrading Rolldown takes effect when the
+process restarts or a new processor is created.
 
 `Condenser::RollupProcessor` is deprecated and will be removed in condenser
 3.0. Until then it can still be used by registering it in place of Rolldown:

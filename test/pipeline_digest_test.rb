@@ -45,6 +45,14 @@ class GreetingTemplate
   end
 end
 
+module NpmInstallSpy
+  def npm_install(*packages)
+    spy = Thread.current[:npm_install_spy]
+    spy ? spy.call(npm_path, packages.flatten) : super
+  end
+end
+Condenser::NodeProcessor.prepend(NpmInstallSpy)
+
 class PipelineDigestTest < ActiveSupport::TestCase
 
   def setup
@@ -130,6 +138,100 @@ class PipelineDigestTest < ActiveSupport::TestCase
     not_minified_export = not_minified.export
     assert_not_equal minified_export.source, not_minified_export.source
     assert_not_equal minified.etag, not_minified.etag
+  end
+
+  test "condenser's version is part of the pipeline digests, cache key and etag" do
+    file 'main.js', "console.log(1);\n"
+    entries = env.find('main.js').pipeline_processors
+    digests = lambda do
+      environment = env
+      asset = environment.find('main.js')
+      [environment.pipline_digest, environment.pipeline_digest_for(entries), environment.export_pipeline_digest('application/javascript'), asset.cache_key, asset.etag]
+    end
+
+    before = digests.call
+    assert_equal before, digests.call
+
+    stub_const(Condenser, :VERSION, '0.0.0') do
+      digests.call.zip(before).each { |after, digest| assert_not_equal digest, after }
+    end
+  end
+
+  def rolldown_npm_dir(version)
+    file 'npm/node_modules/rolldown/package.json', JSON.generate({ name: 'rolldown', version: version })
+    File.join(@path, 'npm')
+  end
+
+  def bump_rolldown(npm_dir, version)
+    file 'npm/node_modules/rolldown/package.json', JSON.generate({ name: 'rolldown', version: version })
+  end
+
+  test 'the Rolldown version is read when the RolldownProcessor is created and is in the digest and etag' do
+    file 'main.js', "console.log(1);\n"
+    npm_dir = rolldown_npm_dir('0.0.1')
+    environment = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: npm_dir, base: @path)
+    processor = environment.exporters['application/javascript'].first
+    assert_instance_of Condenser::RolldownProcessor, processor
+    assert_equal '0.0.1', processor.options[:rolldown]
+
+    digest = environment.export_pipeline_digest('application/javascript')
+    etag = environment.find('main.js').etag
+    unchanged = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: npm_dir, base: @path)
+    assert_equal digest, unchanged.export_pipeline_digest('application/javascript')
+    assert_equal etag, unchanged.find('main.js').etag
+
+    bump_rolldown(npm_dir, '0.0.2')
+    assert_equal '0.0.1', processor.options[:rolldown]
+    assert_equal digest, environment.export_pipeline_digest('application/javascript')
+
+    upgraded = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: npm_dir, base: @path)
+    assert_equal '0.0.2', upgraded.exporters['application/javascript'].first.options[:rolldown]
+    assert_not_equal digest, upgraded.export_pipeline_digest('application/javascript')
+    assert_not_equal etag, upgraded.find('main.js').etag
+  end
+
+  # Records npm installs instead of running them, installing a fake Rolldown
+  def spy_npm_installs(version: '1.2.3')
+    installs = []
+    Thread.current[:npm_install_spy] = lambda do |npm_path, packages|
+      installs << [npm_path, packages]
+      package = File.join(npm_path, 'node_modules', 'rolldown', 'package.json')
+      FileUtils.mkdir_p(File.dirname(package))
+      File.write(package, JSON.generate({ name: 'rolldown', version: version }))
+    end
+    installs
+  end
+
+  def teardown
+    Thread.current[:npm_install_spy] = nil
+    super
+  end
+
+  test 'creating a RolldownProcessor installs Rolldown if it is missing, once per npm path' do
+    npm_dir = File.realpath(Dir.mktmpdir)
+    installs = spy_npm_installs
+    environment = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: npm_dir, base: @path)
+    assert_equal [[npm_dir, ['rolldown']]], installs
+    assert_equal '1.2.3', environment.exporters['application/javascript'].first.options[:rolldown]
+
+    Condenser::RolldownProcessor.new(npm_dir)
+    assert_equal 1, installs.size
+  ensure
+    FileUtils.remove_entry(npm_dir, true)
+  end
+
+  test 'a RolldownProcessor with a bundler_path never installs Rolldown' do
+    file 'wrapped-rolldown/package.json', JSON.generate({ name: 'rolldown', version: '0.0.1' })
+    npm_dir = File.realpath(Dir.mktmpdir)
+    installs = spy_npm_installs
+    processor = Condenser::RolldownProcessor.new(npm_dir, bundler_path: File.join(@path, 'wrapped-rolldown'))
+    Condenser::RolldownProcessor::Runner.any_instance.stubs(:call).returns({})
+
+    assert_equal '0.0.1', processor.options[:rolldown]
+    processor.call(@env, {})
+    assert_empty installs
+  ensure
+    FileUtils.remove_entry(npm_dir, true)
   end
 
 end
