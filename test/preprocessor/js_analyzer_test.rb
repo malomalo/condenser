@@ -602,4 +602,108 @@ class JSAnalyzerTest < ActiveSupport::TestCase
     assert_empty asset.linked_assets
   end
 
+  test 'class and object methods named import and export' do
+    file 'name.js', <<~JS
+      class Loader {
+        import(path) { return path; }
+        static export(path, options = {}) { return [path, options]; }
+        async import2() { return this.import('a'); }
+      }
+      const o = {
+        import(x) { return x; },
+        export (y) { return y; },
+        get import() { return 1; }
+      };
+    JS
+
+    asset = @env.find('name.js')
+    assert_nil asset.type
+    assert_nil asset.exports
+    assert_empty asset.export_dependencies
+    assert_empty asset.linked_assets
+  end
+
+  test 'regex vs division' do
+    file 'a.js', ''
+    file 'name.js', <<~JS
+      var a = 10, b = 2, c = 1, s = 'x';
+      var d = a / b / c;
+      var x = /re"/g, y = (a + b)/2, z = [a][0]/2, w = a++ / 2;
+      function f(s) { return /it's/.test(s); }
+      if (typeof /"/ === 'object') /'/.test(s);
+      var g = a /* c */ / b, h = x.source.length / 2 / c;
+      export default import('./a');
+    JS
+
+    asset = @env.find('name.js')
+    assert_equal "module", asset.type
+    assert asset.has_default_export?
+    assert_equal ['a.js'], asset.linked_assets.map(&:filename)
+  end
+
+  test 'a dynamic import of a variable followed by a string containing quotes' do
+    file 'name.js', <<~JS
+      let shared, worker;
+      if (typeof self !== "undefined") self.__mapboxImport = (u) => import(
+        /* webpackIgnore: true */
+        u
+      );
+      const workerBundleString = "self.onerror = function() { console.error('An error'); }; self.__mapboxImport = (u) => import(u); (" + shared + ")(undefined, sharedChunk); (" + worker + ")(undefined, sharedChunk);";
+    JS
+
+    asset = @env.find('name.js')
+    assert_equal "module", asset.type
+    assert_empty asset.linked_assets
+    assert_empty asset.export_dependencies
+  end
+
+  test 'nested template literals' do
+    file 'a.js', ''
+    file 'b.js', ''
+    file 'name.js', <<~JS
+      const t = `a ${ `b ${ c ? `{` : '}' } import('x')` } ${ { d: 1 }.d / 2 } export`;
+      const u = `${import('./a')}`;
+      export const v = `${ `${ `\\`` }` }`, w = import(`./b`);
+    JS
+
+    asset = @env.find('name.js')
+    assert_equal "module", asset.type
+    assert asset.exports
+    assert_not asset.has_default_export?
+    assert_equal %w(a.js b.js), asset.linked_assets.map(&:filename).sort
+  end
+
+  test 'export from after other exports' do
+    %w(a b c).each { |n| file "#{n}.js", '' }
+    file 'name.js', <<~JS
+      // Re-export the helpers.
+      export { a } from './a';
+      export * as b from './b';
+      export {default as c} from './c';
+      export default function () {}
+    JS
+
+    asset = @env.find('name.js')
+    assert_equal "module", asset.type
+    assert asset.has_default_export?
+    assert_equal %w(a.js b.js c.js), asset.export_dependencies.map(&:filename).sort
+  end
+
+  test 'syntax errors' do
+    file 'name.js', <<~JS
+      var a = 1;
+      var s = "unterminated
+    JS
+
+    error = assert_raises(Condenser::SyntaxError) { @env.find('name.js').process }
+    assert_match(/Unexpected token \\n .*name\.js\s+2:/, error.message)
+
+    file 'name.js', "function a() { return 1; }}"
+    error = assert_raises(Condenser::SyntaxError) { @env.find('name.js').process }
+    assert_match(/Unexpected token \} .*name\.js\s+1:26/, error.message)
+
+    file 'name.js', "function a() { return `${1}"
+    assert_raises(Condenser::SyntaxError) { @env.find('name.js').process }
+  end
+
 end
