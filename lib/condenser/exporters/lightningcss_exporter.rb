@@ -5,8 +5,8 @@
 # modern syntax (nesting, lab() colors, ...) is lowered and vendor prefixes
 # are added for the targets.
 #
-# It's meant to be registered as an exporter so it runs once on the complete
-# CSS:
+# It's registered as an instance, as an exporter so it runs once on the
+# complete CSS:
 #
 #     register_exporter 'text/css', Condenser::LightningCSSExporter.new(targets: { safari: 15.4, chrome: 100 })
 #
@@ -44,18 +44,6 @@ class Condenser::LightningCSSExporter
   def self.version
     require_lightningcss!
     ::LightningCSS::VERSION
-  end
-
-  def self.instance
-    @instance ||= new
-  end
-
-  def self.call(environment, input)
-    instance.call(environment, input)
-  end
-
-  def self.options
-    instance.options
   end
 
   # The targets, Lightning CSS options and version, which are part of the

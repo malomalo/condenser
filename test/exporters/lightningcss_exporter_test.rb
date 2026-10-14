@@ -62,8 +62,8 @@ class LightningCSSExporterTest < ActiveSupport::TestCase
     assert_equal ".a {\n  color: oklch(60% .2 30);\n}\n", export.call('15.4')
   end
 
-  test 'registered as a class keeps the CSS as written' do
-    @env.register_exporter('text/css', Condenser::LightningCSSExporter)
+  test 'without targets keeps the CSS as written' do
+    @env.register_exporter('text/css', Condenser::LightningCSSExporter.new)
     file 'main.css', ".a { .b { color: red } }\n"
 
     assert_exported_file 'main.css', 'text/css', <<~CSS
