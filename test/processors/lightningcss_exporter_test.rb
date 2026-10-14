@@ -147,9 +147,13 @@ class LightningCSSExporterTest < ActiveSupport::TestCase
   end
 
   test 'raises when the lightningcss gem is too old' do
-    with_lightningcss_constant(:VERSION, '1.33.0.1') do
-      error = assert_raises(LoadError) { Condenser::LightningCSSExporter.new }
-      assert_equal 'Condenser::LightningCSSExporter requires lightningcss 1.33.0.2 or later, 1.33.0.1 is installed', error.message
+    with_lightningcss_constant(:Backend, nil) do
+      with_lightningcss_constant(:VERSION, '1.33.0.1') do
+        Condenser::LightningCSSExporter.stubs(:require).with('lightningcss').returns(true)
+
+        error = assert_raises(LoadError) { Condenser::LightningCSSExporter.new }
+        assert_equal 'Condenser::LightningCSSExporter requires lightningcss 1.33.0.2 or later, 1.33.0.1 is installed', error.message
+      end
     end
   end
 
