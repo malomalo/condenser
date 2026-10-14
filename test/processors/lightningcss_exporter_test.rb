@@ -17,7 +17,19 @@ class LightningCSSExporterTest < ActiveSupport::TestCase
       }
     CSS
 
-    assert_exported_file 'main.css', 'text/css', '.a{-webkit-user-select:none;user-select:none;color:#bf5702;color:color(display-p3 .697529 .364974 .135177);color:lab(50% 40 59)}.a .b{color:red}'
+    assert_exported_file 'main.css', 'text/css', <<~CSS
+      .a {
+        -webkit-user-select: none;
+        user-select: none;
+        color: #bf5702;
+        color: color(display-p3 .697529 .364974 .135177);
+        color: lab(50% 40 59);
+      }
+
+      .a .b {
+        color: red;
+      }
+    CSS
   end
 
   test 'leaves CSS the targets support' do
@@ -28,19 +40,39 @@ class LightningCSSExporterTest < ActiveSupport::TestCase
       }
     CSS
 
-    assert_exported_file 'main.css', 'text/css', '.a{user-select:none}'
-  end
-
-  test 'registered as a class minifies without targets' do
-    @env.register_exporter('text/css', Condenser::LightningCSSExporter)
-    file 'main.css', <<~CSS
+    assert_exported_file 'main.css', 'text/css', <<~CSS
       .a {
-        color: #ff0000;
-        margin: 0px 0px 0px 0px;
+        user-select: none;
       }
     CSS
+  end
 
-    assert_exported_file 'main.css', 'text/css', '.a{color:red;margin:0}'
+  test 'targets can include the minor version' do
+    file 'main.css', ".a { color: oklch(60% .2 30); }\n"
+
+    export = lambda do |version|
+      env = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: @npm_dir, base: @path)
+      env.unregister_minifier('text/css')
+      env.register_exporter('text/css', Condenser::LightningCSSExporter.new(targets: { safari: version }))
+      env.find('main.css').export.source
+    end
+
+    assert_equal ".a {\n  color: lab(51.6908% 61.9679 48.0969);\n}\n", export.call(15)
+    assert_equal ".a {\n  color: oklch(60% .2 30);\n}\n", export.call(15.4)
+    assert_equal ".a {\n  color: oklch(60% .2 30);\n}\n", export.call('15.4')
+  end
+
+  test 'registered as a class keeps the CSS as written' do
+    @env.register_exporter('text/css', Condenser::LightningCSSExporter)
+    file 'main.css', ".a { .b { color: red } }\n"
+
+    assert_exported_file 'main.css', 'text/css', <<~CSS
+      .a {
+        & .b {
+          color: red;
+        }
+      }
+    CSS
   end
 
   test 'runs on the CSS compiled from SCSS' do
@@ -50,7 +82,12 @@ class LightningCSSExporterTest < ActiveSupport::TestCase
       .a { user-select: $select; }
     SCSS
 
-    assert_exported_file 'main.css', 'text/css', '.a{-webkit-user-select:none;user-select:none}'
+    assert_exported_file 'main.css', 'text/css', <<~CSS
+      .a {
+        -webkit-user-select: none;
+        user-select: none;
+      }
+    CSS
   end
 
   test 'runs before the minifier' do
@@ -65,20 +102,19 @@ class LightningCSSExporterTest < ActiveSupport::TestCase
     assert_exported_file 'main.css', 'text/css', '.a{-webkit-user-select:none;user-select:none}'
   end
 
-  test 'without minify or targets the CSS is kept as written' do
-    @env.register_exporter('text/css', Condenser::LightningCSSExporter.new(minify: false))
-    file 'main.css', ".a { .b { color: red } }\n"
-
-    assert_exported_file 'main.css', 'text/css', <<~CSS
+  test 'minifies with the minify option' do
+    @env.register_exporter('text/css', Condenser::LightningCSSExporter.new(targets: { safari: 12 }, minify: true))
+    file 'main.css', <<~CSS
       .a {
-        & .b {
-          color: red;
-        }
+        user-select: none;
+        margin: 0px 0px 0px 0px;
       }
     CSS
+
+    assert_exported_file 'main.css', 'text/css', '.a{-webkit-user-select:none;user-select:none;margin:0}'
   end
 
-  test 'logs warnings with a 1-based line' do
+  test 'logs warnings with their location' do
     @env.register_exporter('text/css', Condenser::LightningCSSExporter.new(error_recovery: true))
     file 'main.css', <<~CSS
       .a { color: red; }
@@ -106,9 +142,11 @@ class LightningCSSExporterTest < ActiveSupport::TestCase
     assert_raises(ArgumentError) { Condenser::LightningCSSExporter.new(css_modules: true) }
   end
 
-  test 'raises for targets without minify' do
-    error = assert_raises(ArgumentError) { Condenser::LightningCSSExporter.new(targets: { safari: 12 }, minify: false) }
-    assert_match(/minify: true/, error.message)
+  test 'raises for an invalid target version' do
+    @env.register_exporter('text/css', Condenser::LightningCSSExporter.new(targets: { safari: 'abc' }))
+    file 'main.css', ".a { color: red; }\n"
+
+    assert_raises(LightningCSS::OptionError) { @env.find('main.css').export }
   end
 
   test 'raises for options Lightning CSS does not know' do

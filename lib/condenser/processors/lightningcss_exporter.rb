@@ -8,20 +8,16 @@
 # It's meant to be registered as an exporter so it runs once on the complete
 # CSS:
 #
-#     register_exporter 'text/css', Condenser::LightningCSSExporter.new(targets: { safari: 15, chrome: 100 })
+#     register_exporter 'text/css', Condenser::LightningCSSExporter.new(targets: { safari: 15.4, chrome: 100 })
 #
-# The gem only applies the targets when it minifies, so the output is always
-# minified and the 'text/css' minifier can be unregistered.
+# To also minify with Lightning CSS pass `minify: true` and unregister the
+# 'text/css' minifier.
 class Condenser::LightningCSSExporter
 
   RESERVED_OPTIONS = {
     filename: "condenser sets it to the asset's",
     css_modules: "the class names an exported stylesheet uses can't be renamed"
   }.freeze
-
-  # The gem prints errors and warnings as "message at file:line:column",
-  # with 0-based lines.
-  LOCATION = /\s+at\s+(?<file>.*):(?<line>\d+):(?<column>\d+)\z/
 
   def self.setup(environment)
     require_lightningcss!
@@ -57,14 +53,14 @@ class Condenser::LightningCSSExporter
   # export pipeline digest.
   attr_reader :options
 
-  # targets - Hash of browser to major version, the oldest browsers to
-  #           transform the CSS for, e.g. `{ safari: 15, chrome: 100 }`. The
-  #           browsers are android, chrome, edge, firefox, ie, ios_saf,
-  #           opera, safari and samsung. Default nil, which keeps the CSS as
-  #           written.
-  # options - Options passed to `LightningCSS.transform`, e.g.
-  #           `error_recovery` or `scope`. `minify` defaults to true and
-  #           must be true when there are targets. `filename` and
+  # targets - Hash of browser to version, the oldest browsers to transform the
+  #           CSS for, e.g. `{ safari: 15.4, chrome: 100 }`. A version is a
+  #           major version (Integer), or a Float or String with the minor and
+  #           patch versions (`15.4`, `"15.4.1"`). The browsers are android,
+  #           chrome, edge, firefox, ie, ios_saf, opera, safari and samsung.
+  #           Default nil, which keeps the CSS as written.
+  # options - Options passed to `LightningCSS.transform`, e.g. `minify`
+  #           (default false), `error_recovery` or `scope`. `filename` and
   #           `css_modules` raise an ArgumentError.
   def initialize(targets: nil, **options)
     options.each_key do |key|
@@ -72,11 +68,7 @@ class Condenser::LightningCSSExporter
       raise ArgumentError, "LightningCSSExporter options can't include #{key.inspect}, #{instead}"
     end
 
-    @transform_options = { minify: true }.merge(options)
-    if targets && !@transform_options[:minify]
-      raise ArgumentError, "LightningCSSExporter needs `minify: true` for targets, the lightningcss gem only applies targets when it minifies"
-    end
-
+    @transform_options = { minify: false }.merge(options)
     @transform_options[:targets] = targets.transform_keys(&:to_s).sort.to_h if targets
     @transform_options.freeze
     @options = @transform_options.merge(lightningcss: self.class.version).compact.freeze
@@ -91,7 +83,7 @@ class Condenser::LightningCSSExporter
     result = ::LightningCSS.transform(input[:source], filename: input[:filename], **@transform_options)
 
     result.warnings.each do |warning|
-      environment.logger.warn(located_message(warning, input[:filename]))
+      environment.logger.warn(located_message(warning.message, warning.location, input[:filename]))
     end
 
     input[:source] = result.code
@@ -101,22 +93,24 @@ class Condenser::LightningCSSExporter
 
   private
 
-  # Returns "file:line:column: message" with a 1-based line, or the message
-  # prefixed with +filename+ if it has no location.
-  def located_message(message, filename)
-    if (match = LOCATION.match(message))
-      "#{match[:file]}:#{match[:line].to_i + 1}:#{match[:column]}: #{match.pre_match}"
+  # Returns "file:line:column: message", or the message prefixed with
+  # +filename+ if there's no location. Location columns count from 0, the
+  # message shows them from 1 as Lightning CSS's own messages do.
+  def located_message(message, location, filename)
+    if location
+      "#{location.filename || filename}:#{location.line}:#{location.column + 1}: #{message}"
     else
       "#{filename}: #{message}"
     end
   end
 
   def syntax_error(error, filename)
-    match = LOCATION.match(error.message)
-    line = match ? match[:line].to_i + 1 : 1
+    location = error.location
+    # The gem's message ends with " at <location>"
+    message = location ? error.message.delete_suffix(" at #{location}") : error.message
 
-    syntax_error = Condenser::SyntaxError.new(located_message(error.message, filename))
-    syntax_error.set_backtrace(["/assets/#{filename}:#{line}"] + caller)
+    syntax_error = Condenser::SyntaxError.new(located_message(message, location, filename))
+    syntax_error.set_backtrace(["/assets/#{filename}:#{location&.line || 1}"] + caller)
     syntax_error.instance_variable_set(:@path, "/assets/#{filename}")
     syntax_error
   end

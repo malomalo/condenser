@@ -229,16 +229,17 @@ If the `lightningcss` gem (native Rust bindings for
 Condenser can transform CSS for the browsers you support, lowering modern
 syntax such as nesting and `lab()` colors and adding vendor prefixes. Register
 it as a `text/css` exporter so it runs once on the exported CSS (including CSS
-compiled from Sass). `targets` is a Hash of browser to the oldest major version
-you support:
+compiled from Sass), before the minifier. `targets` is a Hash of browser to the
+oldest version you support, either a major version or one with the minor
+version such as `15.4` or `"15.4"`:
 
 ``` ruby
-environment.register_exporter 'text/css', Condenser::LightningCSSExporter.new(targets: { safari: 15, chrome: 100, firefox: 100 })
+environment.register_exporter 'text/css', Condenser::LightningCSSExporter.new(targets: { safari: 15.4, chrome: 100, firefox: 100 })
 ```
 
-The gem only applies targets when it minifies, so the output is minified and
-you can unregister the `text/css` minifier. Other options (`error_recovery`,
-`scope`) are passed to `LightningCSS.transform`.
+Other options (`error_recovery`, `scope`) are passed to `LightningCSS.transform`.
+To also minify with Lightning CSS, pass `minify: true` and unregister the
+`text/css` minifier. It needs version 1.33.0.2 or later of the `lightningcss` gem.
 
 ## Javascript, ES#, & ES Modules
 
