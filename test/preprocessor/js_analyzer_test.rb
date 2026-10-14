@@ -452,4 +452,258 @@ class JSAnalyzerTest < ActiveSupport::TestCase
     assert_empty asset.export_dependencies
   end
 
+  test 'identifiers containing import are not treated as imports' do
+    file 'name.js', <<~JS
+      function bulk_import(locals) { return locals; }
+      function import_into(locals) { return locals; }
+      var reimport = 1, _import = 2, import$ = 3, importé = 4;
+      bulk_import('a');
+      import_into("b");
+      myimport.call();
+      obj.import('c');
+      obj?.import('d');
+      $import('e');
+      ünimport('f');
+      reimport = importé + import$;
+    JS
+
+    asset = @env.find('name.js')
+    assert_nil asset.type
+    assert_nil asset.exports
+    assert_empty asset.export_dependencies
+    assert_empty asset.linked_assets
+  end
+
+  test 'identifiers containing export are not treated as exports' do
+    file 'name.js', <<~JS
+      var exported = 1, exporter = 2, _export = 3, $export = 4, export_ = 5, ünexport = 6;
+      obj.export = function () { return exported; };
+      obj?.export();
+      module.exports = { exporter, _export, $export };
+    JS
+
+    asset = @env.find('name.js')
+    assert_nil asset.type
+    assert_nil asset.exports
+    assert_not asset.has_default_export?
+    assert_empty asset.export_dependencies
+  end
+
+  test 'import and export as property names are not keywords' do
+    file 'name.js', <<~JS
+      class Loader {
+        #import() { return 1; }
+        #export = 2;
+        run() { return this.#import() + this.#export; }
+      }
+      var o = { import: 1, export: 2 };
+      const { import: imp, export: exp } = o;
+      o. import(1);
+      o
+        . export(2);
+      console.log(imp, exp, new Loader().run());
+    JS
+
+    asset = @env.find('name.js')
+    assert_nil asset.type
+    assert_nil asset.exports
+    assert_empty asset.export_dependencies
+    assert_empty asset.linked_assets
+  end
+
+  test 'spread with a space before import is still a dynamic import' do
+    file 'a.js', ''
+    file 'name.js', <<~JS
+      const parts = [... import('./a')];
+    JS
+
+    asset = @env.find('name.js')
+    assert_equal ['a.js'], asset.linked_assets.map(&:filename)
+  end
+
+  test 'template functions with import in their names alongside real imports and exports' do
+    file 'a.js', ''
+    file 'name.js', <<~JS
+      import a from 'a';
+
+      function bulk_import(locals) {
+        return locals.rows.map(r => r / 2);
+      }
+
+      function importTpl_into(locals) { return bulk_import(locals); }
+
+      export default { bulk_import, import_into: importTpl_into };
+    JS
+
+    asset = @env.find('name.js')
+    assert_equal "module", asset.type
+    assert asset.exports
+    assert asset.has_default_export?
+    assert_equal ['a.js'], asset.export_dependencies.map(&:filename)
+  end
+
+  test 'import and export keywords after other tokens' do
+    %w(a b c d e f g h).each { |n| file "#{n}.js", '' }
+    file 'name.js', <<~JS
+      import a from 'a';import b from 'b'
+      {}
+      import c from 'c'
+      /* c */import d from 'd'
+      // c
+      import e from 'e'
+      function x() { return import('./f'); }import g from 'g'
+      [...import('./h')];
+      export {a};export const z = 1
+    JS
+
+    asset = @env.find('name.js')
+    assert_equal "module", asset.type
+    assert asset.exports
+    assert_not asset.has_default_export?
+    assert_equal %w(a.js b.js c.js d.js e.js f.js g.js h.js), asset.export_dependencies.map(&:filename).sort
+    assert_equal %w(f.js h.js), asset.linked_assets.map(&:filename).sort
+
+    file 'name.js', "export default function () {}"
+    asset = @env.find('name.js')
+    assert asset.has_default_export?
+
+    file 'name.js', "x();export * from 'a'"
+    asset = @env.find('name.js')
+    assert asset.exports
+    assert_equal ['a.js'], asset.export_dependencies.map(&:filename)
+  end
+
+  test 'import.meta is not an import' do
+    file 'name.js', <<~JS
+      const url = new URL('a.png', import.meta.url);
+      f(import.meta.url, import . meta);
+    JS
+
+    asset = @env.find('name.js')
+    assert_equal "module", asset.type
+    assert_nil asset.exports
+    assert_empty asset.export_dependencies
+    assert_empty asset.linked_assets
+  end
+
+  test 'import and export inside strings, templates, regexes and comments' do
+    file 'name.js', <<~JS
+      var s = 'import a from "a"', d = "export default 1";
+      var t = `import('b') ${bulk_import('c')} export * from 'd'`;
+      var r = /import\\('e'\\)/, q = /export/g;
+      // import f from 'f'
+      /* export default g */
+    JS
+
+    asset = @env.find('name.js')
+    assert_nil asset.type
+    assert_nil asset.exports
+    assert_empty asset.export_dependencies
+    assert_empty asset.linked_assets
+  end
+
+  test 'class and object methods named import and export' do
+    file 'name.js', <<~JS
+      class Loader {
+        import(path) { return path; }
+        static export(path, options = {}) { return [path, options]; }
+        async import2() { return this.import('a'); }
+      }
+      const o = {
+        import(x) { return x; },
+        export (y) { return y; },
+        get import() { return 1; }
+      };
+    JS
+
+    asset = @env.find('name.js')
+    assert_nil asset.type
+    assert_nil asset.exports
+    assert_empty asset.export_dependencies
+    assert_empty asset.linked_assets
+  end
+
+  test 'regex vs division' do
+    file 'a.js', ''
+    file 'name.js', <<~JS
+      var a = 10, b = 2, c = 1, s = 'x';
+      var d = a / b / c;
+      var x = /re"/g, y = (a + b)/2, z = [a][0]/2, w = a++ / 2;
+      function f(s) { return /it's/.test(s); }
+      if (typeof /"/ === 'object') /'/.test(s);
+      var g = a /* c */ / b, h = x.source.length / 2 / c;
+      export default import('./a');
+    JS
+
+    asset = @env.find('name.js')
+    assert_equal "module", asset.type
+    assert asset.has_default_export?
+    assert_equal ['a.js'], asset.linked_assets.map(&:filename)
+  end
+
+  test 'a dynamic import of a variable followed by a string containing quotes' do
+    file 'name.js', <<~JS
+      let shared, worker;
+      if (typeof self !== "undefined") self.__mapboxImport = (u) => import(
+        /* webpackIgnore: true */
+        u
+      );
+      const workerBundleString = "self.onerror = function() { console.error('An error'); }; self.__mapboxImport = (u) => import(u); (" + shared + ")(undefined, sharedChunk); (" + worker + ")(undefined, sharedChunk);";
+    JS
+
+    asset = @env.find('name.js')
+    assert_equal "module", asset.type
+    assert_empty asset.linked_assets
+    assert_empty asset.export_dependencies
+  end
+
+  test 'nested template literals' do
+    file 'a.js', ''
+    file 'b.js', ''
+    file 'name.js', <<~JS
+      const t = `a ${ `b ${ c ? `{` : '}' } import('x')` } ${ { d: 1 }.d / 2 } export`;
+      const u = `${import('./a')}`;
+      export const v = `${ `${ `\\`` }` }`, w = import(`./b`);
+    JS
+
+    asset = @env.find('name.js')
+    assert_equal "module", asset.type
+    assert asset.exports
+    assert_not asset.has_default_export?
+    assert_equal %w(a.js b.js), asset.linked_assets.map(&:filename).sort
+  end
+
+  test 'export from after other exports' do
+    %w(a b c).each { |n| file "#{n}.js", '' }
+    file 'name.js', <<~JS
+      // Re-export the helpers.
+      export { a } from './a';
+      export * as b from './b';
+      export {default as c} from './c';
+      export default function () {}
+    JS
+
+    asset = @env.find('name.js')
+    assert_equal "module", asset.type
+    assert asset.has_default_export?
+    assert_equal %w(a.js b.js c.js), asset.export_dependencies.map(&:filename).sort
+  end
+
+  test 'syntax errors' do
+    file 'name.js', <<~JS
+      var a = 1;
+      var s = "unterminated
+    JS
+
+    error = assert_raises(Condenser::SyntaxError) { @env.find('name.js').process }
+    assert_match(/Unexpected token \\n .*name\.js\s+2:/, error.message)
+
+    file 'name.js', "function a() { return 1; }}"
+    error = assert_raises(Condenser::SyntaxError) { @env.find('name.js').process }
+    assert_match(/Unexpected token \} .*name\.js\s+1:26/, error.message)
+
+    file 'name.js', "function a() { return `${1}"
+    assert_raises(Condenser::SyntaxError) { @env.find('name.js').process }
+  end
+
 end
