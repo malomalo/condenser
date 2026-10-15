@@ -344,9 +344,10 @@ is up to the app, and a process that gets the CSS from a persistent cache
 doesn't run the processor at all. It logs a warning for each directory it
 scans that isn't watched.
 
-`minify: true` minifies the CSS like `tailwindcss --minify`. Condenser's
-default CSS minifier, `SassMinifier`, changes Tailwind's output and makes it
-bigger, so unregister it, and either pass `minify: true` or minify with the
+`minify: true` minifies the CSS like `tailwindcss --minify`, with Tailwind's
+own Lightning CSS pass. Condenser's default CSS minifier, `SassMinifier`,
+rewrites Tailwind's output differently and makes minified output bigger, so
+unregister it, and either pass `minify: true` or minify with the
 `LightningCSSExporter` instead:
 
 ```ruby
