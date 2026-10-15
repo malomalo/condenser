@@ -465,7 +465,7 @@ class FileDependenciesTest < ActiveSupport::TestCase
     @second = File.realpath(Dir.mktmpdir)
     file 'config/only.css', 'only one', base: @second
     file 'a/b/ctx.txt.erb', <<~ERB
-      <% depend_on_file './sibling.txt' %><% depend_on_file '../up.txt' %><% depend_on_file 'content/a.html' %><% depend_on_file 'config/only.css' %><% depend_on_directory './pages', glob: '*.html' %><% depend_on_directory 'content', glob: '*.html', recursive: true %><%= %w(a/b/sibling.txt a/up.txt content/a.html).map { |f| f = File.join('#{@path}', f); File.file?(f) ? File.read(f) : 'missing' }.join(',') %>,<%= File.read('#{@second}/config/only.css') %>,<%= Dir.children('#{@path}/a/b/pages').sort.join(',') %>
+      <% depend_on_file './sibling.txt' %><% depend_on_file '../up.txt' %><% depend_on_file 'content/a.html' %><% depend_on_file 'config/only.css' %><% depend_on_directory './pages', glob: '*.html' %><% depend_on_directory 'content', glob: '*.html', recursive: true %><%= %w(a/b/sibling.txt a/up.txt content/a.html).map { |f| File.read(File.join('#{@path}', f)) }.join(',') %>,<%= File.read('#{@second}/config/only.css') %>,<%= Dir.children('#{@path}/a/b/pages').sort.join(',') %>
     ERB
 
     in_other_directory do

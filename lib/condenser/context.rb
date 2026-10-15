@@ -133,6 +133,7 @@ class Condenser
     # isn't processed as an asset, like a template a stylesheet is generated
     # from. See `Condenser#expand_dependency_path` for how +path+ is resolved.
     def depend_on_file(path)
+      ensure_dependency_exists!(path)
       @file_dependencies << path
 
       nil
@@ -144,6 +145,7 @@ class Condenser
     # or a subdirectory invalidates the cache. With +recursive+ it covers the
     # subdirectories too.
     def depend_on_directory(path, glob: '*', recursive: false)
+      ensure_dependency_exists!(path, directory: true)
       @directory_dependencies << { path: path, glob: glob, recursive: recursive }
 
       nil
@@ -307,6 +309,12 @@ Extend your environment context with a custom method.
     # The asset at +path+, or raises FileNotFound.
     def find_asset!(path, **kargs)
       find_asset(path, **kargs) or raise FileNotFound, "couldn't find file '#{path}'#{" from #{@source_file}" if @source_file}"
+    end
+
+    # Raises FileNotFound now, from the template, if +path+ doesn't exist.
+    def ensure_dependency_exists!(path, directory: false)
+      environment.expand_dependency_path(path, source_file: source_file, directory: directory)
+      nil
     end
 
     # The [path, accept] dependency on +asset+ with its own type.
