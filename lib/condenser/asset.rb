@@ -110,26 +110,24 @@ class Condenser
 
     # The file dependencies as recorded: absolute paths, or bare paths that
     # are looked up in the load paths.
-    def file_dependency_names
+    def file_dependencies
       direct_dependency_names[:files].map { |f| expand_filename_base(f) }
     end
 
     # As [name, globs, recursive]
-    def directory_dependency_names
+    def directory_dependencies
       direct_dependency_names[:directories].map { |d, *rest| [expand_filename_base(d), *rest] }
     end
 
-    # The paths the file dependencies are at now.
-    def file_dependencies
-      file_dependency_names.filter_map { |f| resolve_dependency_path(f) }
+    # Each file dependency and the path it's at now, or nil if it's missing.
+    def file_dependency_paths
+      file_dependencies.to_h { |f| [f, resolve_dependency_path(f)] }
     end
 
-    # As [path, globs, recursive]
-    def directory_dependencies
-      directory_dependency_names.filter_map do |d, *rest|
-        path = resolve_dependency_path(d, directory: true)
-        [path, *rest] if path
-      end
+    # Each directory dependency and the path it's at now, or nil if it's
+    # missing.
+    def directory_dependency_paths
+      directory_dependencies.to_h { |d, *| [d, resolve_dependency_path(d, directory: true)] }
     end
 
     # A digest of where the file dependencies are and their contents, and of
@@ -137,8 +135,9 @@ class Condenser
     def file_dependencies_digest
       return @fdd if @fdd_computed
 
-      files = file_dependency_names.map { |f| [f, resolve_dependency_path(f)] }
-      directories = directory_dependency_names.map { |d, *rest| [d, resolve_dependency_path(d, directory: true), *rest] }
+      files = file_dependency_paths.to_a
+      directory_paths = directory_dependency_paths
+      directories = directory_dependencies.map { |d, *rest| [d, directory_paths[d], *rest] }
       @environment.build_cache.record_file_dependencies(self, files, directories)
       @fdd = if !files.empty? || !directories.empty?
         build_cache = @environment.build_cache
@@ -614,8 +613,6 @@ class Condenser
 
     # The path a recorded dependency name is at now, or nil.
     def resolve_dependency_path(name, directory: false)
-      return name if File.absolute_path?(name)
-
       @environment.expand_dependency_path(name, directory: directory)
     rescue FileNotFound
       nil

@@ -381,8 +381,9 @@ class FileDependenciesTest < ActiveSupport::TestCase
         File.join(@path, 'a/up.txt'),
         File.join(@content, 'a.html'),
         File.join(@absolute, 'abs.txt')
-      ].sort, asset.file_dependencies.sort
-      assert_includes asset.file_dependency_names, 'content/a.html'
+      ].sort, asset.file_dependency_paths.values.sort
+      assert_equal File.join(@content, 'a.html'), asset.file_dependency_paths['content/a.html']
+      assert_includes asset.file_dependencies, 'content/a.html'
       assert_includes asset.source, 'sibling.txt: sibling one'
 
       file 'a/b/sibling.txt', 'sibling two'
@@ -430,11 +431,17 @@ class FileDependenciesTest < ActiveSupport::TestCase
     }
 
     in_other_directory do
+      asset = new_env(@path, @second).find('a/b/test.txt')
       assert_equal [
         [File.join(@path, 'a/b/pages'), ['*.html'], false],
-        [@content, ['*.html'], false],
-        [File.join(@second, 'shared'), ['*.html'], false]
-      ].sort, new_env(@path, @second).find('a/b/test.txt').directory_dependencies.sort
+        ['content', ['*.html'], false],
+        ['shared', ['*.html'], false]
+      ].sort, asset.directory_dependencies.sort
+      assert_equal({
+        File.join(@path, 'a/b/pages') => File.join(@path, 'a/b/pages'),
+        'content' => @content,
+        'shared' => File.join(@second, 'shared')
+      }, asset.directory_dependency_paths)
 
       file 'a/b/pages/b.html', 'b'
       assert_includes new_env(@path, @second).find('a/b/test.txt').export.source, 'pages: a.html,b.html'
@@ -476,11 +483,18 @@ class FileDependenciesTest < ActiveSupport::TestCase
         File.join(@path, 'a/up.txt'),
         File.join(@content, 'a.html'),
         File.join(@second, 'config/only.css')
+      ].sort, asset.file_dependency_paths.values.sort
+      assert_equal [
+        File.join(@path, 'a/b/sibling.txt'),
+        File.join(@path, 'a/up.txt'),
+        'config/only.css',
+        'content/a.html'
       ].sort, asset.file_dependencies.sort
       assert_equal [
         [File.join(@path, 'a/b/pages'), ['*.html'], false],
-        [@content, ['*.html'], true]
+        ['content', ['*.html'], true]
       ], asset.directory_dependencies
+      assert_equal @content, asset.directory_dependency_paths['content']
 
       file 'a/b/sibling.txt', 'sibling two'
       assert_includes new_env(@path, @second).find('a/b/ctx.txt').export.source, 'sibling two'
@@ -530,7 +544,10 @@ class FileDependenciesTest < ActiveSupport::TestCase
 
     in_other_directory do
       asset = new_env(@path, @second).find('a/b/test.txt')
-      assert_equal [File.join(@path, 'config/both.css'), File.join(@second, 'config/only.css')].sort, asset.file_dependencies.sort
+      assert_equal({
+        'config/both.css' => File.join(@path, 'config/both.css'),
+        'config/only.css' => File.join(@second, 'config/only.css')
+      }, asset.file_dependency_paths)
 
       file 'config/only.css', 'only two', base: @second
       assert_includes new_env(@path, @second).find('a/b/test.txt').export.source, 'only.css: only two'
@@ -579,8 +596,8 @@ class FileDependenciesTest < ActiveSupport::TestCase
       listening = new_env(@path, @second)
       assert_includes build(listening), 'x.txt: second'
       flush_listener(listening) if listening.build_cache.listening
-      assert_equal ['config/x.txt'], listening.find('test.txt').file_dependency_names
-      assert_equal [File.join(@second, 'config/x.txt')], listening.find('test.txt').file_dependencies
+      assert_equal ['config/x.txt'], listening.find('test.txt').file_dependencies
+      assert_equal({ 'config/x.txt' => File.join(@second, 'config/x.txt') }, listening.find('test.txt').file_dependency_paths)
 
       file 'config/x.txt', 'first'
       assert wait_until { build(listening).include?('x.txt: first') } if listening.build_cache.listening
@@ -622,6 +639,7 @@ class FileDependenciesTest < ActiveSupport::TestCase
       flush_listener(listening) if listening.build_cache.listening
 
       rm 'config/x.txt'
+      assert_equal({ 'config/x.txt' => nil }, new_env.find('test.txt').file_dependency_paths)
       assert wait_until { raises_not_found?(listening) } if listening.build_cache.listening
       error = assert_raises(Condenser::FileNotFound) { build(new_env) }
       assert_equal "couldn't find file 'config/x.txt' from #{File.join(@path, 'test.txt')}", error.message

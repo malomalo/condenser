@@ -241,16 +241,19 @@ class Condenser
       record_dependencies(@export_dependencies, asset, deps)
     end
 
-    # +files+ and +directories+ are [name, path] pairs; a bare name is also
-    # indexed by name, so a file added or removed in another load path that
-    # changes where it resolves invalidates the asset.
+    # +files+ and +directories+ are [name, path] pairs, with a nil path if
+    # it's missing. A bare name is also indexed by name, so a file added or
+    # removed in another load path that changes where it resolves invalidates
+    # the asset.
     def record_file_dependencies(asset, files, directories)
       return if !@listening
 
       [[files, @file_dependencies, @bare_file_dependencies], [directories, @directory_dependencies, @bare_directory_dependencies]].each do |deps, index, bare_index|
         deps.each do |name, path|
+          absolute = File.absolute_path?(name)
+          path ||= name if absolute
           (index[self.class.real_path(path)] ||= Set.new) << asset if path
-          (bare_index[name] ||= Set.new) << asset if !File.absolute_path?(name)
+          (bare_index[name] ||= Set.new) << asset if !absolute
         end
       end
     end
