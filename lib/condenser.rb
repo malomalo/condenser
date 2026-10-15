@@ -24,6 +24,7 @@ class Condenser
   autoload :JSAnalyzer,       'condenser/processors/js_analyzer'
   autoload :PurgeCSSProcessor,'condenser/processors/purgecss_processor'
   autoload :CSSMediaCombinerProcessor,'condenser/processors/css_media_combiner_processor'
+  autoload :LightningCSSExporter,'condenser/exporters/lightningcss_exporter'
   autoload :NodeProcessor,    'condenser/processors/node_processor'
   autoload :UglifyMinifier,   'condenser/minifiers/uglify_minifier'
   autoload :TerserMinifier,   'condenser/minifiers/terser_minifier'
