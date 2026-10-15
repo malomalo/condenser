@@ -108,28 +108,42 @@ class Condenser
       end.tap { |assets| @environment.build_cache.record_process_dependencies(self, assets) }
     end
 
+    # The file dependencies as recorded: absolute paths, or bare paths that
+    # are looked up in the load paths.
     def file_dependencies
       direct_dependency_names[:files].map { |f| expand_filename_base(f) }
     end
 
-    # As [path, globs, recursive]
+    # As [name, globs, recursive]
     def directory_dependencies
       direct_dependency_names[:directories].map { |d, *rest| [expand_filename_base(d), *rest] }
     end
 
-    # A digest of the contents of the file dependencies and the listings of
-    # the directory dependencies, or nil if there are none.
+    # Each file dependency and the path it's at now, or nil if it's missing.
+    def file_dependency_paths
+      file_dependencies.to_h { |f| [f, resolve_dependency_path(f)] }
+    end
+
+    # Each directory dependency and the path it's at now, or nil if it's
+    # missing.
+    def directory_dependency_paths
+      directory_dependencies.to_h { |d, *| [d, resolve_dependency_path(d, directory: true)] }
+    end
+
+    # A digest of where the file dependencies are and their contents, and of
+    # the listings of the directory dependencies, or nil if there are none.
     def file_dependencies_digest
       return @fdd if @fdd_computed
 
-      files = file_dependencies
-      directories = directory_dependencies
-      @environment.build_cache.record_file_dependencies(self, files, directories.map(&:first))
+      files = file_dependency_paths.to_a
+      directory_paths = directory_dependency_paths
+      directories = directory_dependencies.map { |d, *rest| [d, directory_paths[d], *rest] }
+      @environment.build_cache.record_file_dependencies(self, files, directories)
       @fdd = if !files.empty? || !directories.empty?
         build_cache = @environment.build_cache
         Digest::SHA1.base64digest(JSON.generate([
-          files.map { |f| [normalize_filename_base(f), build_cache.file_digest(f)] },
-          directories.map { |d, globs, recursive| [normalize_filename_base(d), globs, recursive, build_cache.directory_digest(d, globs: globs, recursive: recursive)] }
+          files.map { |f, path| [normalize_filename_base(f), path && normalize_filename_base(path), path && build_cache.file_digest(path)] },
+          directories.map { |d, path, globs, recursive| [normalize_filename_base(d), path && normalize_filename_base(path), globs, recursive, path && build_cache.directory_digest(path, globs: globs, recursive: recursive)] }
         ]))
       end
       @fdd_computed = true
@@ -504,7 +518,7 @@ class Condenser
           data[:process_dependencies] = normialize_dependency_names(data[:process_dependencies])
           data[:export_dependencies] = normialize_dependency_names(data[:export_dependencies])
           data[:linked_assets] = normialize_dependency_names(data[:linked_assets])
-          data[:file_dependencies] = data[:file_dependencies].map { |f| File.expand_path(f) }.uniq
+          data[:file_dependencies] = data[:file_dependencies].map { |f| dependency_name(f) }.uniq
           data[:directory_dependencies] = normalize_directory_dependencies(data[:directory_dependencies])
 
           # Do this here and at the end so cache_key can be calculated if we
@@ -579,10 +593,31 @@ class Condenser
     def normalize_directory_dependencies(deps)
       deps = deps.map do |dep|
         dep = { path: dep } if dep.is_a?(String)
-        [File.expand_path(dep[:path]), Array(dep[:glob] || '*').map(&:to_s).sort, !!dep[:recursive]]
+        [dependency_name(dep[:path], directory: true), Array(dep[:glob] || '*').map(&:to_s).sort, !!dep[:recursive]]
       end.uniq
       deps.reject { |d, globs, recursive| !recursive && deps.include?([d, globs, true]) }
     end
+
+    # The name recorded for a dependency: an absolute path, or a bare path
+    # that's looked up in the load paths again, like an import. Raises
+    # FileNotFound if it doesn't exist.
+    def dependency_name(filename, directory: false)
+      filename = filename.to_s
+      expanded = @environment.expand_dependency_path(filename, source_file: @source_file, directory: directory)
+      if File.absolute_path?(filename) || filename.match?(Resolve::SOURCE_RELATIVE)
+        expanded
+      else
+        @environment.expand_path(filename)
+      end
+    end
+
+    # The path a recorded dependency name is at now, or nil.
+    def resolve_dependency_path(name, directory: false)
+      @environment.expand_dependency_path(name, directory: directory)
+    rescue FileNotFound
+      nil
+    end
+    private :dependency_name, :resolve_dependency_path
 
     def export
       return @export if @export

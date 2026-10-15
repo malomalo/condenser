@@ -45,6 +45,8 @@ class Condenser
       @export_dependencies = {}
       @file_dependencies = {}
       @directory_dependencies = {}
+      @bare_file_dependencies = {}
+      @bare_directory_dependencies = {}
       @file_digests = {}
       @directory_digests = {}
       @watch_listeners = []
@@ -140,6 +142,17 @@ class Condenser
                 @directory_dependencies[dir]&.each { |asset| modified << asset.source_file }
                 break if dir == (dir = File.dirname(dir))
               end
+
+              @path.each do |load_path|
+                prefix = File.join(self.class.real_path(load_path), '')
+                next if !file.start_with?(prefix)
+
+                name = file.delete_prefix(prefix)
+                @bare_file_dependencies[name]&.each { |asset| modified << asset.source_file }
+                until (name = File.dirname(name)) == '.'
+                  @bare_directory_dependencies[name]&.each { |asset| modified << asset.source_file }
+                end
+              end
             end
             
             removed.each do |file|
@@ -228,11 +241,21 @@ class Condenser
       record_dependencies(@export_dependencies, asset, deps)
     end
 
+    # +files+ and +directories+ are [name, path] pairs, with a nil path if
+    # it's missing. A bare name is also indexed by name, so a file added or
+    # removed in another load path that changes where it resolves invalidates
+    # the asset.
     def record_file_dependencies(asset, files, directories)
       return if !@listening
 
-      files.each { |f| (@file_dependencies[self.class.real_path(f)] ||= Set.new) << asset }
-      directories.each { |d| (@directory_dependencies[self.class.real_path(d)] ||= Set.new) << asset }
+      [[files, @file_dependencies, @bare_file_dependencies], [directories, @directory_dependencies, @bare_directory_dependencies]].each do |deps, index, bare_index|
+        deps.each do |name, path|
+          absolute = File.absolute_path?(name)
+          path ||= name if absolute
+          (index[self.class.real_path(path)] ||= Set.new) << asset if path
+          (bare_index[name] ||= Set.new) << asset if !absolute
+        end
+      end
     end
 
     # Listen reports paths with symlinks resolved, e.g. /private/var for
@@ -323,6 +346,8 @@ class Condenser
       @export_dependencies.clear
       @file_dependencies.clear
       @directory_dependencies.clear
+      @bare_file_dependencies.clear
+      @bare_directory_dependencies.clear
       @npm_packages = nil
       @npm_digests = nil
     end
