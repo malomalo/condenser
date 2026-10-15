@@ -77,7 +77,8 @@ class Condenser::RolldownProcessor
     @bundler_path || (@npm_dir ? File.join(@npm_dir, 'node_modules', 'rolldown') : 'rolldown')
   end
 
-  # A node process with Rolldown loaded that runs one build at a time.
+  # A node process running +script+ (Rolldown's by default, with +argument+
+  # the path to Rolldown) that runs one build at a time.
   class Worker
     @workers = ObjectSpace::WeakMap.new
 
@@ -93,9 +94,11 @@ class Condenser::RolldownProcessor
 
     attr_reader :pid
 
-    def initialize(binary, bundler_path, max_memory: MAX_MEMORY)
+    def initialize(binary, argument, script: SCRIPT, name: 'rolldown', max_memory: MAX_MEMORY)
       @binary = binary
-      @bundler_path = bundler_path
+      @argument = argument
+      @script = script
+      @name = name
       @max_memory = max_memory
       @lock = Mutex.new
       @next_build = 0
@@ -166,11 +169,11 @@ class Condenser::RolldownProcessor
     end
 
     def exited
-      "rolldown exited with #{terminate || 'an unknown status'}"
+      "#{@name} exited with #{terminate || 'an unknown status'}"
     end
 
     def throwaway_build(config, logger:, &block)
-      worker = Worker.new(@binary, @bundler_path)
+      worker = Worker.new(@binary, @argument, script: @script, name: @name, max_memory: @max_memory)
       worker.build(config, logger: logger, &block)
     ensure
       worker.stop
@@ -181,7 +184,7 @@ class Condenser::RolldownProcessor
       @stopping = false
       io, child_io = UNIXSocket.pair
       begin
-        @pid = Process.spawn(@binary, '--max_old_space_size=5120', SCRIPT, @bundler_path, in: File::NULL, 3 => child_io)
+        @pid = Process.spawn(@binary, '--max_old_space_size=5120', @script, @argument, in: File::NULL, 3 => child_io)
       rescue Exception
         io.close
         raise
