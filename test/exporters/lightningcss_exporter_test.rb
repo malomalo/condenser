@@ -1,4 +1,5 @@
 require 'test_helper'
+require 'lightningcss'
 
 class LightningCSSExporterTest < ActiveSupport::TestCase
 
