@@ -140,14 +140,16 @@ class Condenser
     # The path a processor reads for a file (or +directory+) dependency.
     # Absolute paths are used as they are, "./" and "../" are relative to the
     # directory of +source_file+, and other relative paths are looked up in
-    # the load paths, like imports. Raises FileNotFound if it doesn't exist.
+    # the load paths, like imports. Raises FileNotFound if it doesn't exist,
+    # and ArgumentError for a "./" or "../" path without a +source_file+.
     def expand_dependency_path(filename, source_file: nil, directory: false)
       filename = filename.to_s
       exists = directory ? File.method(:directory?) : File.method(:file?)
       expanded = if File.absolute_path?(filename)
         File.expand_path(filename)
       elsif filename.match?(SOURCE_RELATIVE)
-        File.expand_path(filename, File.dirname(source_file)) if source_file
+        raise ArgumentError, "the dependency path '#{filename}' is relative to a source file, it needs source_file:" if !source_file
+        File.expand_path(filename, File.dirname(source_file))
       elsif (name = expand_path(filename))
         path.map { |p| File.join(p, name) }.find(&exists)
       end

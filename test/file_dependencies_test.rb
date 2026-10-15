@@ -639,4 +639,13 @@ class FileDependenciesTest < ActiveSupport::TestCase
     assert_equal "couldn't find directory '#{File.join(@path, 'missing')}' from #{File.join(@path, 'test.txt')}", error.message
   end
 
+  test 'expand_dependency_path needs a source file for ./ and ../ paths' do
+    file 'x.txt', 'x'
+    ['./x.txt', '../x.txt', '.', '..'].each do |path|
+      error = assert_raises(ArgumentError) { @env.expand_dependency_path(path) }
+      assert_equal "the dependency path '#{path}' is relative to a source file, it needs source_file:", error.message
+    end
+    assert_equal File.join(@path, 'x.txt'), @env.expand_dependency_path('./x.txt', source_file: File.join(@path, 'test.txt'))
+  end
+
 end
