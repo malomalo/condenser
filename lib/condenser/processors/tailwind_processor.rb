@@ -94,8 +94,10 @@ class Condenser::TailwindProcessor
     directories = result['globs'].map do |glob|
       { path: glob['base'], glob: File.basename(glob['pattern']), recursive: glob['pattern'].include?('/') }
     end
+    covered = directories.to_set { |d| d[:path] }
+    recursive = directories.select { |d| d[:recursive] }.to_set { |d| File.join(d[:path], '') }
     result['files'].map { |f| File.dirname(f) }.uniq.each do |dir|
-      next if directories.any? { |d| d[:path] == dir || (d[:recursive] && dir.start_with?(File.join(d[:path], ''))) }
+      next if covered.include?(dir) || ancestors(dir).any? { |a| recursive.include?(File.join(a, '')) }
 
       directories << { path: dir }
     end
@@ -108,6 +110,13 @@ class Condenser::TailwindProcessor
     end
     input[:directory_dependencies].merge(directories)
     warn_unwatched(environment, directories.map { |d| d[:path] })
+  end
+
+  # The directories above +dir+, nearest first.
+  def ancestors(dir)
+    dirs = []
+    dirs << dir until dir == (dir = File.dirname(dir))
+    dirs
   end
 
   # The listener only notices changes under the load paths and the watched
