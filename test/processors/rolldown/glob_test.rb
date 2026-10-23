@@ -5,7 +5,6 @@ class RolldownGlobTest < ActiveSupport::TestCase
 
   def setup
     super
-    @env.unregister_minifier('application/javascript')
     @env.unregister_exporter('application/javascript')
     @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path))
   end

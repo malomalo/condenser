@@ -3,8 +3,6 @@ require 'test_helper'
 class DependencyTest < ActiveSupport::TestCase
   
   test 'js file with dependencies processed with BabelPorcessor' do
-    @env.unregister_minifier('application/javascript')
-    
     file 'models/a.js', ''
     file 'models/b.js', ''
     
@@ -40,7 +38,6 @@ class DependencyTest < ActiveSupport::TestCase
   test 'js file with dependencies processed with JSAnalzyer' do
     @env.unregister_preprocessor 'application/javascript', Condenser::BabelProcessor
     @env.register_preprocessor 'application/javascript', Condenser::JSAnalyzer
-    @env.unregister_minifier('application/javascript')
     
     file 'models/a.js', ''
     file 'models/b.js', ''
@@ -79,7 +76,6 @@ class DependencyTest < ActiveSupport::TestCase
   test 'js depending on another file type with JSAnalzyer' do
     @env.unregister_preprocessor 'application/javascript', Condenser::BabelProcessor
     @env.register_preprocessor 'application/javascript', Condenser::JSAnalyzer
-    @env.unregister_minifier('application/javascript')
 
     file 'a.js', ''
     file 'b.rb', ''
@@ -101,7 +97,6 @@ class DependencyTest < ActiveSupport::TestCase
   test 'relative imports with JSAnalzyer' do
     @env.unregister_preprocessor 'application/javascript', Condenser::BabelProcessor
     @env.register_preprocessor 'application/javascript', Condenser::JSAnalyzer
-    @env.unregister_minifier('application/javascript')
     
     file 'a/a.js', <<~JS
       export decault function () { console.log("a/a"); }

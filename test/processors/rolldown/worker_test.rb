@@ -37,7 +37,6 @@ class RolldownWorkerTest < ActiveSupport::TestCase
 
   def setup
     super
-    @env.unregister_minifier('application/javascript')
     register_rolldown
     file 'main.js', <<~JS
       import { cube } from './math.js';
@@ -121,7 +120,8 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     plain = Condenser::RolldownProcessor.new(@env.npm_path)
     aliased = Condenser::RolldownProcessor.new(@env.npm_path, aliases: { 'condenser-alias' => File.join(@path, 'aliased.js') }, platform: 'browser')
     assert_includes export('main.js', processor: aliased), '"aliased"'
-    assert_includes export('main.js', processor: plain), 'from "condenser-alias"'
+    error = assert_raises(RuntimeError) { export('main.js', processor: plain) }
+    assert_includes error.message, "Could not resolve 'condenser-alias'"
     assert_includes export('main.js', processor: aliased), '"aliased"'
     assert_not_equal worker_pid(plain), worker_pid(aliased)
     assert alive?(worker_pid(plain))
@@ -132,7 +132,7 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     default = Condenser::RolldownProcessor.new(@env.npm_path)
     tuned = Condenser::RolldownProcessor.new(@env.npm_path, max_memory: 1024)
     assert_equal default.options, tuned.options
-    assert_equal %i[prefix dynamic_imports aliases rolldown], default.options.keys
+    assert_equal %i[prefix dynamic_imports aliases minify rolldown], default.options.keys
 
     digest = @env.export_pipeline_digest('application/javascript')
     register_rolldown(tuned)
@@ -429,9 +429,7 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     log = StringIO.new
     @env.logger = Logger.new(log, level: :warn)
     file 'warns.js', <<~JS
-      import x from 'nope';
-
-      console.log( x );
+      console.log( eval('1') );
     JS
 
     reference = export('main.js')
@@ -441,9 +439,9 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     assert_empty log.string
 
     export('warns.js')
-    assert_equal 1, log.string.scan('[UNRESOLVED_IMPORT]').size
+    assert_equal 1, log.string.scan('[EVAL]').size
     export('main.js')
-    assert_equal 1, log.string.scan('[UNRESOLVED_IMPORT]').size
+    assert_equal 1, log.string.scan('[EVAL]').size
   end
 
   test 'concurrent exports share the worker one build at a time' do
@@ -553,7 +551,6 @@ class RolldownWorkerTest < ActiveSupport::TestCase
         require 'condenser'
         require 'logger'
         env = Condenser.new(#{@path.inspect}, logger: Logger.new(File::NULL), npm_path: #{@npm_dir.inspect}, base: #{@path.inspect})
-        env.unregister_minifier('application/javascript')
         env.unregister_exporter('application/javascript')
         processor = Condenser::RolldownProcessor.new(#{@npm_dir.inspect})
         env.register_exporter('application/javascript', processor)

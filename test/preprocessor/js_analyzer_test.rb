@@ -2,11 +2,6 @@ require 'test_helper'
 
 class JSAnalyzerTest < ActiveSupport::TestCase
   
-  def setup
-    super
-    @env.unregister_minifier('application/javascript')
-  end
-  
   test 'file with exports gets marked as module and exports as module' do
     @env.clear_pipeline
     @env.register_preprocessor 'application/javascript', Condenser::JSAnalyzer

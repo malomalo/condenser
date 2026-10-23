@@ -29,6 +29,17 @@ class OptionsProcessor
   end
 end
 
+# A JavaScript "minifier" that upcases the source.
+class UpcaseMinifier
+  def self.options
+    {}
+  end
+
+  def self.call(environment, input)
+    input[:source] = input[:source].upcase
+  end
+end
+
 # A template whose output depends on its options.
 class GreetingTemplate
   attr_reader :options
@@ -121,17 +132,24 @@ class PipelineDigestTest < ActiveSupport::TestCase
       }.find('main.js').export.source
     end
 
-    assert_includes build.call('hello'), '"hello"'
-    assert_includes build.call('goodbye'), '"goodbye"'
+    assert_includes build.call('hello'), '`hello`'
+    assert_includes build.call('goodbye'), '`goodbye`'
   end
 
   test 'changing the minifier changes the etag and export but reuses the processed file' do
     file 'main.js', "console.log( 1 );\n"
 
-    minified = env.find('main.js')
+    unminified_rolldown = lambda do |e|
+      e.unregister_exporter('application/javascript')
+      e.register_exporter('application/javascript', Condenser::RolldownProcessor.new(e.npm_path))
+    end
+    minified = env { |e|
+      unminified_rolldown.call(e)
+      e.register_minifier('application/javascript', UpcaseMinifier)
+    }.find('main.js')
     minified_export = minified.export
 
-    not_minified = env { |e| e.unregister_minifier('application/javascript') }.find('main.js')
+    not_minified = env(&unminified_rolldown).find('main.js')
     assert_equal minified.cache_key, not_minified.cache_key
 
     Condenser::JSAnalyzer.expects(:call).never

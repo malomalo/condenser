@@ -35,14 +35,17 @@ class Condenser::RolldownProcessor
   end
 
   def options
-    options = {prefix: @prefix, dynamic_imports: @dynamic_imports, aliases: @aliases, rolldown: @rolldown_version}
+    options = {prefix: @prefix, dynamic_imports: @dynamic_imports, aliases: @aliases, minify: @minify, rolldown: @rolldown_version}
     options[:platform] = @platform if @platform != 'neutral'
     options
   end
 
-  def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, aliases: {}, platform: 'neutral', max_memory: MAX_MEMORY)
+  def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, aliases: {}, platform: 'neutral', minify: false, max_memory: MAX_MEMORY)
     unless DYNAMIC_IMPORTS.include?(dynamic_imports)
       raise ArgumentError, "dynamic_imports must be :inline or :keep, got #{dynamic_imports.inspect}"
+    end
+    unless minify == true || minify == false
+      raise ArgumentError, "minify must be true or false, got #{minify.inspect}"
     end
     unless max_memory.is_a?(Integer) && max_memory.positive?
       raise ArgumentError, "max_memory must be a positive Integer, got #{max_memory.inspect}"
@@ -54,13 +57,14 @@ class Condenser::RolldownProcessor
     @bundler_path = bundler_path
     @aliases = aliases
     @platform = platform
+    @minify = minify
     @max_memory = max_memory
     @lock = Mutex.new
     @rolldown_version = self.class.read_version(rolldown_path) if bundler_path || dir
   end
 
   def call(environment, input)
-    Runner.new(@npm_dir, worker: worker, prefix: @prefix, dynamic_imports: @dynamic_imports, aliases: @aliases, platform: @platform).call(environment, input)
+    Runner.new(@npm_dir, worker: worker, prefix: @prefix, dynamic_imports: @dynamic_imports, aliases: @aliases, platform: @platform, minify: @minify).call(environment, input)
   end
 
   def worker
@@ -220,13 +224,16 @@ class Condenser::RolldownProcessor
   end
 
   class Runner < Condenser::NodeProcessor
-    def initialize(dir = nil, worker:, prefix: nil, dynamic_imports: :inline, aliases: {}, platform: 'neutral')
+    JSON_TYPE = 'application/json'
+
+    def initialize(dir = nil, worker:, prefix: nil, dynamic_imports: :inline, aliases: {}, platform: 'neutral', minify: false)
       super(dir)
       @worker = worker
       @prefix = prefix
       @dynamic_imports = dynamic_imports
       @aliases = aliases
       @platform = platform
+      @minify = minify
     end
 
     def call(environment, input)
@@ -235,6 +242,7 @@ class Condenser::RolldownProcessor
       @accept = input[:content_types].last
       @entry = input[:source_file]
       @digests = {}
+      @json = Set.new
 
       config = {
         entry: @entry,
@@ -242,7 +250,8 @@ class Condenser::RolldownProcessor
         cwd: environment.base || Dir.pwd,
         modules: npm_path ? [npm_module_path] : [],
         aliases: @aliases,
-        platform: @platform
+        platform: @platform,
+        minify: @minify
       }
 
       input[:source] = exec_runtime(config)
@@ -274,12 +283,17 @@ class Condenser::RolldownProcessor
         importee, importer = args
         # npm: false; Rolldown resolves node_modules when this is nil.
         id = @environment.find(importee, importer, accept: @accept)&.source_file
-        { id: id, digest: digest_for(id) } if id
+        # JSON needs its extension, as in Node and Rolldown.
+        if id.nil? && importee.end_with?('.json')
+          id = @environment.find(importee, importer, accept: JSON_TYPE)&.source_file
+          @json << id if id
+        end
+        { id: id, type: @json.include?(id) ? 'json' : 'js', digest: digest_for(id) } if id
       when 'load'
         id = args.first
         if id == @entry
           { code: utf8(@input[:source]), digest: digest_for(@entry) }
-        elsif (asset = @environment.find(id, accept: @accept))
+        elsif (asset = @environment.find(id, accept: accept_for(id)))
           { code: utf8(asset.source), digest: asset.hexdigest }
         end
       when 'glob'
@@ -296,8 +310,12 @@ class Condenser::RolldownProcessor
       @digests[id] ||= if id == @entry
         @environment.digestor.hexdigest(@input[:source])
       else
-        @environment.find(id, accept: @accept)&.hexdigest
+        @environment.find(id, accept: accept_for(id))&.hexdigest
       end
+    end
+
+    def accept_for(id)
+      @json.include?(id) ? JSON_TYPE : @accept
     end
 
     def utf8(string)
