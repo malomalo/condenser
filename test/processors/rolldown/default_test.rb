@@ -12,9 +12,12 @@ class RolldownDefaultTest < ActiveSupport::TestCase
     super
   end
 
+  # The default RolldownProcessor, without minifying so the output is
+  # readable.
   def new_env(**options)
     env = Condenser.new(@path, logger: Logger.new('/dev/null'), base: @path, **options)
-    env.unregister_minifier('application/javascript')
+    env.unregister_exporter('application/javascript')
+    env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(env.npm_path))
     env
   end
 
@@ -23,10 +26,14 @@ class RolldownDefaultTest < ActiveSupport::TestCase
     ENV['NODE_PATH'] = value
   end
 
-  test 'Condenser.new exports JavaScript with a RolldownProcessor' do
-    exporters = new_env(npm_path: @npm_dir).exporters['application/javascript']
+  test 'Condenser.new exports and minifies JavaScript with a RolldownProcessor' do
+    env = Condenser.new(@path, logger: Logger.new('/dev/null'), base: @path, npm_path: @npm_dir)
+    exporters = env.exporters['application/javascript']
     assert_equal [Condenser::RolldownProcessor], exporters.map(&:class)
+    assert_equal true, exporters.first.options[:minify]
+    assert_nil env.minifier_for('application/javascript')
     assert_equal File.join(@npm_dir, 'node_modules', 'rolldown'), exporters.first.rolldown_path
+    assert_equal 'console.log(`main`);', env.find('main.js').export.source
     assert_equal <<~JS, new_env(npm_path: @npm_dir).find('main.js').export.source
       // main.js
       console.log("main");
@@ -35,9 +42,9 @@ class RolldownDefaultTest < ActiveSupport::TestCase
 
   test 'the default RolldownProcessor uses the npm path passed to Condenser.new' do
     with_node_path(@path)
-    env = new_env(npm_path: @npm_dir)
+    env = Condenser.new(@path, logger: Logger.new('/dev/null'), base: @path, npm_path: @npm_dir)
     assert_equal File.join(@npm_dir, 'node_modules', 'rolldown'), env.exporters['application/javascript'].first.rolldown_path
-    assert_includes env.find('main.js').export.source, 'console.log("main");'
+    assert_includes env.find('main.js').export.source, 'console.log(`main`);'
   end
 
   test 'without an npm path rolldown is loaded with node module resolution' do

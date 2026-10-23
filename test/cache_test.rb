@@ -103,13 +103,13 @@ class CacheTest < ActiveSupport::TestCase
     JS
 
     asset = assert_exported_file 'main.js', 'application/javascript', <<~JS
-      function cube(c){return c*c}console.log(cube(5));
+      function e(e){return e*e}console.log(e(5));
     JS
     etag = asset.etag
     assert_match(/\A\h{64}\z/, etag)
 
     asset = assert_exported_file 'main.js', 'application/javascript', <<~JS
-      function cube(c){return c*c}console.log(cube(5));
+      function e(e){return e*e}console.log(e(5));
     JS
     assert_equal etag, asset.etag
     
@@ -120,7 +120,7 @@ class CacheTest < ActiveSupport::TestCase
     JS
 
     asset = assert_exported_file 'main.js', 'application/javascript', <<~CSS
-      function cube(c){return c*c*c}console.log(cube(5));
+      function e(e){return e*e*e}console.log(e(5));
     CSS
     assert_match(/\A\h{64}\z/, asset.etag)
     assert_not_equal etag, asset.etag
@@ -292,7 +292,7 @@ class CacheTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'a.js', 'application/javascript', <<~JS
-    console.log("a");
+    console.log(`a`);
     JS
 
     file 'a.js', <<~JS
@@ -302,7 +302,7 @@ class CacheTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'a.js', 'application/javascript', <<~JS
-      function b(){console.log("b")}console.log("a"),b();
+      function e(){console.log(`b`)}console.log(`a`),e();
     JS
 
     file 'b.js', <<~JS
@@ -310,7 +310,7 @@ class CacheTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'a.js', 'application/javascript', <<~JS
-      function b(){console.log("c")}console.log("a"),b();
+      function e(){console.log(`c`)}console.log(`a`),e();
     JS
   end
 
@@ -364,7 +364,7 @@ class CacheTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'a.js', 'application/javascript', <<~JS
-      function b(){console.log("b")}function d(){console.log("d")}function c(){console.log("c"),d()}console.log("a"),b(),c();
+      function e(){console.log(`b`)}function t(){console.log(`d`)}function n(){console.log(`c`),t()}console.log(`a`),e(),n();
     JS
 
     ed = @env.build_cache.instance_variable_get(:@export_dependencies)
@@ -378,7 +378,7 @@ class CacheTest < ActiveSupport::TestCase
     file 'd.js', "export default function e () { console.log('e'); }\n"
 
     assert_exported_file 'a.js', 'application/javascript', <<~JS
-      function b(){console.log("b")}function e(){console.log("e")}function c(){console.log("c"),e()}console.log("a"),b(),c();
+      function e(){console.log(`b`)}function t(){console.log(`e`)}function n(){console.log(`c`),t()}console.log(`a`),e(),n();
     JS
   end
   
@@ -413,15 +413,15 @@ class CacheTest < ActiveSupport::TestCase
 
     # Set the cache
     env1 = Condenser.new(base1, logger: Logger.new(STDOUT, level: :debug), base: base1, npm_path: @npm_dir, cache: Condenser::Cache::FileStore.new(cachepath))
-    assert_equal 'function c(){console.log("c")}function b(){console.log("b"),c()}console.log("a"),b();', env1.find('test/a.js').export.source
+    assert_equal 'function e(){console.log(`c`)}function t(){console.log(`b`),e()}console.log(`a`),t();', env1.find('test/a.js').export.source
 
     # Poison the cache
     env2 = Condenser.new(base2, logger: Logger.new(STDOUT, level: :debug), base: base2, npm_path: @npm_dir, cache: Condenser::Cache::FileStore.new(cachepath))
-    assert_equal 'function c(){console.log("d")}function b(){console.log("b"),c()}console.log("a"),b();', env2.find('test/a.js').export.source
+    assert_equal 'function e(){console.log(`d`)}function t(){console.log(`b`),e()}console.log(`a`),t();', env2.find('test/a.js').export.source
 
     # Fails to find dependency change because cache is missing the dependency
     env3 = Condenser.new(base3, logger: Logger.new(STDOUT, level: :debug), base: base3, npm_path: @npm_dir, cache: Condenser::Cache::FileStore.new(cachepath))
-    assert_equal 'function c(){console.log("e")}function b(){console.log("b"),c()}console.log("a"),b();', env3.find('test/a.js').export.source
+    assert_equal 'function e(){console.log(`e`)}function t(){console.log(`b`),e()}console.log(`a`),t();', env3.find('test/a.js').export.source
   end
 
   test 'a file that was missing is found once it is created' do
@@ -492,7 +492,7 @@ class CacheTest < ActiveSupport::TestCase
     end
 
     source = build.call.source
-    assert_includes source, 'function helper'
+    assert_includes source, 'return 1'
 
     # Computing main.js's cache key resolves 'helper', which is only on the
     # path once PathAddingProcessor is set up

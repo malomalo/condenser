@@ -2,6 +2,9 @@
 
 class Condenser::TerserMinifier < Condenser::NodeProcessor
 
+  # The Terser options, which are part of the export pipeline digest.
+  attr_reader :options
+
   def initialize(dir, options = {})
     super(dir)
     npm_install('terser')

@@ -33,5 +33,17 @@ class TerserMinifierTest < ActiveSupport::TestCase
       class MyClass{fn(){console.log("Hello")}}function fa(){return console.log(1),5}
     CSS
   end
-  
+
+  test 'can be registered as an instance, with its options in the export pipeline digest' do
+    minifier = Condenser::TerserMinifier.new(@npm_dir, mangle: false)
+    assert_equal({ mangle: false, keep_classnames: true, keep_fnames: true }, minifier.options)
+
+    digest = @env.export_pipeline_digest('application/javascript')
+    @env.register_minifier('application/javascript', minifier)
+    assert_not_equal digest, @env.export_pipeline_digest('application/javascript')
+
+    file 'test.js', "function fa(value) { console.log(value); }\n"
+    assert_exported_file 'test.js', 'application/javascript', 'function fa(value){console.log(value)}'
+  end
+
 end

@@ -55,7 +55,7 @@ class ServerTest < ActiveSupport::TestCase
 
     get "/assets/main.js"
     assert_equal <<~JS.strip, last_response.body
-      function cube(c){return c*c*c}console.log(cube(5));
+      function e(e){return e*e*e}console.log(e(5));
     JS
   end
 
@@ -254,7 +254,7 @@ class ServerTest < ActiveSupport::TestCase
     JS
     get "/assets/%E6%97%A5%E6%9C%AC%E8%AA%9E.js"
     assert_equal <<~JS.strip, last_response.body
-      console.log("日本語");
+      console.log(`日本語`);
     JS
   end
 
