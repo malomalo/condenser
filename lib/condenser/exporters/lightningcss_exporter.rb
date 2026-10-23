@@ -79,7 +79,7 @@ class Condenser::LightningCSSExporter
     options = self.class::DEFAULT_OPTIONS.merge(options)
     options.each_key do |key|
       next unless (instead = self.class::RESERVED_OPTIONS[key.to_sym])
-      raise ArgumentError, "#{self.class.name.demodulize} options can't include #{key.inspect}, #{instead}"
+      raise ArgumentError, "#{self.class.name.split("::").last} options can't include #{key.inspect}, #{instead}"
     end
     options[:targets] = targets.transform_keys(&:to_s).sort.to_h if targets
 

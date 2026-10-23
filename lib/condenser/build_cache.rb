@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'json'
+
 class Condenser
   class BuildCache
     
@@ -104,7 +106,7 @@ class Condenser
 
             others = []
             @map_cache&.delete_if do |k,v|
-              if globs.any?{ |a| k.starts_with?(a) }
+              if globs.any?{ |a| k.start_with?(a) }
                 dependents(@export_dependencies, v.source_file).each do |a|
                   others << "/#{a.filename}".delete_suffix(File.extname(a.filename))
                 end
@@ -114,12 +116,12 @@ class Condenser
               end
             end
             @map_cache&.delete_if do |k,v|
-              others.any?{ |a| k.starts_with?(a) || k.starts_with?("/" + a) }
+              others.any?{ |a| k.start_with?(a) || k.start_with?("/" + a) }
             end
             
             others = []
             @lookup_cache.delete_if do |key, value|
-              if globs.any?{ |a| key.starts_with?(a) }
+              if globs.any?{ |a| key.start_with?(a) }
                 value.each do |v|
                   dependents(@export_dependencies, v.source_file).each do |a|
                     others << "/#{a.filename}".delete_suffix(File.extname(a.filename))
@@ -132,7 +134,7 @@ class Condenser
               end
             end
             @lookup_cache&.delete_if do |k,v|
-              others.any?{ |a| k.starts_with?(a) || k.starts_with?("/" + a) }
+              others.any?{ |a| k.start_with?(a) || k.start_with?("/" + a) }
             end
 
             (added + removed + modified).each do |file|

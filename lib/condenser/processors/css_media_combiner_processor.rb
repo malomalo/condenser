@@ -53,7 +53,7 @@ class Condenser::CSSMediaCombinerProcessor
           @selectors.pop
         else
           output << pre_match
-          @selectors << matched.squish
+          @selectors << matched.strip.gsub(/[[:space:]]+/, ' ')
           @stack << :media_query
         end
       when :statement
@@ -71,7 +71,7 @@ class Condenser::CSSMediaCombinerProcessor
           output << pre_match
         else
           output << pre_match.rstrip
-          @selectors << matched.squish
+          @selectors << matched.strip.gsub(/[[:space:]]+/, ' ')
           @stack << :media_query
         end
       end

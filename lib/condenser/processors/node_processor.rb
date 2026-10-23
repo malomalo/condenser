@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'json'
 require 'tempfile'
 require 'open3'
 require 'securerandom'

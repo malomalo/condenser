@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 require 'logger'
-require 'active_support'
-require 'active_support/core_ext'
 
 require 'condenser/version'
 require 'condenser/errors'

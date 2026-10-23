@@ -28,7 +28,7 @@ class Condenser
       accept = Array(accept)
       
       cache_key = [dirname, basename].flatten.join('/')
-      cache_key = "/#{cache_key}" if !cache_key.starts_with?('/')
+      cache_key = "/#{cache_key}" if !cache_key.start_with?('/')
       cache_key << "@#{accept.join(',')}" if accept
       cache_key << "@npm" if npm
       build_cache.fetch(cache_key) do

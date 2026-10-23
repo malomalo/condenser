@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'json'
+
 class Condenser::SVGTransformer::Tag
 
   attr_accessor :tag_name, :attrs, :children, :namespace
