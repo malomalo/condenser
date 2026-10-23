@@ -37,7 +37,6 @@ class RolldownWorkerTest < ActiveSupport::TestCase
 
   def setup
     super
-    @env.unregister_minifier('application/javascript')
     register_rolldown
     file 'main.js', <<~JS
       import { cube } from './math.js';
@@ -133,7 +132,7 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     default = Condenser::RolldownProcessor.new(@env.npm_path)
     tuned = Condenser::RolldownProcessor.new(@env.npm_path, max_memory: 1024)
     assert_equal default.options, tuned.options
-    assert_equal %i[prefix dynamic_imports aliases rolldown], default.options.keys
+    assert_equal %i[prefix dynamic_imports aliases minify rolldown], default.options.keys
 
     digest = @env.export_pipeline_digest('application/javascript')
     register_rolldown(tuned)
@@ -552,7 +551,6 @@ class RolldownWorkerTest < ActiveSupport::TestCase
         require 'condenser'
         require 'logger'
         env = Condenser.new(#{@path.inspect}, logger: Logger.new(File::NULL), npm_path: #{@npm_dir.inspect}, base: #{@path.inspect})
-        env.unregister_minifier('application/javascript')
         env.unregister_exporter('application/javascript')
         processor = Condenser::RolldownProcessor.new(#{@npm_dir.inspect})
         env.register_exporter('application/javascript', processor)

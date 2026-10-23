@@ -11,7 +11,6 @@ class RolldownTest < ActiveSupport::TestCase
   
   def setup
     super
-    @env.unregister_minifier('application/javascript')
     @env.unregister_exporter('application/javascript')
     @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path))
   end
@@ -267,6 +266,40 @@ class RolldownTest < ActiveSupport::TestCase
     assert_includes @env.find('browser.js').export.source, 'console.log("browser")'
   ensure
     FileUtils.rm_rf(package)
+  end
+
+  test 'minify: true minifies the bundle with Rolldown' do
+    @env.unregister_exporter('application/javascript')
+    @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path, minify: true))
+    file 'main.js', <<~JS
+      import { cube } from './math.js';
+
+      console.log( cube( 5 ) );
+    JS
+    file 'math.js', <<~JS
+      export function cube ( number ) {
+        return number * number * number;
+      }
+    JS
+
+    assert_exported_file 'main.js', 'application/javascript', <<~JS
+      function e(e){return e*e*e}console.log(e(5));
+    JS
+  end
+
+  test 'minify is in the options' do
+    assert_equal false, Condenser::RolldownProcessor.new(@env.npm_path).options[:minify]
+    assert_equal true, Condenser::RolldownProcessor.new(@env.npm_path, minify: true).options[:minify]
+
+    digest = @env.export_pipeline_digest('application/javascript')
+    @env.unregister_exporter('application/javascript')
+    @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path, minify: true))
+    assert_not_equal digest, @env.export_pipeline_digest('application/javascript')
+  end
+
+  test 'minify must be true or false' do
+    error = assert_raises(ArgumentError) { Condenser::RolldownProcessor.new(@env.npm_path, minify: 'yes') }
+    assert_equal 'minify must be true or false, got "yes"', error.message
   end
 
   test 'the installed Rolldown version is in the options' do

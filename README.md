@@ -334,13 +334,20 @@ it isn't there, and its version is read for the cache keys. Without an npm
 path, `rolldown` is loaded with Node's own module lookup (for example from
 `NODE_PATH`).
 
+The default `RolldownProcessor` minifies the bundle with Rolldown's built-in
+(Oxc) minifier, `minify: true`, in the same native build. `RolldownProcessor.new`
+defaults to `minify: false`, for readable bundles. The default pipeline
+registers no `application/javascript` minifier; if you register one, e.g.
+`TerserMinifier`, use a `RolldownProcessor` without `minify: true`, or the
+bundle is minified twice.
+
 `RolldownProcessor` is registered as an instance, and uses the npm path it's
 created with. Pass `npm_path:` to `Condenser.new` so the default one gets it,
 or, if the npm path is set afterwards, register your own once it's set:
 
 ```ruby
 condenser.unregister_exporter('application/javascript')
-condenser.register_exporter('application/javascript', Condenser::RolldownProcessor.new(condenser.npm_path))
+condenser.register_exporter('application/javascript', Condenser::RolldownProcessor.new(condenser.npm_path, minify: true))
 ```
 
 Since the version is read once, upgrading Rolldown takes effect when the
@@ -403,7 +410,7 @@ Several JavaScript and CSS minifiers are available through shorthand.
 In Rails you will specify them with:
 
 ```ruby
-config.assets.js_minifier  = :uglify
+config.assets.js_minifier  = :rolldown
 config.assets.css_minifier = :scss
 ```
 
@@ -411,7 +418,18 @@ If you're not using Rails, configure this directly on the "environment".
 
 ``` ruby
 environment.register_minifier 'text/css', Condenser::SassMinifier
-environment.register_minifier 'application/javascript', Condenser::UglifyMinifier
+```
+
+`Condenser.new`'s default pipeline minifies JavaScript with Rolldown (see
+[Bundling with Rolldown](#bundling-with-rolldown)) and registers no separate
+JavaScript minifier. To minify with [Terser](https://terser.org) instead,
+register a `RolldownProcessor` that doesn't minify and `Condenser::TerserMinifier`,
+which runs in Node and installs `terser` into the npm path:
+
+``` ruby
+environment.unregister_exporter 'application/javascript'
+environment.register_exporter 'application/javascript', Condenser::RolldownProcessor.new(environment.npm_path)
+environment.register_minifier 'application/javascript', Condenser::TerserMinifier.new(environment.npm_path)
 ```
 
 If you are using Condenser directly with a Rack app, don't forget to add
