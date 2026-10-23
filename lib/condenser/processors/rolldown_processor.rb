@@ -40,12 +40,6 @@ class Condenser::RolldownProcessor
     options
   end
 
-  # Whether the bundle is minified by Rolldown's built-in (Oxc) minifier. When
-  # it is, Condenser doesn't run the application/javascript minifier.
-  def minify?
-    @minify
-  end
-
   def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, aliases: {}, platform: 'neutral', minify: false, max_memory: MAX_MEMORY)
     unless DYNAMIC_IMPORTS.include?(dynamic_imports)
       raise ArgumentError, "dynamic_imports must be :inline or :keep, got #{dynamic_imports.inspect}"

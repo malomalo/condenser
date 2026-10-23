@@ -336,9 +336,10 @@ path, `rolldown` is loaded with Node's own module lookup (for example from
 
 The default `RolldownProcessor` minifies the bundle with Rolldown's built-in
 (Oxc) minifier, `minify: true`, in the same native build. `RolldownProcessor.new`
-defaults to `minify: false`, for readable bundles. When an exporter
-minifies (its `minify?` is true), Condenser doesn't run the
-`application/javascript` minifier, so a bundle is never minified twice.
+defaults to `minify: false`, for readable bundles. The default pipeline
+registers no `application/javascript` minifier; if you register one, e.g.
+`TerserMinifier`, use a `RolldownProcessor` without `minify: true`, or the
+bundle is minified twice.
 
 `RolldownProcessor` is registered as an instance, and uses the npm path it's
 created with. Pass `npm_path:` to `Condenser.new` so the default one gets it,

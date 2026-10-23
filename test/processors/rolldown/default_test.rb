@@ -30,7 +30,7 @@ class RolldownDefaultTest < ActiveSupport::TestCase
     env = Condenser.new(@path, logger: Logger.new('/dev/null'), base: @path, npm_path: @npm_dir)
     exporters = env.exporters['application/javascript']
     assert_equal [Condenser::RolldownProcessor], exporters.map(&:class)
-    assert exporters.first.minify?
+    assert_equal true, exporters.first.options[:minify]
     assert_nil env.minifier_for('application/javascript')
     assert_equal File.join(@npm_dir, 'node_modules', 'rolldown'), exporters.first.rolldown_path
     assert_equal 'console.log(`main`);', env.find('main.js').export.source

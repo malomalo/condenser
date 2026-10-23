@@ -302,34 +302,6 @@ class RolldownTest < ActiveSupport::TestCase
     assert_equal 'minify must be true or false, got "yes"', error.message
   end
 
-  test 'the application/javascript minifier does not run when Rolldown minifies' do
-    @env.unregister_exporter('application/javascript')
-    @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path, minify: true))
-    file 'main.js', "console.log( 'main' );\n"
-
-    digest = @env.export_pipeline_digest('application/javascript')
-    minifier = stub(options: {})
-    minifier.expects(:call).never
-    @env.register_minifier('application/javascript', minifier)
-
-    assert_nil @env.export_minifier_for('application/javascript')
-    assert_equal digest, @env.export_pipeline_digest('application/javascript')
-    assert_exported_file 'main.js', 'application/javascript', "console.log(`main`);\n"
-  end
-
-  test 'the application/javascript minifier runs when Rolldown does not minify' do
-    file 'main.js', "console.log( 'main' );\n"
-    minifier = Class.new do
-      def self.options = {}
-      def self.name = 'TestMinifier'
-      def self.call(environment, input) = input[:source] = 'minified'
-    end
-    @env.register_minifier('application/javascript', minifier)
-
-    assert_equal minifier, @env.export_minifier_for('application/javascript')
-    assert_exported_file 'main.js', 'application/javascript', 'minified'
-  end
-
   test 'the installed Rolldown version is in the options' do
     version = JSON.parse(File.read(File.join(@npm_dir, 'node_modules', 'rolldown', 'package.json')))['version']
     assert_equal version, @env.exporters['application/javascript'].first.options[:rolldown]
