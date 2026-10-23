@@ -26,8 +26,8 @@ class Condenser
   autoload :PurgeCSSProcessor,'condenser/processors/purgecss_processor'
   autoload :CSSMediaCombinerProcessor,'condenser/processors/css_media_combiner_processor'
   autoload :LightningCSSExporter,'condenser/exporters/lightningcss_exporter'
+  autoload :LightningCSSMinifier,'condenser/minifiers/lightningcss_minifier'
   autoload :NodeProcessor,    'condenser/processors/node_processor'
-  autoload :UglifyMinifier,   'condenser/minifiers/uglify_minifier'
   autoload :TerserMinifier,   'condenser/minifiers/terser_minifier'
   autoload :Erubi,            'condenser/templating_engine/erb'
   autoload :Sass,             'condenser/transformers/sass'
@@ -69,10 +69,9 @@ class Condenser
       self.configure do
         register_preprocessor 'application/javascript', Condenser::JSAnalyzer
         # register_preprocessor 'application/javascript', Condenser::BabelProcessor
-        register_exporter     'application/javascript', Condenser::RolldownProcessor.new(npm_path)
-        register_minifier     'application/javascript', Condenser::UglifyMinifier
+        register_exporter     'application/javascript', Condenser::RolldownProcessor.new(npm_path, minify: true)
         
-        register_minifier  'text/css', Condenser::SassMinifier
+        register_minifier  'text/css', Condenser::LightningCSSMinifier
       
         register_writer Condenser::FileWriter.new
         register_writer Condenser::ZlibWriter.new

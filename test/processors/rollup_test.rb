@@ -4,7 +4,6 @@ class RollupTest < ActiveSupport::TestCase
   
   def setup
     super
-    @env.unregister_minifier('application/javascript')
     @env.unregister_exporter('application/javascript')
     @env.register_exporter('application/javascript', Condenser::RollupProcessor)
   end
@@ -130,6 +129,20 @@ class RollupTest < ActiveSupport::TestCase
 
       console.log( square(cube( 5 )) );
     FILE
+  end
+
+  test 'import a ./ glob relative to the importing file' do
+    file 'a/router.js', <<~JS
+      import controllers from './controllers/*';
+
+      console.log( controllers );
+    JS
+    file 'a/controllers/x.js', "export default 'a/x';\n"
+    file 'controllers/x.js', "export default 'root/x';\n"
+
+    source = @env.find('a/router.js').export.source
+    assert_includes source, "'a/x'"
+    assert_not_includes source, "'root/x'"
   end
 
   test 'import glob via /* as array' do

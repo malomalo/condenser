@@ -6,6 +6,8 @@ require 'digest/md5'
 # Resolves Sass imports through the Condenser environment. Every stylesheet,
 # the entry included, gets a `condenser:` URL, and Dart Sass's tries at
 # resolving a URL relative to one are declined, so bare URLs use the load paths.
+# npm stylesheets get a `condenser-npm:` URL and do resolve relative URLs, the
+# way Sass does for files, so their partials load from next to them.
 class Condenser::Sass::Importer
   SCHEME = 'condenser'
   NPM_SCHEME = 'condenser-npm'
@@ -16,6 +18,9 @@ class Condenser::Sass::Importer
   ENTRY_QUERY = '?entry'
   EXTENSIONS = %w(.sass .scss .css).freeze
   SYNTAXES = { 'text/sass' => :indented, 'text/scss' => :scss, 'text/css' => :css }.freeze
+  FILE_SYNTAXES = { '.sass' => :indented, '.scss' => :scss, '.css' => :css }.freeze
+  # The `exports` conditions Dart Sass's Node package importer matches
+  EXPORT_CONDITIONS = %w(sass style default).freeze
 
   def self.url(scheme, name)
     "#{scheme}:/#{escape(name)}"
@@ -33,6 +38,7 @@ class Condenser::Sass::Importer
     @assets = {}
     @source_files = {}
     @sources = {}
+    @npm_files = {}
 
     root = @environment.path.find { |p| @input[:source_file].start_with?(File.join(p, '')) }
     @name = root ? @input[:source_file].delete_prefix(File.join(root, '')) : @input[:filename]
@@ -57,6 +63,13 @@ class Condenser::Sass::Importer
     when RELATIVE_SCHEME
       importer, name = path.split('!/', 2).map { |part| decode(part) }
       importer_file = @source_files[self.class.url(SCHEME, importer)]
+    when NPM_SCHEME
+      # A URL relative to an npm stylesheet, resolved by Dart Sass. nil if
+      # there's no such file.
+      return if @environment.npm_path.nil?
+      file = sass_file(File.join(@environment.npm_path, decode(path)))
+      return npm_url(file) if file
+      return
     when nil
       return if context.containing_url.nil?
       name = expand_path(decode(path))
@@ -82,6 +95,8 @@ class Condenser::Sass::Importer
   def load(canonical_url)
     if source = @sources[canonical_url]
       { contents: source, syntax: :scss }
+    elsif (file = @npm_files[canonical_url])
+      { contents: File.read(file), syntax: FILE_SYNTAXES.fetch(File.extname(file)) }
     else
       asset = @assets[canonical_url]
       syntax = SYNTAXES.fetch(asset.content_type, :scss)
@@ -137,6 +152,10 @@ class Condenser::Sass::Importer
     assets.group_by(&:source_file).map { |_, a| a.min_by { |x| @accept.index(x.content_type) || @accept.size } }.sort_by(&:filename)
   end
 
+  # The stylesheet of the npm package +name+, chosen as Dart Sass's Node
+  # package importer does: the `sass`, `style` or `default` condition of the
+  # package's root export, then its `sass` field, its `style` field and its
+  # index file.
   def npm_style(name)
     return if @environment.npm_path.nil?
 
@@ -144,15 +163,46 @@ class Condenser::Sass::Importer
       package = File.join(dir, 'package.json')
       next unless File.exist?(package)
 
-      style = JSON.parse(File.read(package))['style']
-      next unless style
-
-      file = File.expand_path(style, dir)
-      @input[:process_dependencies] << [file, @accept.map { |i| [i] }]
-      url = self.class.url(NPM_SCHEME, file.delete_prefix(File.join(@environment.npm_path, '')))
-      @sources[url] = File.read(file)
-      return url
+      manifest = JSON.parse(File.read(package))
+      paths = [npm_export(manifest['exports']), manifest['sass'], manifest['style']]
+      file = paths.grep(String).map { |path| File.expand_path(path, dir) }.find { |f| FILE_SYNTAXES.key?(File.extname(f)) && File.file?(f) }
+      file ||= sass_file(File.join(dir, 'index'), index: false)
+      return npm_url(file) if file
     end
     nil
+  end
+
+  # The target of a package's root export for the `sass`, `style` or `default`
+  # condition, or nil. Targets Sass can't load are skipped.
+  def npm_export(exports)
+    case exports
+    when String
+      exports if FILE_SYNTAXES.key?(File.extname(exports))
+    when Array
+      exports.lazy.filter_map { |e| npm_export(e) }.first
+    when Hash
+      return npm_export(exports['.']) if exports.keys.any? { |k| k.start_with?('.') }
+      exports.lazy.filter_map { |k, v| npm_export(v) if EXPORT_CONDITIONS.include?(k) }.first
+    end
+  end
+
+  # The file Sass loads for +path+: the file or its partial, trying each
+  # extension if it has none, and then its index file.
+  def sass_file(path, index: true)
+    has_extension = FILE_SYNTAXES.key?(File.extname(path))
+    names = has_extension ? [path] : FILE_SYNTAXES.keys.map { |x| path + x }
+    file = names.flat_map { |n| [n, File.join(File.dirname(n), "_#{File.basename(n)}")] }.find { |f| File.file?(f) }
+    file || (sass_file(File.join(path, 'index'), index: false) if index && !has_extension)
+  end
+
+  # Records +file+ as a dependency and returns its `condenser-npm:` URL.
+  def npm_url(file)
+    url = self.class.url(NPM_SCHEME, file.delete_prefix(File.join(@environment.npm_path, '')))
+    unless @npm_files.key?(url)
+      @input[:process_dependencies] << [file, @accept.map { |i| [i] }]
+      @npm_files[url] = file
+      @source_files[url] = file
+    end
+    url
   end
 end

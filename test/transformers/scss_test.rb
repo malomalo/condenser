@@ -456,6 +456,121 @@ class CondenserSCSSTest < ActiveSupport::TestCase
     FileUtils.remove_entry(npm, true) if npm
   end
 
+  test 'npm package with only a sass field' do
+    npm = File.realpath(Dir.mktmpdir)
+    Condenser::RolldownProcessor.stubs(:install_npm_packages)
+    env = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: npm, base: @path)
+    file 'node_modules/sassy/package.json', '{"name": "sassy", "sass": "scss/sassy.scss"}', base: npm
+    file 'node_modules/sassy/scss/sassy.scss', "$c: red;\n.sassy { color: $c; }", base: npm
+    file 'test.scss', "@import 'sassy';"
+
+    assert_equal ".sassy {\n  color: red;\n}", env.find('test.css').source.rstrip
+  ensure
+    FileUtils.remove_entry(npm, true) if npm
+  end
+
+  test 'npm package sass field is preferred over its style field' do
+    npm = File.realpath(Dir.mktmpdir)
+    Condenser::RolldownProcessor.stubs(:install_npm_packages)
+    env = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: npm, base: @path)
+    file 'node_modules/strap/package.json', '{"name": "strap", "style": "dist/strap.css", "sass": "scss/strap.scss"}', base: npm
+    file 'node_modules/strap/dist/strap.css', '.compiled { color: blue; }', base: npm
+    file 'node_modules/strap/scss/strap.scss', "$primary: blue !default;\n.btn { color: $primary; }", base: npm
+    file 'test.scss', "$primary: green;\n@import 'strap';"
+
+    assert_equal ".btn {\n  color: green;\n}", env.find('test.css').source.rstrip
+  ensure
+    FileUtils.remove_entry(npm, true) if npm
+  end
+
+  test 'npm package sass and style conditions of its root export are preferred over its fields' do
+    npm = File.realpath(Dir.mktmpdir)
+    Condenser::RolldownProcessor.stubs(:install_npm_packages)
+    env = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: npm, base: @path)
+    file 'node_modules/exported/package.json', JSON.generate(
+      name: 'exported', sass: 'field.scss',
+      exports: { '.' => { import: './index.js', sass: './exported.scss', default: './index.js' }, './package.json' => './package.json' }
+    ), base: npm
+    file 'node_modules/exported/field.scss', '.field { color: red; }', base: npm
+    file 'node_modules/exported/exported.scss', '.exported { color: red; }', base: npm
+    file 'node_modules/exported/index.js', 'export default 1;', base: npm
+    file 'test.scss', "@use 'exported';"
+
+    assert_equal ".exported {\n  color: red;\n}", env.find('test.css').source.rstrip
+  ensure
+    FileUtils.remove_entry(npm, true) if npm
+  end
+
+  test 'npm package stylesheets resolve relative imports next to them' do
+    npm = File.realpath(Dir.mktmpdir)
+    Condenser::RolldownProcessor.stubs(:install_npm_packages)
+    env = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: npm, base: @path)
+    file 'node_modules/kit/package.json', '{"name": "kit", "style": "scss/kit.scss"}', base: npm
+    file 'node_modules/kit/scss/kit.scss', <<~SCSS, base: npm
+      @import 'variables';
+      @import 'mixins';
+      @import './base';
+      @import '../vendor/reset';
+      .kit { @include pad; color: $kit-color; }
+    SCSS
+    file 'node_modules/kit/scss/_variables.scss', '$kit-color: teal;', base: npm
+    file 'node_modules/kit/scss/mixins/_index.scss', '@mixin pad { padding: 1px; }', base: npm
+    file 'node_modules/kit/scss/base.sass', "body\n  margin: 0", base: npm
+    file 'node_modules/kit/vendor/reset.css', 'p { margin: 0; }', base: npm
+    file 'variables.scss', '$kit-color: red;'
+    file 'test.scss', "@import 'kit';"
+
+    assert_equal <<~CSS.rstrip, env.find('test.css').source.rstrip
+      body {
+        margin: 0;
+      }
+
+      p {
+        margin: 0;
+      }
+
+      .kit {
+        padding: 1px;
+        color: teal;
+      }
+    CSS
+  ensure
+    FileUtils.remove_entry(npm, true) if npm
+  end
+
+  test 'npm package stylesheets with nested @use namespaces' do
+    npm = File.realpath(Dir.mktmpdir)
+    Condenser::RolldownProcessor.stubs(:install_npm_packages)
+    env = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: npm, base: @path)
+    file 'node_modules/theme/package.json', '{"name": "theme", "sass": "src/theme.scss"}', base: npm
+    file 'node_modules/theme/src/theme.scss', "@use 'colors/palette';\n@forward 'colors/palette' show $accent;\n$primary: palette.$base;", base: npm
+    file 'node_modules/theme/src/colors/_palette.scss', "$base: navy;\n$accent: gold;", base: npm
+    file 'test.scss', "@use 'theme' as t;\n.a { color: t.$primary; background: t.$accent; }"
+
+    assert_equal ".a {\n  color: navy;\n  background: gold;\n}", env.find('test.css').source.rstrip
+  ensure
+    FileUtils.remove_entry(npm, true) if npm
+  end
+
+  test 'changing a partial of an npm package stylesheet reprocesses the importing file' do
+    npm = File.realpath(Dir.mktmpdir)
+    Condenser::RolldownProcessor.stubs(:install_npm_packages)
+    file 'node_modules/kit/package.json', '{"name": "kit", "sass": "kit.scss"}', base: npm
+    file 'node_modules/kit/kit.scss', "@import 'variables';\n.kit { color: $c; }", base: npm
+    file 'node_modules/kit/_variables.scss', '$c: red;', base: npm
+    file 'test.scss', '@import "kit";'
+
+    env = Condenser.new(@path, logger: Logger.new('/dev/null'), cache: @env.cache, npm_path: npm, base: @path)
+    assert_equal ".kit {\n  color: red;\n}", env.find('test.css').source.rstrip
+
+    file 'node_modules/kit/_variables.scss', '$c: blue;', base: npm
+
+    env = Condenser.new(@path, logger: Logger.new('/dev/null'), cache: @env.cache, npm_path: npm, base: @path)
+    assert_equal ".kit {\n  color: blue;\n}", env.find('test.css').source.rstrip
+  ensure
+    FileUtils.remove_entry(npm, true) if npm
+  end
+
   test 'importing a templated .sass file from scss' do
     @env.register_mime_type 'text/sass', extensions: %w(.sass)
     @env.register_transformer 'text/sass', 'text/css', Condenser::SassTransformer
@@ -745,12 +860,14 @@ class CondenserSCSSTest < ActiveSupport::TestCase
 
   test "the Dart Sass version is part of the cache key" do
     file 'test.scss', 'div { color: red; }'
+    @env.register_minifier('text/css', Condenser::SassMinifier)
     before = @env.find('test.css').cache_key
     export_before = @env.export_pipeline_digest('text/css')
 
     Condenser::Sass.stubs(:version).returns('0.0.1')
     [Condenser::ScssTransformer, Condenser::SassMinifier].each { |c| c.instance_variable_set(:@instance, nil) }
     env = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: @npm_dir, base: @path)
+    env.register_minifier('text/css', Condenser::SassMinifier)
     assert_not_equal before, env.find('test.css').cache_key
     assert_not_equal export_before, env.export_pipeline_digest('text/css')
   ensure

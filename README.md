@@ -295,8 +295,10 @@ environment.register_exporter 'text/css', Condenser::LightningCSSExporter.new(ta
 ```
 
 Other options (`error_recovery`, `scope`) are passed to `LightningCSS.transform`.
-To also minify with Lightning CSS, pass `minify: true` and unregister the
-`text/css` minifier. It needs version 1.33.0.2 or later of the `lightningcss` gem.
+It needs version 1.33.0.2 or later of the `lightningcss` gem. The default
+`text/css` minifier, `Condenser::LightningCSSMinifier`, also takes `targets`,
+so to lower syntax and minify in one pass register it with the targets instead
+of adding an exporter (see [Minifying Assets](#minifying-assets)).
 
 ### Utility CSS with Tailwind
 
@@ -361,10 +363,11 @@ doesn't run the processor at all. It logs a warning for each directory it
 scans that isn't watched.
 
 `minify: true` minifies the CSS like `tailwindcss --minify`, with Tailwind's
-own Lightning CSS pass. Condenser's default CSS minifier, `SassMinifier`,
-rewrites Tailwind's output differently and makes minified output bigger, so
-unregister it, and either pass `minify: true` or minify with the
-`LightningCSSExporter` instead:
+own Lightning CSS pass. Condenser's default CSS minifier,
+`LightningCSSMinifier`, also minifies with Lightning CSS, so with the default
+pipeline `minify:` isn't needed. To minify only in the processor, unregister
+the CSS minifier. Don't use `SassMinifier` with Tailwind: it rewrites
+Tailwind's output differently and makes minified output bigger.
 
 ```ruby
 env.unregister_minifier 'text/css'
@@ -407,17 +410,44 @@ it isn't there, and its version is read for the cache keys. Without an npm
 path, `rolldown` is loaded with Node's own module lookup (for example from
 `NODE_PATH`).
 
+The default `RolldownProcessor` minifies the bundle with Rolldown's built-in
+(Oxc) minifier, `minify: true`, in the same native build. `RolldownProcessor.new`
+defaults to `minify: false`, for readable bundles. The default pipeline
+registers no `application/javascript` minifier; if you register one, e.g.
+`TerserMinifier`, use a `RolldownProcessor` without `minify: true`, or the
+bundle is minified twice.
+
 `RolldownProcessor` is registered as an instance, and uses the npm path it's
 created with. Pass `npm_path:` to `Condenser.new` so the default one gets it,
 or, if the npm path is set afterwards, register your own once it's set:
 
 ```ruby
 condenser.unregister_exporter('application/javascript')
-condenser.register_exporter('application/javascript', Condenser::RolldownProcessor.new(condenser.npm_path))
+condenser.register_exporter('application/javascript', Condenser::RolldownProcessor.new(condenser.npm_path, minify: true))
 ```
 
 Since the version is read once, upgrading Rolldown takes effect when the
 process restarts or a new processor is created.
+
+An import that can't be resolved, as an asset or an npm package, fails the
+build with an error naming the importing file and the import.
+
+### Importing JSON
+
+With Rolldown, a `.json` file can be imported like any other asset, from the
+load paths or relative to the importing file. The extension is required, as in
+Node; `import users from 'users'` doesn't find `users.json`.
+
+```js
+import users from 'users.json';
+import { name } from 'config/app.json' with { type: 'json' };
+```
+
+The JSON is the default export, and its top-level keys that are valid
+identifiers are also named exports. It's inlined into the bundle, and editing
+it rebuilds the bundles that import it. JSON rendered from a template, such as
+`users.json.erb`, is imported as `users.json`. `RollupProcessor` doesn't
+support importing JSON.
 
 `Condenser::RollupProcessor` is deprecated and will be removed in condenser
 3.0. Until then it can still be used by registering it in place of Rolldown:
@@ -456,19 +486,48 @@ Several JavaScript and CSS minifiers are available through shorthand.
 In Rails you will specify them with:
 
 ```ruby
-config.assets.js_minifier  = :uglify
-config.assets.css_minifier = :scss
+config.assets.js_minifier  = :rolldown
+config.assets.css_minifier = :lightning_css
 ```
 
 If you're not using Rails, configure this directly on the "environment".
 
 ``` ruby
+environment.register_minifier 'text/css', Condenser::LightningCSSMinifier
+```
+
+`Condenser.new`'s default pipeline minifies JavaScript with Rolldown (see
+[Bundling with Rolldown](#bundling-with-rolldown)) and registers no separate
+JavaScript minifier. To minify with [Terser](https://terser.org) instead,
+register a `RolldownProcessor` that doesn't minify and `Condenser::TerserMinifier`,
+which runs in Node and installs `terser` into the npm path:
+
+``` ruby
+environment.unregister_exporter 'application/javascript'
+environment.register_exporter 'application/javascript', Condenser::RolldownProcessor.new(environment.npm_path)
+environment.register_minifier 'application/javascript', Condenser::TerserMinifier.new(environment.npm_path)
+```
+
+`Condenser.new`'s default pipeline minifies CSS with
+`Condenser::LightningCSSMinifier`, which needs the `lightningcss` gem (version
+1.33.0.2 or later). The gem is only loaded when CSS is first minified, which
+raises a `LoadError` if it's missing. To also lower modern syntax and add
+vendor prefixes for your browsers, register it with `targets`, as for
+`LightningCSSExporter`:
+
+``` ruby
+environment.register_minifier 'text/css', Condenser::LightningCSSMinifier.new(targets: { safari: 15.4, chrome: 100 })
+```
+
+`Condenser::SassMinifier` minifies CSS with Dart Sass instead, for apps that
+already use the `sass-embedded` gem and don't want another native gem:
+
+``` ruby
 environment.register_minifier 'text/css', Condenser::SassMinifier
-environment.register_minifier 'application/javascript', Condenser::UglifyMinifier
 ```
 
 If you are using Condenser directly with a Rack app, don't forget to add
-the dependencies (the `sass-embedded` gem in the example above) to your Gemfile.
+the dependencies (the `lightningcss` gem in the example above) to your Gemfile.
 
 ### Gzip
 

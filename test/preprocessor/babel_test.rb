@@ -8,7 +8,8 @@ class CondenserBabelTest < ActiveSupport::TestCase
     @env.register_preprocessor 'application/javascript', Condenser::BabelProcessor.new(@npm_dir,
       presets: [ ['@babel/preset-env', { modules: false, targets: { browsers: 'firefox > 41' } }] ]
     )
-    @env.unregister_minifier    'application/javascript'
+    @env.unregister_exporter('application/javascript')
+    @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@npm_dir))
   end
   
   test 'find' do

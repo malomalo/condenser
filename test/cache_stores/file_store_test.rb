@@ -46,4 +46,20 @@ class CacheFileStoreTest < ActiveSupport::TestCase
     assert_equal [2], Condenser::Cache::FileStore.new(@cachepath).fetch('key') { [3] }
   end
 
+  test 'delete removes the cached file and reports whether the key existed' do
+    store = @env.cache
+    store.set('key', 'value')
+    path = File.join(@cachepath, 'key.cache')
+    assert File.exist?(path)
+    size_before = store.size
+    file_size = File.size(path)
+
+    assert_equal true, store.delete('key')
+    assert_equal size_before - file_size, store.size
+    assert_nil store.get('key')
+    assert_not File.exist?(path)
+
+    assert_equal false, store.delete('key')
+  end
+
 end

@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
 class Condenser::Cache
-  class NullStore
+  # Public: A cache store that stores nothing; every fetch runs its block.
+  class NullStore < Condenser::CacheStore
 
     def get(key)
       nil
@@ -11,16 +12,21 @@ class Condenser::Cache
       value
     end
 
+    # Nothing is ever cached, so always run the block.
     def fetch(key, force: false)
-      value = get(key)
-      
-      if value.nil?
-        value = yield
-        set(key, value)
-      end
-      value
+      yield
     end
-    
+
+    # The dependency key is never cached, so always run the block. The value
+    # key isn't stored, so a key Proc is never called.
+    def fetch_if(key_or_proc, key, &block)
+      block.call
+    end
+
+    def delete(key)
+      false
+    end
+
     # Public: Pretty inspect
     #
     # Returns String.

@@ -11,7 +11,6 @@ class RolldownTest < ActiveSupport::TestCase
   
   def setup
     super
-    @env.unregister_minifier('application/javascript')
     @env.unregister_exporter('application/javascript')
     @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path))
   end
@@ -269,6 +268,40 @@ class RolldownTest < ActiveSupport::TestCase
     FileUtils.rm_rf(package)
   end
 
+  test 'minify: true minifies the bundle with Rolldown' do
+    @env.unregister_exporter('application/javascript')
+    @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path, minify: true))
+    file 'main.js', <<~JS
+      import { cube } from './math.js';
+
+      console.log( cube( 5 ) );
+    JS
+    file 'math.js', <<~JS
+      export function cube ( number ) {
+        return number * number * number;
+      }
+    JS
+
+    assert_exported_file 'main.js', 'application/javascript', <<~JS
+      function e(e){return e*e*e}console.log(e(5));
+    JS
+  end
+
+  test 'minify is in the options' do
+    assert_equal false, Condenser::RolldownProcessor.new(@env.npm_path).options[:minify]
+    assert_equal true, Condenser::RolldownProcessor.new(@env.npm_path, minify: true).options[:minify]
+
+    digest = @env.export_pipeline_digest('application/javascript')
+    @env.unregister_exporter('application/javascript')
+    @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path, minify: true))
+    assert_not_equal digest, @env.export_pipeline_digest('application/javascript')
+  end
+
+  test 'minify must be true or false' do
+    error = assert_raises(ArgumentError) { Condenser::RolldownProcessor.new(@env.npm_path, minify: 'yes') }
+    assert_equal 'minify must be true or false, got "yes"', error.message
+  end
+
   test 'the installed Rolldown version is in the options' do
     version = JSON.parse(File.read(File.join(@npm_dir, 'node_modules', 'rolldown', 'package.json')))['version']
     assert_equal version, @env.exporters['application/javascript'].first.options[:rolldown]
@@ -320,21 +353,27 @@ class RolldownTest < ActiveSupport::TestCase
     assert sockets.all?(&:closed?)
   end
 
-  test 'an unresolved import logs a warning' do
+  test 'an unresolved import raises an error naming the importer and the import' do
     file 'main.js', <<~JS
       import x from 'nope';
 
       console.log( x );
     JS
 
+    error = assert_raises(RuntimeError) { @env.find('main.js').export }
+    assert error.message.start_with?("Error: #{@path}/main.js:1:15: [UNRESOLVED_IMPORT] Could not resolve 'nope' in main.js"), error.message
+    assert_not_includes error.message, "\e["
+  end
+
+  test 'a warning is logged' do
+    file 'main.js', <<~JS
+      console.log( eval('1') );
+    JS
+
     log = StringIO.new
     @env.logger = Logger.new(log, level: :warn)
-    assert_exported_file 'main.js', 'application/javascript', <<~FILE
-      import x from "nope";
-      // main.js
-      console.log(x);
-    FILE
-    assert_match(/WARN -- : \[UNRESOLVED_IMPORT\] .*Could not resolve 'nope' in main\.js/, log.string)
+    @env.find('main.js').export
+    assert_match(/WARN -- : \[EVAL\] Use of direct `eval` function/, log.string)
     assert_not_includes log.string, "\e["
   end
 
