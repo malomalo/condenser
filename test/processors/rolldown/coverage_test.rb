@@ -12,7 +12,6 @@ class RolldownCoverageTest < ActiveSupport::TestCase
 
   def setup
     super
-    @env.unregister_minifier('application/javascript')
     register_rolldown
   end
 

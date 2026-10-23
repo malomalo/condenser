@@ -135,7 +135,6 @@ class NpmPackagesTest < ActiveSupport::TestCase
     # the version child.js has
     build = lambda do
       env = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: @npm, base: @path, cache: cache)
-      env.unregister_minifier('application/javascript')
       env.unregister_exporter('application/javascript')
       env.register_exporter('application/javascript', Condenser::RollupProcessor.new(@npm, dynamic_imports: :keep))
       embedded = env.find('main.js').export.source[/child-\h+\.js/]
