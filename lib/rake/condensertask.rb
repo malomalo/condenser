@@ -10,7 +10,7 @@ module Rake
   # Simple Condenser compilation Rake task macro.
   #
   #   Rake::CondenserTask.new do |t|
-  #     t.environment = Condenser.new
+  #     t.environment = Condenser.new(listen: false)
   #     t.output      = "./public/assets"
   #     t.assets      = %w( application.js application.css )
   #   end
@@ -75,7 +75,7 @@ module Rake
 
     def initialize(name = :assets)
       @name         = name
-      @environment  = lambda { Condenser.new(Dir.pwd) }
+      @environment  = lambda { Condenser.new(Dir.pwd, listen: false) }
       @manifest     = lambda { Condenser::Manifest.new(environment, output) }
       @logger       = Logger.new($stdout, level: :info)
       @keep         = 2

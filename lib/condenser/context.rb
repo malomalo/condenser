@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'delegate'
+require 'uri'
 require 'set'
 require 'condenser/errors'
 

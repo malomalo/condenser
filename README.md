@@ -203,6 +203,31 @@ what assets need to be re-compiled when a file changes. Files are considered
 In Rails you can force a "clean" install by clearing the `public/assets` and
 `tmp/cache/assets` directories.
 
+### Listening for changes
+
+By default an environment starts a file listener
+([Listen](https://github.com/guard/listen)) on its load paths and watched paths,
+so a long running process, like a development server, notices changed, added
+and removed files and rebuilds only what they affect. Listen is only used when it
+has a native adapter for the platform (FSEvents, inotify, ...); it isn't used
+when it would fall back to polling.
+
+For one-off builds, like precompiling assets, or in production, pass
+`listen: false`:
+
+```ruby
+env = Condenser.new('app/assets', listen: false)
+```
+
+No listener is started, for the load paths or for the paths passed to
+`env.watch`, which are still recorded. Builds work the same and each new
+environment checks the cache against the files' digests, so it picks up changes
+made since the last build. A running environment doesn't notice files that
+change after it has found an asset; create a new environment to see them.
+
+`Rake::CondenserTask`'s default environment doesn't listen. When you set your
+own `environment` on the task, pass `listen: false` to it.
+
 ### Depending on files that aren't assets
 
 A processor whose output depends on files that aren't assets, like the

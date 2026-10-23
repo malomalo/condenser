@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 require 'logger'
-require 'active_support'
-require 'active_support/core_ext'
 
 require 'condenser/version'
 require 'condenser/errors'
@@ -53,8 +51,12 @@ class Condenser
   # base: If base is passed assets cache_keys will be realitve to this.
   #       This allows deploy systems like Capistrano to take advantage of the
   #       cache even though it precompiles assets in a different folder
-  def initialize(*path, logger: nil, digestor: nil, cache: nil, pipeline: nil, npm_path: nil, base: nil, &block)
+  # listen: Whether to start a file listener (Listen) on the load paths and
+  #         watched paths so a running process notices changes. Defaults to
+  #         true; pass false for one-off builds like precompiling.
+  def initialize(*path, logger: nil, digestor: nil, cache: nil, pipeline: nil, npm_path: nil, base: nil, listen: true, &block)
     @logger = logger || Logger.new($stdout, level: :info)
+    @listen = listen
     @path = []
     append_path(path)
     self.npm_path = npm_path

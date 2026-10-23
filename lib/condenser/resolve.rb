@@ -6,13 +6,12 @@ class Condenser
     def initialize(*args, **kws, &block)
       @reverse_mapping = nil
       @dependency_paths = nil
-      @build_cache_options = kws[:listen]
       super
     end
     
     def build_cache
       return @build_cache if instance_variable_defined?(:@build_cache)
-      @build_cache = BuildCache.new(path, logger: logger)
+      @build_cache = BuildCache.new(path, logger: logger, listen: @listen)
       @watched_paths.each { |p, ignore| @build_cache.watch(p, ignore: ignore) }
       @build_cache
     end
@@ -30,7 +29,7 @@ class Condenser
       accept = Array(accept)
       
       cache_key = [dirname, basename].flatten.join('/')
-      cache_key = "/#{cache_key}" if !cache_key.starts_with?('/')
+      cache_key = "/#{cache_key}" if !cache_key.start_with?('/')
       cache_key << "@#{accept.join(',')}" if accept
       cache_key << "@npm" if npm
       build_cache.fetch(cache_key) do

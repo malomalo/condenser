@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'json'
 require 'set'
 require 'digest/md5'
 require 'digest/sha1'
@@ -258,7 +259,7 @@ class Condenser
 
       @processors_loaded = true
       process
-      @processors.map! { |p| p.is_a?(String) ? p.constantize : p }
+      @processors.map! { |p| p.is_a?(String) ? Object.const_get(p) : p }
       @environment.load_processors(*@processors)
     end
     
