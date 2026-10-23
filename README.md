@@ -295,8 +295,10 @@ environment.register_exporter 'text/css', Condenser::LightningCSSExporter.new(ta
 ```
 
 Other options (`error_recovery`, `scope`) are passed to `LightningCSS.transform`.
-To also minify with Lightning CSS, pass `minify: true` and unregister the
-`text/css` minifier. It needs version 1.33.0.2 or later of the `lightningcss` gem.
+It needs version 1.33.0.2 or later of the `lightningcss` gem. The default
+`text/css` minifier, `Condenser::LightningCSSMinifier`, also takes `targets`,
+so to lower syntax and minify in one pass register it with the targets instead
+of adding an exporter (see [Minifying Assets](#minifying-assets)).
 
 ## Javascript, ES#, & ES Modules
 
@@ -411,13 +413,13 @@ In Rails you will specify them with:
 
 ```ruby
 config.assets.js_minifier  = :rolldown
-config.assets.css_minifier = :scss
+config.assets.css_minifier = :lightning_css
 ```
 
 If you're not using Rails, configure this directly on the "environment".
 
 ``` ruby
-environment.register_minifier 'text/css', Condenser::SassMinifier
+environment.register_minifier 'text/css', Condenser::LightningCSSMinifier
 ```
 
 `Condenser.new`'s default pipeline minifies JavaScript with Rolldown (see
@@ -432,8 +434,26 @@ environment.register_exporter 'application/javascript', Condenser::RolldownProce
 environment.register_minifier 'application/javascript', Condenser::TerserMinifier.new(environment.npm_path)
 ```
 
+`Condenser.new`'s default pipeline minifies CSS with
+`Condenser::LightningCSSMinifier`, which needs the `lightningcss` gem (version
+1.33.0.2 or later). The gem is only loaded when CSS is first minified, which
+raises a `LoadError` if it's missing. To also lower modern syntax and add
+vendor prefixes for your browsers, register it with `targets`, as for
+`LightningCSSExporter`:
+
+``` ruby
+environment.register_minifier 'text/css', Condenser::LightningCSSMinifier.new(targets: { safari: 15.4, chrome: 100 })
+```
+
+`Condenser::SassMinifier` minifies CSS with Dart Sass instead, for apps that
+already use the `sass-embedded` gem and don't want another native gem:
+
+``` ruby
+environment.register_minifier 'text/css', Condenser::SassMinifier
+```
+
 If you are using Condenser directly with a Rack app, don't forget to add
-the dependencies (the `sass-embedded` gem in the example above) to your Gemfile.
+the dependencies (the `lightningcss` gem in the example above) to your Gemfile.
 
 ### Gzip
 

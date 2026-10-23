@@ -127,19 +127,19 @@ class CacheTest < ActiveSupport::TestCase
   end
 
   test 'changing a scss dependency reflects in the next call' do
-    file "dir/a.scss", "body { color: blue; }"
-    file "dir/b.scss", "body { color: green; }"
+    file "dir/a.scss", ".a { color: blue; }"
+    file "dir/b.scss", ".b { color: green; }"
 
     file 'test.scss', '@import "dir/*"'
 
     assert_exported_file 'test.css', 'text/css', <<~CSS
-      body{color:blue}body{color:green}
+      .a{color:#00f}.b{color:green}
     CSS
 
-    file "dir/b.scss", "body { color: red; }"
+    file "dir/b.scss", ".b { color: red; }"
 
     assert_exported_file 'test.css', 'text/css', <<~CSS
-      body{color:blue}body{color:red}
+      .a{color:#00f}.b{color:red}
     CSS
   end
 
@@ -240,17 +240,17 @@ class CacheTest < ActiveSupport::TestCase
   end
   
   test 'a new dependency for a glob call is reflected in the next call' do
-    file "dir/a.scss", "body { color: blue; }"
+    file "dir/a.scss", ".a { color: blue; }"
     file 'test.scss', '@import "dir/*"'
 
     assert_exported_file 'test.css', 'text/css', <<~CSS
-      body{color:blue}
+      .a{color:#00f}
     CSS
 
-    file "dir/b.scss", "body { color: green; }"
+    file "dir/b.scss", ".b { color: green; }"
 
     assert_exported_file 'test.css', 'text/css', <<~CSS
-      body{color:blue}body{color:green}
+      .a{color:#00f}.b{color:green}
     CSS
   end
 
@@ -270,18 +270,18 @@ class CacheTest < ActiveSupport::TestCase
   end
   
   test 'a dependency is removed for a glob call when one of it dependencies is delted' do
-    file "css/a.scss", "body { color: blue; }"
-    file "css/b.scss", "body { color: green; }"
+    file "css/a.scss", ".a { color: blue; }"
+    file "css/b.scss", ".b { color: green; }"
     file 'test.scss', '@import "css/*"'
 
     assert_exported_file 'test.css', 'text/css', <<~CSS
-      body{color:blue}body{color:green}
+      .a{color:#00f}.b{color:green}
     CSS
 
     rm "css/b.scss"
 
     assert_exported_file 'test.css', 'text/css', <<~CSS
-      body{color:blue}
+      .a{color:#00f}
     CSS
   end
 
@@ -315,30 +315,30 @@ class CacheTest < ActiveSupport::TestCase
   end
 
   test 'a dependency is added then changed should flush the parent (CSS)' do
-    file 'a.scss', "body { background: aqua; }"
+    file 'a.scss', ".a { background: aqua; }"
     file 'b.scss', <<~JS
-      body { background: blue; }
+      .b { background: blue; }
     JS
 
     assert_exported_file 'a.css', 'text/css', <<~JS
-      body{background:aqua}
+      .a{background:#0ff}
     JS
 
     file 'a.scss', <<~JS
       @import "b";
-      body { background: aqua; }
+      .a { background: aqua; }
     JS
 
     assert_exported_file 'a.css', 'text/css', <<~JS
-      body{background:blue}body{background:aqua}
+      .b{background:#00f}.a{background:#0ff}
     JS
 
     file 'b.scss', <<~JS
-      body { background: green; }
+      .b { background: green; }
     JS
 
     assert_exported_file 'a.css', 'text/css', <<~JS
-      body{background:green}body{background:aqua}
+      .b{background:green}.a{background:#0ff}
     JS
   end
   

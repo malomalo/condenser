@@ -10,23 +10,35 @@
 #
 #     register_exporter 'text/css', Condenser::LightningCSSExporter.new(targets: { safari: 15.4, chrome: 100 })
 #
-# To also minify with Lightning CSS pass `minify: true` and unregister the
-# 'text/css' minifier.
+# The default 'text/css' minifier, Condenser::LightningCSSMinifier, also
+# takes targets, to lower syntax and minify in one pass.
+#
+# `new` takes `targets:` and other `LightningCSS.transform` options, e.g.
+# `minify` (default false), `error_recovery` or `scope`. `filename` and
+# `css_modules` raise an ArgumentError.
 class Condenser::LightningCSSExporter
-
-  RESERVED_OPTIONS = {
-    filename: "condenser sets it to the asset's",
-    css_modules: "the class names an exported stylesheet uses can't be renamed"
-  }.freeze
-
-  def self.setup(environment)
-    require_lightningcss!
-  end
 
   # The oldest lightningcss gem that applies targets without minifying,
   # accepts minor versions and gives errors a location.
   MINIMUM_VERSION = '1.33.0.2'
 
+  # The `LightningCSS.transform` options condenser sets, to why.
+  RESERVED_OPTIONS = {
+    filename: "condenser sets it to the asset's",
+    css_modules: "the class names an exported stylesheet uses can't be renamed"
+  }.freeze
+
+  # The options the given options are merged into, and the ones merged over
+  # them.
+  DEFAULT_OPTIONS = { minify: false }.freeze
+  FORCED_OPTIONS = {}.freeze
+
+  def self.setup(environment)
+    require_lightningcss!
+  end
+
+  # Loads the lightningcss gem, raising a LoadError naming the class if it's
+  # missing or too old.
   def self.require_lightningcss!
     begin
       require 'lightningcss' unless defined?(::LightningCSS::Backend)
@@ -55,30 +67,32 @@ class Condenser::LightningCSSExporter
   #           major version (Integer), or a Float or String with the minor and
   #           patch versions (`15.4`, `"15.4.1"`). The browsers are android,
   #           chrome, edge, firefox, ie, ios_saf, opera, safari and samsung.
-  #           Default nil, which keeps the CSS as written.
-  # options - Options passed to `LightningCSS.transform`, e.g. `minify`
-  #           (default false), `error_recovery` or `scope`. `filename` and
-  #           `css_modules` raise an ArgumentError.
+  #           Default nil, which keeps the CSS as written. They're sorted so
+  #           their order doesn't change the pipeline digest.
+  # options - Options passed to `LightningCSS.transform`. Raises an
+  #           ArgumentError for a key in RESERVED_OPTIONS.
   def initialize(targets: nil, **options)
-    # Condenser doesn't set up exporters, so the gem is loaded (and its
-    # version checked) here instead of in #call.
-    self.class.require_lightningcss!
+    # Condenser doesn't set up exporters or minifier instances, so the gem is
+    # loaded (and its version checked) here instead of in #call.
+    version = self.class.version
 
+    options = self.class::DEFAULT_OPTIONS.merge(options)
     options.each_key do |key|
-      next unless (instead = RESERVED_OPTIONS[key.to_sym])
-      raise ArgumentError, "LightningCSSExporter options can't include #{key.inspect}, #{instead}"
+      next unless (instead = self.class::RESERVED_OPTIONS[key.to_sym])
+      raise ArgumentError, "#{self.class.name.demodulize} options can't include #{key.inspect}, #{instead}"
     end
+    options[:targets] = targets.transform_keys(&:to_s).sort.to_h if targets
 
-    @transform_options = { minify: false }.merge(options)
-    @transform_options[:targets] = targets.transform_keys(&:to_s).sort.to_h if targets
-    @transform_options.freeze
-    @options = @transform_options.merge(lightningcss: self.class.version).freeze
+    @transform_options = options.merge(self.class::FORCED_OPTIONS).freeze
+    @options = @transform_options.merge(lightningcss: version).freeze
   end
 
   def name
     self.class.name
   end
 
+  # Transforms the input's source, logging warnings with their location and
+  # raising a Condenser::SyntaxError for invalid CSS.
   def call(environment, input)
     result = ::LightningCSS.transform(input[:source], filename: input[:filename], **@transform_options)
 
