@@ -5,13 +5,12 @@ class Condenser
     
     def initialize(*args, **kws, &block)
       @reverse_mapping = nil
-      @build_cache_options = kws[:listen]
       super
     end
     
     def build_cache
       return @build_cache if instance_variable_defined?(:@build_cache)
-      @build_cache = BuildCache.new(path, logger: logger)
+      @build_cache = BuildCache.new(path, logger: logger, listen: @listen)
       @watched_paths.each { |p, ignore| @build_cache.watch(p, ignore: ignore) }
       @build_cache
     end

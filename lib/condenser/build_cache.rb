@@ -36,7 +36,7 @@ class Condenser
       end
     end
 
-    def initialize(path, logger:, listen: {})
+    def initialize(path, logger:, listen: true)
       @logger = logger
       @path = path
       @map_cache = {}
