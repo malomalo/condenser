@@ -41,6 +41,7 @@ class Condenser
   autoload :ZlibWriter,       'condenser/writers/zlib_writer'
   autoload :BrotliWriter,     'condenser/writers/brotli_writer'
   autoload :BuildCache,       'condenser/build_cache'
+  autoload :NodeWorker,       'condenser/node_worker'
   autoload :ParseHelpers,     'condenser/helpers/parse_helpers'
   
   def self.configure(&block)
