@@ -140,7 +140,7 @@ class LightningCSSExporterTest < ActiveSupport::TestCase
 
   test 'raises when the lightningcss gem is missing' do
     with_lightningcss_constant(:Backend, nil) do
-      Condenser::LightningCSS.stubs(:require).with('lightningcss').raises(LoadError)
+      Condenser::LightningCSSExporter.stubs(:require).with('lightningcss').raises(LoadError)
 
       error = assert_raises(LoadError) { Condenser::LightningCSSExporter.new }
       assert_equal "Condenser::LightningCSSExporter requires the lightningcss gem, add `gem 'lightningcss', '>= 1.33.0.2'` to your Gemfile", error.message

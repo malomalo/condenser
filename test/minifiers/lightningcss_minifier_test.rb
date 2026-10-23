@@ -92,7 +92,7 @@ class LightningCSSMinifierTest < ActiveSupport::TestCase
 
   test 'the default pipeline loads without the lightningcss gem and raises when CSS is minified' do
     Condenser::LightningCSSMinifier.instance_variable_set(:@instance, nil)
-    Condenser::LightningCSS.stubs(:require_lightningcss!).raises(LoadError, "Condenser::LightningCSSMinifier requires the lightningcss gem")
+    Condenser::LightningCSSMinifier.stubs(:require_lightningcss!).raises(LoadError, "Condenser::LightningCSSMinifier requires the lightningcss gem")
 
     env = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: @npm_dir, base: @path)
     assert_equal Condenser::LightningCSSMinifier, env.minifier_for('text/css')
