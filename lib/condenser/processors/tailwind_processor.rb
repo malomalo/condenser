@@ -32,7 +32,7 @@ class Condenser::TailwindProcessor
   # minify:    - Minify the CSS like `tailwindcss --minify`. Default false.
   # max_memory - The node process is restarted after a build that leaves it
   #              using more than this many bytes.
-  def initialize(npm_path, base: nil, minify: false, max_memory: Condenser::RolldownProcessor::MAX_MEMORY)
+  def initialize(npm_path, base: nil, minify: false, max_memory: Condenser::NodeWorker::MAX_MEMORY)
     node = Condenser::NodeProcessor.new(npm_path)
     node.npm_install(PACKAGES)
     @binary = node.binary
@@ -65,7 +65,7 @@ class Condenser::TailwindProcessor
 
   def worker
     @lock.synchronize do
-      @worker ||= Condenser::RolldownProcessor::Worker.new(@binary, @modules, script: SCRIPT, name: 'tailwind', max_memory: @max_memory)
+      @worker ||= Condenser::NodeWorker.new(@binary, @modules, script: SCRIPT, name: 'tailwind', max_memory: @max_memory)
     end
   end
 
@@ -74,7 +74,7 @@ class Condenser::TailwindProcessor
     attempts = 0
     message = begin
       worker.build(config, logger: environment.logger)
-    rescue Condenser::RolldownProcessor::WorkerDied
+    rescue Condenser::NodeWorker::WorkerDied
       retry if (attempts += 1) == 1 && !worker.stopping?
       raise
     end

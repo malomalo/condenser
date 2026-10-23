@@ -4,6 +4,7 @@ class TailwindTest < ActiveSupport::TestCase
 
   module SpawnSpy
     def spawn(*args, **kwargs)
+      Thread.current[:tailwind_spawn_args]&.push(args)
       super.tap { |pid| Thread.current[:tailwind_spawns]&.push(pid) }
     end
   end
@@ -18,6 +19,7 @@ class TailwindTest < ActiveSupport::TestCase
   def teardown
     super
     Thread.current[:tailwind_spawns] = nil
+    Thread.current[:tailwind_spawn_args] = nil
     FileUtils.remove_entry(@cache_dir, true) if @cache_dir
     FileUtils.remove_entry(@other, true) if @other
   end
@@ -267,6 +269,16 @@ class TailwindTest < ActiveSupport::TestCase
     assert_match(/\A4\./, @tailwind.options[:tailwindcss])
   end
 
+  test 'the node process runs without a heap size flag' do
+    file 'views/index.html', '<div class="flex"></div>'
+    file 'application.css', '@import "tailwindcss";'
+    spawned = Thread.current[:tailwind_spawn_args] = []
+
+    css
+    node = Condenser::NodeProcessor.new(@env.npm_path)
+    assert_equal [[node.binary, Condenser::TailwindProcessor::SCRIPT, node.npm_module_path]], spawned
+  end
+
   test 'one node process builds every stylesheet and stop_workers stops it' do
     file 'views/index.html', '<div class="flex"></div>'
     file 'application.css', '@import "tailwindcss";'
@@ -278,7 +290,7 @@ class TailwindTest < ActiveSupport::TestCase
     assert_equal 1, pids.size
     assert_equal 1, Process.kill(0, pids.first)
 
-    Condenser::RolldownProcessor.stop_workers
+    Condenser::NodeWorker.stop_workers
     assert_raises(Errno::ESRCH) { Process.kill(0, pids.first) }
   end
 end
