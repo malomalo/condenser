@@ -23,7 +23,7 @@ class CacheStoreContractTest < ActiveSupport::TestCase
 
   test 'every store implements the cache interface' do
     stores.each_key do |store|
-      %i[get set fetch fetch_if clear].each do |method|
+      %i[get set fetch fetch_if delete clear].each do |method|
         assert_respond_to store, method
       end
       assert_equal %i[key force], store.method(:fetch).parameters.map(&:last), store.inspect
@@ -50,6 +50,16 @@ class CacheStoreContractTest < ActiveSupport::TestCase
 
       assert_equal true, !!store.clear
       assert_equal 5, store.fetch_if('value', 'deps') { 5 }, store.inspect
+    end
+  end
+
+  test 'delete removes a key and returns whether it was cached' do
+    stores.each do |store, caches|
+      store.fetch('key') { 1 }
+      assert_equal caches, store.delete('key'), store.inspect
+      assert_nil store.get('key'), store.inspect
+      assert_equal 2, store.fetch('key') { 2 }, store.inspect
+      assert_equal false, store.delete('missing'), store.inspect
     end
   end
 

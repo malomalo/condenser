@@ -31,15 +31,5 @@ class Condenser::CacheStore
     set(key_or_proc, Marshal.dump(value))
     value
   end
-  
-  def delete(key)
-    @key_access.delete(key)
-    if value = @cache.delete(key)
-      @cache_size -= cached_size(key, value)
-      true
-    else
-      false
-    end
-  end
 
 end
