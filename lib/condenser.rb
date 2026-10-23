@@ -24,7 +24,9 @@ class Condenser
   autoload :JSAnalyzer,       'condenser/processors/js_analyzer'
   autoload :PurgeCSSProcessor,'condenser/processors/purgecss_processor'
   autoload :CSSMediaCombinerProcessor,'condenser/processors/css_media_combiner_processor'
+  autoload :LightningCSS,     'condenser/helpers/lightningcss'
   autoload :LightningCSSExporter,'condenser/exporters/lightningcss_exporter'
+  autoload :LightningCSSMinifier,'condenser/minifiers/lightningcss_minifier'
   autoload :NodeProcessor,    'condenser/processors/node_processor'
   autoload :UglifyMinifier,   'condenser/minifiers/uglify_minifier'
   autoload :TerserMinifier,   'condenser/minifiers/terser_minifier'
@@ -70,7 +72,7 @@ class Condenser
         register_exporter     'application/javascript', Condenser::RolldownProcessor.new(npm_path)
         register_minifier     'application/javascript', Condenser::UglifyMinifier
         
-        register_minifier  'text/css', Condenser::SassMinifier
+        register_minifier  'text/css', Condenser::LightningCSSMinifier
       
         register_writer Condenser::FileWriter.new
         register_writer Condenser::ZlibWriter.new

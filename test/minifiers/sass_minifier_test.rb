@@ -3,6 +3,11 @@ require 'sass-embedded'
 
 class SassMinifierTest < ActiveSupport::TestCase
 
+  def setup
+    super
+    @env.register_minifier('text/css', Condenser::SassMinifier)
+  end
+
   test 'simple example' do
     file 'test.css', <<~JS
       * {

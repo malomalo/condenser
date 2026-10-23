@@ -745,12 +745,14 @@ class CondenserSCSSTest < ActiveSupport::TestCase
 
   test "the Dart Sass version is part of the cache key" do
     file 'test.scss', 'div { color: red; }'
+    @env.register_minifier('text/css', Condenser::SassMinifier)
     before = @env.find('test.css').cache_key
     export_before = @env.export_pipeline_digest('text/css')
 
     Condenser::Sass.stubs(:version).returns('0.0.1')
     [Condenser::ScssTransformer, Condenser::SassMinifier].each { |c| c.instance_variable_set(:@instance, nil) }
     env = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: @npm_dir, base: @path)
+    env.register_minifier('text/css', Condenser::SassMinifier)
     assert_not_equal before, env.find('test.css').cache_key
     assert_not_equal export_before, env.export_pipeline_digest('text/css')
   ensure
