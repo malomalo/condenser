@@ -283,7 +283,8 @@ class Condenser::RolldownProcessor
           { code: utf8(asset.source), digest: asset.hexdigest }
         end
       when 'glob'
-        glob_module(args.first)
+        glob, importer = args
+        glob_module(glob, importer: importer)
       when 'resolveDynamicImport'
         resolve_dynamic_import(*args)
       end
@@ -303,11 +304,12 @@ class Condenser::RolldownProcessor
       string.encoding == Encoding::BINARY ? string.dup.force_encoding(Encoding::UTF_8) : string
     end
 
-    def glob_module(glob)
+    # "./" and "../" globs are relative to +importer+, like export_dependencies.
+    def glob_module(glob, importer:)
       code = String.new
       exports = []
       digests = {}
-      @environment.resolve(glob, nil, accept: @accept, npm: true).each_with_index do |f, i|
+      @environment.resolve(glob, importer, accept: @accept, npm: true).each_with_index do |f, i|
         digests[f.source_file] = digest_for(f.source_file)
         if f.has_default_export?
           code << "import _#{i} from #{JSON.generate(f.source_file)};\n"
