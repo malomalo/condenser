@@ -649,7 +649,7 @@ class Condenser
             end
           end
 
-          if minifier = @environment.minifier_for(content_type)
+          if minifier = @environment.export_minifier_for(content_type)
             @environment.logger.info { "Minifing #{self.filename} with #{minifier.name}" }
             minifier.call(@environment, data)
           end

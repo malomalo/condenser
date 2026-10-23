@@ -65,7 +65,7 @@ class Condenser
     # or nil if it has neither.
     def export_pipeline_digest(mime_type)
       exporters = @exporters[mime_type] || []
-      minifier = @minifiers[mime_type]
+      minifier = export_minifier_for(mime_type)
       return if exporters.empty? && minifier.nil?
 
       versioned_digest(JSON.generate(pipline_to_json([exporters, minifier])))
@@ -135,6 +135,13 @@ class Condenser
       @minifiers[mime_type]
     end
     
+    # The minifier exporting +mime_type+ runs: none if one of its exporters
+    # already minifies (its `minify?` is true), otherwise the registered one.
+    def export_minifier_for(mime_type)
+      return if @exporters[mime_type]&.any? { |e| e.respond_to?(:minify?) && e.minify? }
+      @minifiers[mime_type]
+    end
+
     def unregister_minifier(mime_type)
       @minifiers[mime_type] = nil
     end
