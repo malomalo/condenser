@@ -161,6 +161,87 @@ class TailwindTest < ActiveSupport::TestCase
     assert_match(/\Aapplication\.css: .*automatic source detection, which needs the TailwindProcessor's base:/, error.message)
   end
 
+  test 'a stylesheet with @reference compiles @apply without Tailwind\'s CSS and without a base' do
+    file 'views/index.html', '<div class="grid"></div>'
+    file 'tailwind.css', <<~CSS
+      @import "tailwindcss";
+      @theme { --color-brand: #3366ff; }
+    CSS
+    file 'application.css', <<~CSS
+      @reference "./tailwind.css";
+      .btn { @apply px-4 text-brand; }
+    CSS
+    @env.unregister_preprocessor 'text/css', @tailwind
+    @env.register_preprocessor 'text/css', Condenser::TailwindProcessor.new(@env.npm_path)
+
+    asset = @env.find('application.css')
+    source = asset.source
+    assert_includes source, ".btn {\n  padding-inline: calc(var(--spacing, 0.25rem) * 4);\n  color: var(--color-brand, #3366ff);\n}"
+    assert_not_includes source, '.grid {'
+    assert_not_includes source, '@layer theme'
+    assert_not_includes source, 'box-sizing: border-box'
+    assert_not_includes source, '--color-red-500'
+    assert_includes asset.file_dependencies, File.join(@path, 'tailwind.css')
+    assert_not_includes asset.file_dependencies, File.join(@path, 'views/index.html')
+    assert_empty asset.directory_dependencies
+  end
+
+  test 'a change to the @theme of a referenced stylesheet rebuilds the CSS' do
+    file 'tailwind.css', <<~CSS
+      @import "tailwindcss";
+      @theme { --color-brand: #3366ff; }
+    CSS
+    file 'application.css', <<~CSS
+      @reference "./tailwind.css";
+      .btn { @apply text-brand; }
+    CSS
+
+    assert_includes css(new_env), '#3366ff'
+    file 'tailwind.css', <<~CSS
+      @import "tailwindcss";
+      @theme { --color-brand: #ff6633; }
+    CSS
+    assert_includes css(new_env), '#ff6633'
+  end
+
+  test 'a change to the @theme of a referenced stylesheet rebuilds the CSS with the listener' do
+    skip 'needs a listener' if !@env.build_cache.listening
+    file 'tailwind.css', <<~CSS
+      @import "tailwindcss";
+      @theme { --color-brand: #3366ff; }
+    CSS
+    file 'application.css', <<~CSS
+      @reference "./tailwind.css";
+      .btn { @apply text-brand; }
+    CSS
+
+    assert_includes css, '#3366ff'
+    file 'tailwind.css', <<~CSS
+      @import "tailwindcss";
+      @theme { --color-brand: #ff6633; }
+    CSS
+    assert wait_until { css.include?('#ff6633') }
+  end
+
+  test '@reference with @import "tailwindcss" still compiles and scans for utilities' do
+    file 'views/index.html', '<div class="grid"></div>'
+    file 'theme.css', '@theme { --color-brand: #3366ff; }'
+    file 'application.css', <<~CSS
+      @import "tailwindcss";
+      @reference "./theme.css";
+      .btn { @apply text-brand; }
+    CSS
+
+    asset = @env.find('application.css')
+    source = asset.source
+    assert_includes source, "/*! tailwindcss v#{@tailwind.options[:tailwindcss]}"
+    assert_includes source, 'box-sizing: border-box'
+    assert_includes source, ".grid {\n    display: grid;\n  }"
+    assert_includes source, ".btn {\n  color: var(--color-brand, #3366ff);\n}"
+    assert_includes asset.file_dependencies, File.join(@path, 'views/index.html')
+    assert_includes asset.file_dependencies, File.join(@path, 'theme.css')
+  end
+
   test 'a Tailwind error is raised with the file name and the node process is kept' do
     file 'application.css', <<~CSS
       @import "tailwindcss" source(none);

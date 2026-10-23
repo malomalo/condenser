@@ -3,9 +3,9 @@
 require 'json'
 require 'set'
 
-# Compiles stylesheets that `@import "tailwindcss"` with Tailwind CSS v4, in
-# a node process that's kept running between builds. Other stylesheets are
-# left as they are. It's registered as an instance:
+# Compiles stylesheets that `@import "tailwindcss"` or use `@reference` with
+# Tailwind CSS v4, in a node process that's kept running between builds.
+# Other stylesheets are left as they are. It's registered as an instance:
 #
 #     register_preprocessor 'text/css', Condenser::TailwindProcessor.new(npm_path, base: Rails.root)
 #
@@ -15,7 +15,7 @@ class Condenser::TailwindProcessor
 
   SCRIPT = File.expand_path('tailwind_processor.js', __dir__)
   PACKAGES = %w[tailwindcss @tailwindcss/node @tailwindcss/oxide].freeze
-  IMPORT = /@import\s+(?:url\(\s*)?["']tailwindcss["'\/]/
+  IMPORT = /@import\s+(?:url\(\s*)?["']tailwindcss["'\/]|@reference\b/
 
   # Whether it minifies, and the versions of the Tailwind packages, which are
   # part of the pipeline digest.

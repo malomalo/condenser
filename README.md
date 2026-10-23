@@ -301,9 +301,9 @@ To also minify with Lightning CSS, pass `minify: true` and unregister the
 ### Utility CSS with Tailwind
 
 `Condenser::TailwindProcessor` compiles stylesheets that `@import
-"tailwindcss"` with [Tailwind CSS](https://tailwindcss.com) v4, which needs
-[Node.js](https://nodejs.org/). Other stylesheets are left as they are. Register
-it as a `text/css` preprocessor:
+"tailwindcss"` or use `@reference` with [Tailwind CSS](https://tailwindcss.com)
+v4, which needs [Node.js](https://nodejs.org/). Other stylesheets are left as
+they are. Register it as a `text/css` preprocessor:
 
 ```ruby
 env.register_preprocessor 'text/css', Condenser::TailwindProcessor.new(env.npm_path, base: Rails.root)
@@ -327,6 +327,22 @@ the CSS.
 CLI's `--cwd`. Without it a stylesheet has to say what to scan with
 `@import "tailwindcss" source("../views")` or `source(none)` and `@source`.
 `@source` paths are relative to the stylesheet, as in Tailwind.
+
+A stylesheet that's built separately, and only needs `@apply`, `theme()` or
+custom variants, can `@reference` the main one instead of importing Tailwind
+again. It gets the main stylesheet's theme, utilities and variants but none of
+its CSS, and since it has no utilities to generate nothing is scanned and it
+doesn't need `base:`:
+
+```css
+/* app/assets/stylesheets/admin.css */
+@reference "./application.css";
+.btn { @apply px-4 font-bold text-brand; }
+```
+
+The path is resolved by Tailwind, relative to the stylesheet or as an npm
+package, not through the load paths. The referenced file and what it imports
+are file dependencies, so changing its `@theme` rebuilds the stylesheet.
 
 Every file Tailwind scans is recorded as a file dependency, and every
 directory it scans as a directory dependency (see [Depending on files that
