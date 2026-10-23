@@ -283,26 +283,24 @@ class Condenser
     def file_digest(path)
       return @build_file_digests[path] if @build_file_digests&.key?(path)
 
-      digest = current_file_digest(path)
+      digest = begin
+        stat = File.stat(path)
+        if stat.file?
+          signature = [stat.mtime.to_r, stat.ctime.to_r, stat.size, stat.ino]
+          cached = @file_digests[path]
+          if cached && cached[0] == signature
+            cached[1]
+          else
+            (@file_digests[path] = [signature, Digest::SHA256.file(path).base64digest])[1]
+          end
+        end
+      rescue Errno::ENOENT, Errno::ENOTDIR
+        @file_digests.delete(path)
+        nil
+      end
       @build_file_digests[path] = digest if @build_file_digests
       digest
     end
-
-    # A digest of the file's contents, or nil if it's missing.
-    def current_file_digest(path)
-      stat = File.stat(path)
-      return if !stat.file?
-
-      signature = [stat.mtime.to_r, stat.ctime.to_r, stat.size, stat.ino]
-      cached = @file_digests[path]
-      return cached[1] if cached && cached[0] == signature
-
-      (@file_digests[path] = [signature, Digest::SHA256.file(path).base64digest])[1]
-    rescue Errno::ENOENT, Errno::ENOTDIR
-      @file_digests.delete(path)
-      nil
-    end
-    private :current_file_digest
 
     # A digest of the names of the files in +path+ that match +globs+ and of
     # its subdirectories (and, if +recursive+, the same for each
