@@ -100,16 +100,13 @@ class CondenserBabelTest < ActiveSupport::TestCase
       function a_default() {
       \tconsole.log((0, import_assign.default)({}, { a: 1 }));
       }
-      //#endregion
-      //#region b.js
+      // b.js
       function b_default() {
       \tconsole.log((0, import_assign.default)({}, { b: 1 }));
       }
-      //#endregion
-      //#region c.js
+      // c.js
       a_default();
       b_default();
-      //#endregion
     JS
   end
   
@@ -126,15 +123,13 @@ class CondenserBabelTest < ActiveSupport::TestCase
     JS
   
     assert_exported_file 'name.js', 'application/javascript', <<~JS
-      //#region module/name.js
+      // module/name.js
       function x(y) {
       \treturn y === null || y === void 0 ? void 0 : y.z;
       }
-      //#endregion
-      //#region name.js
+      // name.js
       var d = {};
       console.log(x(d === null || d === void 0 ? void 0 : d.z));
-      //#endregion
     JS
   
   end
