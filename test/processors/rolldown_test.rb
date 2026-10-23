@@ -353,21 +353,27 @@ class RolldownTest < ActiveSupport::TestCase
     assert sockets.all?(&:closed?)
   end
 
-  test 'an unresolved import logs a warning' do
+  test 'an unresolved import raises an error naming the importer and the import' do
     file 'main.js', <<~JS
       import x from 'nope';
 
       console.log( x );
     JS
 
+    error = assert_raises(RuntimeError) { @env.find('main.js').export }
+    assert error.message.start_with?("Error: #{@path}/main.js:1:15: [UNRESOLVED_IMPORT] Could not resolve 'nope' in main.js"), error.message
+    assert_not_includes error.message, "\e["
+  end
+
+  test 'a warning is logged' do
+    file 'main.js', <<~JS
+      console.log( eval('1') );
+    JS
+
     log = StringIO.new
     @env.logger = Logger.new(log, level: :warn)
-    assert_exported_file 'main.js', 'application/javascript', <<~FILE
-      import x from "nope";
-      // main.js
-      console.log(x);
-    FILE
-    assert_match(/WARN -- : \[UNRESOLVED_IMPORT\] .*Could not resolve 'nope' in main\.js/, log.string)
+    @env.find('main.js').export
+    assert_match(/WARN -- : \[EVAL\] Use of direct `eval` function/, log.string)
     assert_not_includes log.string, "\e["
   end
 

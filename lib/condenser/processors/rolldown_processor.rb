@@ -224,6 +224,8 @@ class Condenser::RolldownProcessor
   end
 
   class Runner < Condenser::NodeProcessor
+    JSON_TYPE = 'application/json'
+
     def initialize(dir = nil, worker:, prefix: nil, dynamic_imports: :inline, aliases: {}, platform: 'neutral', minify: false)
       super(dir)
       @worker = worker
@@ -240,6 +242,7 @@ class Condenser::RolldownProcessor
       @accept = input[:content_types].last
       @entry = input[:source_file]
       @digests = {}
+      @json = Set.new
 
       config = {
         entry: @entry,
@@ -280,12 +283,17 @@ class Condenser::RolldownProcessor
         importee, importer = args
         # npm: false; Rolldown resolves node_modules when this is nil.
         id = @environment.find(importee, importer, accept: @accept)&.source_file
-        { id: id, digest: digest_for(id) } if id
+        # JSON needs its extension, as in Node and Rolldown.
+        if id.nil? && importee.end_with?('.json')
+          id = @environment.find(importee, importer, accept: JSON_TYPE)&.source_file
+          @json << id if id
+        end
+        { id: id, type: @json.include?(id) ? 'json' : 'js', digest: digest_for(id) } if id
       when 'load'
         id = args.first
         if id == @entry
           { code: utf8(@input[:source]), digest: digest_for(@entry) }
-        elsif (asset = @environment.find(id, accept: @accept))
+        elsif (asset = @environment.find(id, accept: accept_for(id)))
           { code: utf8(asset.source), digest: asset.hexdigest }
         end
       when 'glob'
@@ -302,8 +310,12 @@ class Condenser::RolldownProcessor
       @digests[id] ||= if id == @entry
         @environment.digestor.hexdigest(@input[:source])
       else
-        @environment.find(id, accept: @accept)&.hexdigest
+        @environment.find(id, accept: accept_for(id))&.hexdigest
       end
+    end
+
+    def accept_for(id)
+      @json.include?(id) ? JSON_TYPE : @accept
     end
 
     def utf8(string)

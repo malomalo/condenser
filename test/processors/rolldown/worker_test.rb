@@ -120,7 +120,8 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     plain = Condenser::RolldownProcessor.new(@env.npm_path)
     aliased = Condenser::RolldownProcessor.new(@env.npm_path, aliases: { 'condenser-alias' => File.join(@path, 'aliased.js') }, platform: 'browser')
     assert_includes export('main.js', processor: aliased), '"aliased"'
-    assert_includes export('main.js', processor: plain), 'from "condenser-alias"'
+    error = assert_raises(RuntimeError) { export('main.js', processor: plain) }
+    assert_includes error.message, "Could not resolve 'condenser-alias'"
     assert_includes export('main.js', processor: aliased), '"aliased"'
     assert_not_equal worker_pid(plain), worker_pid(aliased)
     assert alive?(worker_pid(plain))
@@ -428,9 +429,7 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     log = StringIO.new
     @env.logger = Logger.new(log, level: :warn)
     file 'warns.js', <<~JS
-      import x from 'nope';
-
-      console.log( x );
+      console.log( eval('1') );
     JS
 
     reference = export('main.js')
@@ -440,9 +439,9 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     assert_empty log.string
 
     export('warns.js')
-    assert_equal 1, log.string.scan('[UNRESOLVED_IMPORT]').size
+    assert_equal 1, log.string.scan('[EVAL]').size
     export('main.js')
-    assert_equal 1, log.string.scan('[UNRESOLVED_IMPORT]').size
+    assert_equal 1, log.string.scan('[EVAL]').size
   end
 
   test 'concurrent exports share the worker one build at a time' do

@@ -353,6 +353,26 @@ condenser.register_exporter('application/javascript', Condenser::RolldownProcess
 Since the version is read once, upgrading Rolldown takes effect when the
 process restarts or a new processor is created.
 
+An import that can't be resolved, as an asset or an npm package, fails the
+build with an error naming the importing file and the import.
+
+### Importing JSON
+
+With Rolldown, a `.json` file can be imported like any other asset, from the
+load paths or relative to the importing file. The extension is required, as in
+Node; `import users from 'users'` doesn't find `users.json`.
+
+```js
+import users from 'users.json';
+import { name } from 'config/app.json' with { type: 'json' };
+```
+
+The JSON is the default export, and its top-level keys that are valid
+identifiers are also named exports. It's inlined into the bundle, and editing
+it rebuilds the bundles that import it. JSON rendered from a template, such as
+`users.json.erb`, is imported as `users.json`. `RollupProcessor` doesn't
+support importing JSON.
+
 `Condenser::RollupProcessor` is deprecated and will be removed in condenser
 3.0. Until then it can still be used by registering it in place of Rolldown:
 
