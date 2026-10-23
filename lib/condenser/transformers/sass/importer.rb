@@ -64,10 +64,12 @@ class Condenser::Sass::Importer
       importer, name = path.split('!/', 2).map { |part| decode(part) }
       importer_file = @source_files[self.class.url(SCHEME, importer)]
     when NPM_SCHEME
-      # A URL relative to an npm stylesheet, resolved by Dart Sass
+      # A URL relative to an npm stylesheet, resolved by Dart Sass. nil if
+      # there's no such file.
       return if @environment.npm_path.nil?
       file = sass_file(File.join(@environment.npm_path, decode(path)))
-      return file && npm_url(file)
+      return npm_url(file) if file
+      return
     when nil
       return if context.containing_url.nil?
       name = expand_path(decode(path))
