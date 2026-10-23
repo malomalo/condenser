@@ -373,6 +373,9 @@ class Condenser::RollupProcessor
                 x = File.expand_path(importee, File.dirname(importer))
                 x = "#{x}.js" if !x.end_with?('.js', '.mjs')
                 File.file?(x) ? x : (x.delete_suffix('.js') + "/index.js")
+              elsif importee.end_with?('*') && importee.match?(Condenser::Resolve::SOURCE_RELATIVE)
+                # The absolute glob, so it's relative to the importer
+                File.join(@environment.decompose_path(importee, @entry == importer ? @input[:source_file] : importer)[0], '*')
               elsif importee.end_with?('*')
                 File.join(File.dirname(importee), '*')
               else

@@ -81,8 +81,8 @@ class Condenser
             globs = Set.new
             dirs = Set.new
             (added + removed + modified).each do |file|
-              globs << file.match(/([^\.]+)(\.|$)/).to_a[1]
-              @path.select { |p| file.start_with?(File.join(p, '')) }.each do |path_match|
+              # '' for the absolute globs that "./" and "../" imports are looked up by
+              ['', *@path.select { |p| file.start_with?(File.join(p, '')) }].each do |path_match|
                 a = file.delete_prefix(path_match).match(/([^\.]+)(\.|$)/).to_a[1]
                 b = File.join(File.dirname(a), "*")
               
