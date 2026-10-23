@@ -9,6 +9,7 @@ SimpleCov.start do
 end
 
 require 'fileutils'
+require 'json'
 
 require 'condenser'
 require 'condenser/server'
@@ -23,11 +24,42 @@ require 'minitest/reporters'
 
 Minitest::Reporters.use! Minitest::Reporters::SpecReporter.new
 
+# The tests install the npm packages they use into tmp/ as needed, unpinned.
+# These are installed first, at these versions, so a new release doesn't
+# change the test output (Rolldown) or break the tests (Babel 8 isn't
+# supported yet). They're saved to tmp/package.json so later installs don't
+# replace them. To upgrade, bump the version here.
+TEST_NPM_PACKAGES = {
+  'rolldown'                        => '1.2.15',
+  '@babel/core'                     => '7',
+  '@babel/preset-env'               => '7',
+  '@babel/plugin-transform-runtime' => '7',
+  '@babel/runtime-corejs3'          => '7'
+}
+
+TEST_NPM_DIR = File.expand_path('../../tmp', __FILE__)
+
+def install_test_npm_packages
+  FileUtils.mkdir_p(TEST_NPM_DIR)
+  missing = TEST_NPM_PACKAGES.reject do |name, version|
+    manifest = File.join(TEST_NPM_DIR, 'node_modules', name, 'package.json')
+    next false unless File.exist?(manifest)
+    installed = JSON.parse(File.read(manifest))['version']
+    installed == version || installed.start_with?("#{version}.")
+  end
+  return if missing.empty?
+
+  packages = missing.map { |name, version| "#{name}@#{version}" }
+  system("npm", "install", "--silent", "--save-exact", "--prefix", TEST_NPM_DIR, *packages) ||
+    abort("npm install #{packages.join(' ')} failed")
+end
+install_test_npm_packages
+
 class ActiveSupport::TestCase
 
   def setup
     @path = File.realpath(Dir.mktmpdir)
-    @npm_dir = File.expand_path('../../tmp', __FILE__)
+    @npm_dir = TEST_NPM_DIR
     Dir.mkdir(@npm_dir) if !Dir.exist?(@npm_dir)
     @env = Condenser.new(@path, logger: Logger.new('/dev/null', level: :debug), npm_path: @npm_dir, base: @path)
     @env.unregister_writer(Condenser::ZlibWriter)
