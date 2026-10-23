@@ -51,6 +51,16 @@ class Condenser::Cache
       value
     end
     
+    def delete(key)
+      @key_access.delete(key)
+      if value = @cache.delete(key)
+        @cache_size -= cached_size(key, value)
+        true
+      else
+        false
+      end
+    end
+
     def prune
       keys = @key_access.keys.sort { |a, b| @key_access[a].to_f <=> @key_access[b].to_f }
       keys.each do |key|

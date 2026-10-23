@@ -77,6 +77,21 @@ class Condenser::Cache
       value
     end
     
+    # Removes the key's cache file and takes it out of the tracked size.
+    #
+    # Returns true if the key existed, false otherwise.
+    def delete(key)
+      path = File.join(@root, "#{key}.cache")
+      stat = safe_stat(path)
+      return false unless stat
+
+      File.delete(path)
+      @size -= stat.size if @size
+      true
+    rescue Errno::ENOENT
+      false
+    end
+
     # Public: Pretty inspect
     #
     # Returns String.
