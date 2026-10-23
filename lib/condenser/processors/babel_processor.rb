@@ -78,7 +78,7 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
       directives = match.to_s.split(/\n/).map { |l| l.delete_prefix("//").strip }
       directives.each do |directive|
         if directive.start_with?('depends_on')
-          input[:process_dependencies] << directive.sub(/\Adepends_on\s+/, '')
+          input[:depends_on] << directive.sub(/\Adepends_on\s+/, '')
         end
       end
     end

@@ -98,15 +98,18 @@ class Condenser
     end
 
     def process_dependencies
-      direct_dependency_names[:assets].inject([]) do |memo, i|
-        i[0] = File.join(@environment.base, i[0].delete_prefix('!')) if i[0].start_with?('!') && @environment.base
-        npm = !@environment.npm_path.nil? && i[0].start_with?('/')
-        @environment.resolve(i[0], File.dirname(@source_file), accept: i[1], npm: npm).each do |asset|
-          memo << asset
-        end
-        memo
+      direct_dependency_names[:assets].flat_map do |name, accept|
+        resolve_process_dependency(name, accept: accept)
       end.tap { |assets| @environment.build_cache.record_process_dependencies(self, assets) }
     end
+
+    # The assets a process dependency [name, accept] resolves to.
+    def resolve_process_dependency(name, accept:)
+      name = File.join(@environment.base, name.delete_prefix('!')) if name.start_with?('!') && @environment.base
+      npm = !@environment.npm_path.nil? && name.start_with?('/')
+      @environment.resolve(name, File.dirname(@source_file), accept: accept, npm: npm)
+    end
+    private :resolve_process_dependency
 
     # The file dependencies as recorded: absolute paths, or bare paths that
     # are looked up in the load paths.
@@ -456,6 +459,7 @@ class Condenser
             file_dependencies: Set.new,
             directory_dependencies: Set.new,
             
+            depends_on: Set.new,
             processors: Set.new
           }
         
@@ -511,6 +515,7 @@ class Condenser
             raise ContentTypeMismatch, "mime type(s) \"#{@content_types.join(', ')}\" does not match requested mime type(s) \"#{data[:mime_types].join(', ')}\""
           end
       
+          depends_on_directives(data)
           data[:digest] = @environment.digestor.digest(data[:source])
           data[:digest_name] = @environment.digestor.name.sub(/^.*::/, '').downcase
           env, data[:process_dependencies] = data[:process_dependencies].partition { |d| d.is_a?(String) && d.start_with?('env:') }
@@ -586,6 +591,40 @@ class Condenser
       end
     end
     
+    # Records the `// depends_on` directives. A `!` path is a file relative
+    # to the environment's base, recorded as a file dependency so it's only a
+    # rebuild trigger. Any other path is a process dependency, looked up like
+    # an import; if it isn't a glob and no asset matches, a ./, ../ or
+    # absolute path is recorded as a file dependency too. Raises FileNotFound
+    # if nothing is found.
+    def depends_on_directives(data)
+      data.delete(:depends_on).each do |name|
+        if name.start_with?('!')
+          path = File.expand_path(name.delete_prefix('!'), @environment.base) if @environment.base
+          raise FileNotFound, "#{@filename}: couldn't find '#{name}' for // depends_on" if !path || !File.file?(path)
+          data[:file_dependencies] << path
+          next
+        end
+
+        data[:process_dependencies] << name
+        next if name.match?(Context::GLOB)
+
+        dep_name, accept = normialize_dependency_names([name]).first
+        next if !resolve_process_dependency(dep_name, accept: accept).empty?
+
+        path = if File.absolute_path?(name)
+          name
+        elsif name.match?(Resolve::SOURCE_RELATIVE)
+          File.expand_path(name, File.dirname(@source_file))
+        end
+        if !path || !File.file?(path)
+          hint = " (use '!#{name}' for a file relative to the app root)" if !path
+          raise FileNotFound, "#{@filename}: couldn't find '#{name}' for // depends_on#{hint}"
+        end
+        data[:file_dependencies] << path
+      end
+    end
+
     # Directory dependencies are a path, or a Hash with a :path, the :glob
     # (or globs) that the names of the files to watch match (default "*")
     # and whether it's :recursive. They're stored as [path, globs, recursive].
@@ -617,7 +656,7 @@ class Condenser
     rescue FileNotFound
       nil
     end
-    private :dependency_name, :resolve_dependency_path
+    private :depends_on_directives, :dependency_name, :resolve_dependency_path
 
     def export
       return @export if @export
