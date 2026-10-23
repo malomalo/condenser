@@ -180,17 +180,17 @@ class Condenser
     end
     
     def build
+      @build_cc += 1
       if build_cache.listening && !build_cache.semaphore.owned?
-        build_cache.semaphore.lock 
+        build_cache.semaphore.lock
         logger.debug { "build cache semaphore locked by #{Thread.current.object_id}" }
       end
 
-      if @build_cc == 0
+      if @build_cc == 1
         build_cache.start_build
         build_cache.clear_if_npm_changed(npm_path)
         @dependency_paths = {}
       end
-      @build_cc += 1
       yield
     ensure
       @build_cc -= 1

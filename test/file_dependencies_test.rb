@@ -706,6 +706,18 @@ class FileDependenciesTest < ActiveSupport::TestCase
     assert_not_equal first, @env.build_cache.file_digest(path)
   end
 
+  test 'a build that raises while starting still lets the next build start' do
+    file 'content/a.html', 'one'
+    path = File.join(@content, 'a.html')
+
+    @env.build_cache.stubs(:clear_if_npm_changed).raises(Errno::EACCES).then.returns(nil)
+    assert_raises(Errno::EACCES) { @env.build { } }
+
+    first = @env.build { @env.build_cache.file_digest(path) }
+    File.write(path, 'two, which is longer')
+    assert_not_equal first, @env.build { @env.build_cache.file_digest(path) }
+  end
+
   test 'a dependency path is looked up once per build, and ./ paths for each source directory' do
     @second = File.realpath(Dir.mktmpdir)
     file 'config/x.txt', 'second', base: @second
