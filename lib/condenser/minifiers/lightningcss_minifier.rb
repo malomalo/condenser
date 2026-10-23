@@ -13,14 +13,13 @@
 # `new` takes `targets:`, as for Condenser::LightningCSSExporter, and other
 # `LightningCSS.transform` options, e.g. `error_recovery`. `filename`,
 # `css_modules` and `minify` raise an ArgumentError.
-class Condenser::LightningCSSMinifier
+class Condenser::LightningCSSMinifier < Condenser::LightningCSSExporter
 
-  include Condenser::LightningCSSProcessor
-
-  RESERVED_OPTIONS = Condenser::LightningCSSProcessor::RESERVED_OPTIONS.merge(
+  RESERVED_OPTIONS = Condenser::LightningCSSExporter::RESERVED_OPTIONS.merge(
     minify: 'the minifier always minifies'
   ).freeze
 
+  DEFAULT_OPTIONS = {}.freeze
   FORCED_OPTIONS = { minify: true }.freeze
 
   # The default minifier is registered as the class, so the gem is only

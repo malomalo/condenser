@@ -58,6 +58,25 @@ class LightningCSSMinifierTest < ActiveSupport::TestCase
     end
   end
 
+  test 'always minifies, without the exporter\'s default options' do
+    minifier = Condenser::LightningCSSMinifier.new(targets: { safari: 12, chrome: 80 }, error_recovery: true)
+
+    assert_equal 'Condenser::LightningCSSMinifier', minifier.name
+    assert_equal({ error_recovery: true, targets: { 'chrome' => 80, 'safari' => 12 }, minify: true, lightningcss: LightningCSS::VERSION }, minifier.options)
+    assert_equal [:error_recovery, :targets, :minify, :lightningcss], minifier.options.keys
+  end
+
+  test 'names the minifier when the lightningcss gem is missing' do
+    backend = LightningCSS::Backend
+    Condenser::LightningCSSMinifier.stubs(:require).with('lightningcss').raises(LoadError)
+    LightningCSS.send(:remove_const, :Backend)
+
+    error = assert_raises(LoadError) { Condenser::LightningCSSMinifier.new }
+    assert_equal "Condenser::LightningCSSMinifier requires the lightningcss gem, add `gem 'lightningcss', '>= 1.33.0.2'` to your Gemfile", error.message
+  ensure
+    LightningCSS.const_set(:Backend, backend)
+  end
+
   test 'raises a syntax error with the location for invalid CSS' do
     file 'test.css', <<~CSS
       .a { color: red; }
