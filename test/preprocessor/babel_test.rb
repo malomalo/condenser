@@ -135,12 +135,12 @@ class CondenserBabelTest < ActiveSupport::TestCase
 
   end
 
-  test 'depends_on a file relative to base that is not an asset' do
+  test 'depends_on a ! path, a file relative to base that is not an asset' do
     root = File.realpath(Dir.mktmpdir)
     @env.base = root
     file 'config/x.yml', "secret: one\n", base: root
     file 'name.js', <<~JS
-      // depends_on config/x.yml
+      // depends_on !config/x.yml
       console.log(1);
     JS
 
@@ -153,7 +153,7 @@ class CondenserBabelTest < ActiveSupport::TestCase
       console.log(1);
     JS
     error = assert_raises(Condenser::FileNotFound) { @env.find('missing.js').process }
-    assert_equal "missing.js: couldn't find 'config/missing.yml' for // depends_on", error.message
+    assert_equal "missing.js: couldn't find 'config/missing.yml' for // depends_on (use '!config/missing.yml' for a file relative to the app root)", error.message
   ensure
     FileUtils.remove_entry(root, true)
   end

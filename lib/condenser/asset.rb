@@ -591,14 +591,21 @@ class Condenser
       end
     end
     
-    # Records the `// depends_on` directives. Each is a process dependency,
-    # looked up like an import, so an asset added later takes over. If it
-    # isn't a glob and no asset matches, it's a file relative to the
-    # environment's base (or the source file if it starts with ./ or ../),
-    # recorded as a file dependency so it's only a rebuild trigger. Raises
-    # FileNotFound if that's missing too.
+    # Records the `// depends_on` directives. A `!` path is a file relative
+    # to the environment's base, recorded as a file dependency so it's only a
+    # rebuild trigger. Any other path is a process dependency, looked up like
+    # an import; if it isn't a glob and no asset matches, a ./, ../ or
+    # absolute path is recorded as a file dependency too. Raises FileNotFound
+    # if nothing is found.
     def depends_on_directives(data)
       data.delete(:depends_on).each do |name|
+        if name.start_with?('!')
+          path = File.expand_path(name.delete_prefix('!'), @environment.base) if @environment.base
+          raise FileNotFound, "#{@filename}: couldn't find '#{name}' for // depends_on" if !path || !File.file?(path)
+          data[:file_dependencies] << path
+          next
+        end
+
         data[:process_dependencies] << name
         next if name.match?(Context::GLOB)
 
@@ -609,11 +616,10 @@ class Condenser
           name
         elsif name.match?(Resolve::SOURCE_RELATIVE)
           File.expand_path(name, File.dirname(@source_file))
-        elsif @environment.base
-          File.expand_path(name.delete_prefix('!'), @environment.base)
         end
         if !path || !File.file?(path)
-          raise FileNotFound, "#{@filename}: couldn't find '#{name}' for // depends_on"
+          hint = " (use '!#{name}' for a file relative to the app root)" if !path
+          raise FileNotFound, "#{@filename}: couldn't find '#{name}' for // depends_on#{hint}"
         end
         data[:file_dependencies] << path
       end

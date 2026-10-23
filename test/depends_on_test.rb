@@ -32,9 +32,9 @@ class DependsOnTest < ActiveSupport::TestCase
     env.find('main.js').export.source[/secret-\w+/]
   end
 
-  test 'a file relative to base rebuilds the asset in a new process' do
+  test 'a ! path is a file relative to base that rebuilds the asset in a new process' do
     file 'config/x.yml', "secret: secret-one\n"
-    main 'config/x.yml'
+    main '!config/x.yml'
 
     asset = new_env.find('main.js')
     assert_equal 'secret-one', secret(new_env)
@@ -47,9 +47,9 @@ class DependsOnTest < ActiveSupport::TestCase
     assert_equal 'secret-two', secret(new_env)
   end
 
-  test 'a file relative to base rebuilds the asset with the listener when base is watched' do
+  test 'a ! path rebuilds the asset with the listener when base is watched' do
     file 'config/x.yml', "secret: secret-one\n"
-    main 'config/x.yml'
+    main '!config/x.yml'
     env = new_env(cache: Condenser::Cache::MemoryStore.new)
     skip 'needs a listener' if !env.build_cache.listening
     env.watch(@path)
@@ -59,16 +59,15 @@ class DependsOnTest < ActiveSupport::TestCase
     assert wait_until { secret(env) == 'secret-two' }
   end
 
-  test 'a ! path is relative to base' do
+  test 'a bare path is never looked up in base' do
     file 'config/x.yml', "secret: secret-one\n"
-    main '!config/x.yml'
+    main 'config/x.yml'
 
-    assert_equal 'secret-one', secret(new_env)
-    file 'config/x.yml', "secret: secret-two\n"
-    assert_equal 'secret-two', secret(new_env)
+    error = assert_raises(Condenser::FileNotFound) { new_env.find('main.js').process }
+    assert_equal "main.js: couldn't find 'config/x.yml' for // depends_on (use '!config/x.yml' for a file relative to the app root)", error.message
   end
 
-  test 'an asset in the load path wins over a file relative to base' do
+  test 'a bare path is the asset and a ! path the file in base when both exist' do
     file 'config/x.yml', "secret: secret-base\n"
     file 'app/assets/config/x.yml', "secret: secret-one\n"
     main 'config/x.yml', 'app/assets/config/x.yml'
@@ -81,6 +80,11 @@ class DependsOnTest < ActiveSupport::TestCase
     assert_equal 'secret-one', secret(new_env)
     file 'app/assets/config/x.yml', "secret: secret-two\n"
     assert_equal 'secret-two', secret(new_env)
+
+    main '!config/x.yml'
+    asset = new_env.find('main.js')
+    assert_equal [], asset.process_dependencies
+    assert_equal [File.join(@path, 'config/x.yml')], asset.file_dependencies
   end
 
   test 'a ./ path finds an asset relative to the source file' do
@@ -96,15 +100,19 @@ class DependsOnTest < ActiveSupport::TestCase
   test 'a missing path raises FileNotFound' do
     file 'app/assets/main.js', "// depends_on config/x.yml\nconsole.log(1);\n"
     error = assert_raises(Condenser::FileNotFound) { new_env.find('main.js').process }
-    assert_equal "main.js: couldn't find 'config/x.yml' for // depends_on", error.message
+    assert_equal "main.js: couldn't find 'config/x.yml' for // depends_on (use '!config/x.yml' for a file relative to the app root)", error.message
+
+    file 'app/assets/main.js', "// depends_on !config/x.yml\nconsole.log(1);\n"
+    error = assert_raises(Condenser::FileNotFound) { new_env.find('main.js').process }
+    assert_equal "main.js: couldn't find '!config/x.yml' for // depends_on", error.message
   end
 
-  test 'a missing path raises FileNotFound without a base' do
+  test 'a ! path raises FileNotFound without a base' do
     file 'config/x.yml', "secret: secret-one\n"
-    main 'config/x.yml'
+    main '!config/x.yml'
     env = Condenser.new(@assets, logger: Logger.new('/dev/null'), npm_path: @npm_dir, cache: Condenser::Cache::MemoryStore.new)
     error = assert_raises(Condenser::FileNotFound) { env.find('main.js').process }
-    assert_equal "main.js: couldn't find 'config/x.yml' for // depends_on", error.message
+    assert_equal "main.js: couldn't find '!config/x.yml' for // depends_on", error.message
   end
 
   test 'a glob matching nothing does not raise or look in base' do
