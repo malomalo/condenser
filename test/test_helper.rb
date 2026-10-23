@@ -73,7 +73,7 @@ class ActiveSupport::TestCase
   end
 
   def teardown
-    Condenser::RolldownProcessor.stop_workers
+    Condenser::NodeWorker.stop_workers
     FileUtils.remove_entry(@path, true)
   end
   

@@ -356,6 +356,80 @@ It needs version 1.33.0.2 or later of the `lightningcss` gem. The default
 so to lower syntax and minify in one pass register it with the targets instead
 of adding an exporter (see [Minifying Assets](#minifying-assets)).
 
+### Utility CSS with Tailwind
+
+`Condenser::TailwindProcessor` compiles stylesheets that `@import
+"tailwindcss"` or use `@reference` with [Tailwind CSS](https://tailwindcss.com)
+v4, which needs [Node.js](https://nodejs.org/). Other stylesheets are left as
+they are. Register it as a `text/css` preprocessor:
+
+```ruby
+env.register_preprocessor 'text/css', Condenser::TailwindProcessor.new(env.npm_path, base: Rails.root)
+```
+
+```css
+/* app/assets/stylesheets/application.css */
+@import "tailwindcss";
+@source "../../../vendor/components";
+```
+
+When the processor is created, `tailwindcss`, `@tailwindcss/node` and
+`@tailwindcss/oxide` are installed with `npm` into the npm path if they aren't
+there, and their versions are read for the cache keys. Tailwind runs in a node
+process that's kept running between builds, and each build scans and compiles
+from scratch, so the output is the same as the `tailwindcss` CLI's, with
+`base:` as its `--cwd`, and a class removed from the templates is removed from
+the CSS.
+
+`base:` is the directory Tailwind's automatic source detection scans, like the
+CLI's `--cwd`. Without it a stylesheet has to say what to scan with
+`@import "tailwindcss" source("../views")` or `source(none)` and `@source`.
+`@source` paths are relative to the stylesheet, as in Tailwind.
+
+A stylesheet that's built separately, and only needs `@apply`, `theme()` or
+custom variants, can `@reference` the main one instead of importing Tailwind
+again. It gets the main stylesheet's theme, utilities and variants but none of
+its CSS, and since it has no utilities to generate nothing is scanned and it
+doesn't need `base:`:
+
+```css
+/* app/assets/stylesheets/admin.css */
+@reference "./application.css";
+.btn { @apply px-4 font-bold text-brand; }
+```
+
+The path is resolved by Tailwind, relative to the stylesheet or as an npm
+package, not through the load paths. The referenced file and what it imports
+are file dependencies, so changing its `@theme` rebuilds the stylesheet.
+
+Every file Tailwind scans is recorded as a file dependency, and every
+directory it scans as a directory dependency (see [Depending on files that
+aren't assets](#depending-on-files-that-arent-assets)), so editing a template's
+classes, or adding a template, rebuilds the CSS. A running process only
+notices that if the files are on the load path or a watched path, so watch the
+directories Tailwind scans that aren't, usually the app's root:
+
+```ruby
+env.watch(Rails.root, ignore: ['public/assets', 'storage'])
+```
+
+The processor doesn't call `env.watch` itself: what to ignore under the root
+is up to the app, and a process that gets the CSS from a persistent cache
+doesn't run the processor at all. It logs a warning for each directory it
+scans that isn't watched.
+
+`minify: true` minifies the CSS like `tailwindcss --minify`, with Tailwind's
+own Lightning CSS pass. Condenser's default CSS minifier,
+`LightningCSSMinifier`, also minifies with Lightning CSS, so with the default
+pipeline `minify:` isn't needed. To minify only in the processor, unregister
+the CSS minifier. Don't use `SassMinifier` with Tailwind: it rewrites
+Tailwind's output differently and makes minified output bigger.
+
+```ruby
+env.unregister_minifier 'text/css'
+env.register_preprocessor 'text/css', Condenser::TailwindProcessor.new(env.npm_path, base: Rails.root, minify: true)
+```
+
 ## Javascript, ES#, & ES Modules
 
 Condenser transforms Javascript for the browser by transpiling all the files

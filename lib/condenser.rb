@@ -20,6 +20,7 @@ class Condenser
   autoload :RollupProcessor,  'condenser/processors/rollup_processor'
   autoload :RolldownProcessor,'condenser/processors/rolldown_processor'
   autoload :JSAnalyzer,       'condenser/processors/js_analyzer'
+  autoload :TailwindProcessor,'condenser/processors/tailwind_processor'
   autoload :PurgeCSSProcessor,'condenser/processors/purgecss_processor'
   autoload :CSSMediaCombinerProcessor,'condenser/processors/css_media_combiner_processor'
   autoload :LightningCSSExporter,'condenser/exporters/lightningcss_exporter'
@@ -38,6 +39,7 @@ class Condenser
   autoload :ZlibWriter,       'condenser/writers/zlib_writer'
   autoload :BrotliWriter,     'condenser/writers/brotli_writer'
   autoload :BuildCache,       'condenser/build_cache'
+  autoload :NodeWorker,       'condenser/node_worker'
   autoload :ParseHelpers,     'condenser/helpers/parse_helpers'
   
   def self.configure(&block)

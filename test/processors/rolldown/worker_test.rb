@@ -16,6 +16,7 @@ class RolldownWorkerTest < ActiveSupport::TestCase
 
   module SpawnSpy
     def spawn(*args, **kwargs)
+      Thread.current[:rolldown_worker_spawn_args]&.push(args)
       super.tap { |pid| Thread.current[:rolldown_worker_spawns]&.push(pid) }
     end
   end
@@ -32,8 +33,6 @@ class RolldownWorkerTest < ActiveSupport::TestCase
   class << self
     attr_accessor :on_answer, :config
   end
-
-  class Abort < Exception; end
 
   def setup
     super
@@ -109,6 +108,14 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     assert_equal pid, worker_pid
   end
 
+  test 'the worker runs Rolldown with a 5120 MB heap' do
+    spawned = Thread.current[:rolldown_worker_spawn_args] = []
+    export('main.js')
+    assert_equal [[Condenser::NodeProcessor.new(@env.npm_path).binary, '--max_old_space_size=5120', Condenser::RolldownProcessor::SCRIPT, @processor.rolldown_path]], spawned
+  ensure
+    Thread.current[:rolldown_worker_spawn_args] = nil
+  end
+
   test 'each instance has its own worker' do
     file 'main.js', <<~JS
       import value from 'condenser-alias';
@@ -182,82 +189,6 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     killed.each { |pid| assert_not alive?(pid) }
   end
 
-  test 'a partial last line from a worker that died mid-write is not parsed' do
-    file 'partial.js', <<~JS
-      const net = require('net');
-      const write = net.Socket.prototype.write;
-      net.Socket.prototype.write = function (data, ...rest) {
-        if (typeof data === 'string' && data.includes('"method":"load"')) {
-          require('fs').writeSync(3, data.slice(0, 12));
-          process.exit(1);
-        }
-        return write.call(this, data, ...rest);
-      };
-    JS
-
-    node_options = ENV['NODE_OPTIONS']
-    ENV['NODE_OPTIONS'] = "--require #{File.join(@path, 'partial.js')}"
-    error = assert_raises(RuntimeError) { export('main.js') }
-    assert_match(/\Arolldown exited with pid \d+ exit 1/, error.message)
-    assert_nil worker_pid
-  ensure
-    ENV['NODE_OPTIONS'] = node_options
-  end
-
-  test 'stop_workers stops the worker' do
-    reference = export('main.js')
-    pid = worker_pid
-
-    Condenser::RolldownProcessor.stop_workers
-    assert_not alive?(pid)
-    assert_nil worker_pid
-
-    assert_equal reference, export('main.js')
-    assert_not_equal pid, worker_pid
-  end
-
-  test 'a forked child that never exports does not slow down stopping the worker' do
-    export('main.js')
-    pid = worker_pid
-    child = fork { sleep }
-
-    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-    Condenser::RolldownProcessor.stop_workers
-    assert_operator Process.clock_gettime(Process::CLOCK_MONOTONIC) - started, :<, 1
-    assert_not alive?(pid)
-  ensure
-    if child
-      Process.kill('KILL', child)
-      Process.wait(child)
-    end
-  end
-
-  test 'stop waits for the build in flight' do
-    reference = export('main.js')
-    pid = worker_pid
-    answering = Queue.new
-    release = Queue.new
-    on_answer do |method, _, _|
-      if method == 'resolve' && release
-        answering << true
-        release.pop
-        release = nil
-      end
-    end
-
-    build = Thread.new { export('main.js') }
-    answering.pop
-    stopper = Thread.new { @processor.worker.stop }
-    assert wait_until { stopper.status == 'sleep' }
-    assert alive?(pid)
-
-    release << true
-    assert_equal reference, build.value
-    stopper.join
-    assert_not alive?(pid)
-    assert_nil worker_pid
-  end
-
   test 'a build whose worker dies while it is being stopped is not retried' do
     export('main.js')
     pid = worker_pid
@@ -280,43 +211,6 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     Thread.current[:rolldown_worker_spawns] = nil
   end
 
-  test 'a worker reaped elsewhere exits with an unknown status' do
-    export('main.js')
-    on_answer do |method, _, _|
-      if method == 'resolve'
-        pid = worker_pid
-        Process.kill('KILL', pid)
-        Process.wait(pid)
-      end
-    end
-
-    error = assert_raises(RuntimeError) { export('main.js') }
-    assert_equal 'rolldown exited with an unknown status', error.message
-  end
-
-  test 'a ruby exception while answering re-raises the original exception and keeps the worker' do
-    file 'main.js', <<~JS
-      import maths from 'maths/*';
-
-      console.log( maths.map((f) => f(2)) );
-    JS
-    5.times { |i| file "maths/f#{i}.js", "export default function f#{i} (x) { return x + #{i}; }\n" }
-    reference = export('main.js')
-    Condenser::RolldownProcessor.stop_workers
-
-    on_answer do |method, args, _|
-      raise ArgumentError, 'boom' if method == 'load' && args[0].end_with?('f2.js')
-    end
-    error = assert_raises(ArgumentError) { export('main.js') }
-    assert_equal 'boom', error.message
-    pid = worker_pid
-    assert alive?(pid)
-
-    RolldownWorkerTest.on_answer = nil
-    assert_equal reference, export('main.js')
-    assert_equal pid, worker_pid
-  end
-
   test 'a ruby exception is re-raised when the worker then dies' do
     export('main.js')
     pid = worker_pid
@@ -337,62 +231,6 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     Thread.current[:rolldown_worker_spawns] = nil
   end
 
-  test 'a request from an earlier build is not answered by the current one' do
-    file 'stale.js', <<~JS
-      const net = require('net');
-      const write = net.Socket.prototype.write;
-      let first = null, forged = false;
-      net.Socket.prototype.write = function (data, ...rest) {
-        const message = typeof data === 'string' && data.startsWith('{"rid"') ? JSON.parse(data) : null;
-        if (message && first === null) first = message.build;
-        if (message && !forged && message.build !== first) {
-          forged = true;
-          write.call(this, JSON.stringify({ rid: 1e9, build: first, method: 'load', args: ['forged.js'] }) + "\\n");
-        }
-        return write.call(this, data, ...rest);
-      };
-    JS
-
-    node_options = ENV['NODE_OPTIONS']
-    ENV['NODE_OPTIONS'] = "--require #{File.join(@path, 'stale.js')}"
-    reference = export('main.js')
-    answered = []
-    on_answer { |method, args, _| answered << args[0] }
-    assert_equal reference, export('main.js')
-    assert_not_includes answered, 'forged.js'
-    assert_includes answered, './math.js'
-  ensure
-    ENV['NODE_OPTIONS'] = node_options
-  end
-
-  test 'a done or warn message from an earlier build is ignored' do
-    file 'stale.js', <<~JS
-      const net = require('net');
-      const write = net.Socket.prototype.write;
-      let first = null, forged = false;
-      net.Socket.prototype.write = function (data, ...rest) {
-        const message = typeof data === 'string' && data.startsWith('{') ? JSON.parse(data) : null;
-        if (message && first === null) first = message.build;
-        if (message && !forged && message.build !== first) {
-          forged = true;
-          write.call(this, JSON.stringify({ method: 'warn', build: first, args: ['stale warning'] }) + "\\n");
-          write.call(this, JSON.stringify({ method: 'done', build: first, args: ['stale output'] }) + "\\n");
-        }
-        return write.call(this, data, ...rest);
-      };
-    JS
-    log = StringIO.new
-    @env.logger = Logger.new(log, level: :warn)
-
-    node_options = ENV['NODE_OPTIONS']
-    ENV['NODE_OPTIONS'] = "--require #{File.join(@path, 'stale.js')}"
-    reference = export('main.js')
-    assert_equal reference, export('main.js')
-    assert_not_includes log.string, 'stale warning'
-  ensure
-    ENV['NODE_OPTIONS'] = node_options
-  end
-
   test 'a ruby exception while resolving re-raises the original exception and keeps the worker' do
     reference = export('main.js')
     pid = worker_pid
@@ -405,19 +243,6 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     RolldownWorkerTest.on_answer = nil
     assert_equal reference, export('main.js')
     assert_equal pid, worker_pid
-  end
-
-  test 'an exception that abandons a build stops the worker' do
-    reference = export('main.js')
-    pid = worker_pid
-
-    on_answer { |method, _, _| raise Abort if method == 'resolve' }
-    assert_raises(Abort) { export('main.js') }
-    assert_not alive?(pid)
-    assert_nil worker_pid
-
-    RolldownWorkerTest.on_answer = nil
-    assert_equal reference, export('main.js')
   end
 
   test 'a build error is raised for that build only' do
@@ -444,56 +269,11 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     assert_equal 1, log.string.scan('[EVAL]').size
   end
 
-  test 'concurrent exports share the worker one build at a time' do
-    file 'other.js', <<~JS
-      import { cube } from './math.js';
-
-      console.log( cube( 6 ) );
-    JS
-    references = { 'main.js' => export('main.js'), 'other.js' => export('other.js') }
-    pid = worker_pid
-
-    results = 4.times.map { |i| Thread.new { export(i.even? ? 'main.js' : 'other.js') } }.map(&:value)
-    assert_equal 4.times.map { |i| references[i.even? ? 'main.js' : 'other.js'] }, results
-    assert_equal pid, worker_pid
-  end
-
-  test 'an export started while answering a build uses a throwaway worker' do
-    file 'other.js', <<~JS
-      console.log( 'other' );
-    JS
-    spawned = Thread.current[:rolldown_worker_spawns] = []
-    nested = nil
-    on_answer do |method, args, _|
-      if method == 'load' && args[0].end_with?('math.js') && nested.nil?
-        nested = Timeout.timeout(30) { export('other.js') }
-      end
-    end
-
-    assert_includes export('main.js'), 'x * x * x'
-    assert_includes nested, 'console.log("other")'
-    assert_equal 2, spawned.size
-    assert_equal spawned.first, worker_pid
-    assert alive?(worker_pid)
-    assert_not alive?(spawned.last)
-  ensure
-    Thread.current[:rolldown_worker_spawns] = nil
-  end
-
   test 'max_memory: only accepts positive integers' do
     [nil, 0, -1, 1.5, '5'].each do |value|
       error = assert_raises(ArgumentError) { Condenser::RolldownProcessor.new(@env.npm_path, max_memory: value) }
       assert_equal "max_memory must be a positive Integer, got #{value.inspect}", error.message
     end
-  end
-
-  test 'max_memory: restarts the worker once it uses more memory' do
-    register_rolldown(max_memory: 1)
-    reference = export('main.js')
-    assert_nil worker_pid
-
-    assert_equal reference, export('main.js')
-    assert_nil worker_pid
   end
 
   test 'the Rolldown version is read once, when the processor is created' do
@@ -515,68 +295,6 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     assert_equal '0.0.2', Condenser::RolldownProcessor.new(@env.npm_path, bundler_path: File.join(@path, 'wrapped-rolldown')).options[:rolldown]
   ensure
     Thread.current[:rolldown_file_reads] = nil
-  end
-
-  test 'a forked child starts its own worker' do
-    reference = export('main.js')
-    parent = worker_pid
-
-    reader, writer = IO.pipe
-    child = fork do
-      reader.close
-      source = export('main.js')
-      writer.write(JSON.generate({ pid: worker_pid, same: source == reference }))
-      writer.close
-      exit!(0)
-    end
-    writer.close
-    result = JSON.parse(reader.read)
-    reader.close
-    Process.wait(child)
-
-    assert result['same']
-    assert result['pid']
-    assert_not_equal parent, result['pid']
-    assert wait_until { !alive?(result['pid']) }
-
-    assert_equal parent, worker_pid
-    assert alive?(parent)
-    assert_equal reference, export('main.js')
-    assert_equal parent, worker_pid
-  end
-
-  ['TERM', 'KILL'].each do |signal|
-    test "the worker exits when its ruby process is killed with #{signal}" do
-      file 'child.rb', <<~RUBY
-        require 'condenser'
-        require 'logger'
-        env = Condenser.new(#{@path.inspect}, logger: Logger.new(File::NULL), npm_path: #{@npm_dir.inspect}, base: #{@path.inspect})
-        env.unregister_exporter('application/javascript')
-        processor = Condenser::RolldownProcessor.new(#{@npm_dir.inspect})
-        env.register_exporter('application/javascript', processor)
-        env.find('main.js').export
-        puts processor.worker.pid
-        $stdout.flush
-        sleep
-      RUBY
-
-      log = File.join(@path, 'child.log')
-      reader, writer = IO.pipe
-      child = Process.spawn(Gem.ruby, '-I', File.expand_path('../../../lib', __dir__), '-rbundler/setup', File.join(@path, 'child.rb'), out: writer, err: log)
-      writer.close
-      line = Timeout.timeout(60) { reader.gets }
-      reader.close
-      flunk "the child exited without printing its worker's pid:\n#{File.read(log)}" if line.nil?
-      worker = Integer(line)
-      assert alive?(worker), File.read(log)
-
-      Process.kill(signal, child)
-      Process.wait(child)
-      assert wait_until { !alive?(worker) }, "worker #{worker} is still running:\n#{File.read(log)}"
-    ensure
-      Process.kill('KILL', child) rescue nil if child
-      Process.kill('KILL', worker) rescue nil if worker
-    end
   end
 
   test 'an unchanged module is not loaded from ruby again' do

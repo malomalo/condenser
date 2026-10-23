@@ -93,6 +93,7 @@ class Condenser
     # found nothing, so they have to be redone when the paths change.
     def load_path_changed!
       build_cache.clear_lookups if instance_variable_defined?(:@build_cache)
+      @dependency_paths&.clear
     end
     
     def new_context_class(source_file: nil, content_type: nil)
