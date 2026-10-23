@@ -28,9 +28,8 @@ class RolldownDefaultTest < ActiveSupport::TestCase
     assert_equal [Condenser::RolldownProcessor], exporters.map(&:class)
     assert_equal File.join(@npm_dir, 'node_modules', 'rolldown'), exporters.first.rolldown_path
     assert_equal <<~JS, new_env(npm_path: @npm_dir).find('main.js').export.source
-      //#region main.js
+      // main.js
       console.log("main");
-      //#endregion
     JS
   end
 
