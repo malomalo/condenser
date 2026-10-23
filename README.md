@@ -132,6 +132,37 @@ console.log([<%= Dir.children("#{asset_path}/models").sort.map(&:inspect).join('
 
 The directives must be the first portion of the file.
 
+A `depends_on` path is looked up as follows:
+
+1. A path starting with `!` is a file relative to the environment's `base`
+   (`Rails.root` with condenser-rails), never an asset.
+2. Any other path is an asset, looked up the same way as an import: in the
+   load paths, relative to the file if it starts with `./` or `../`, or as an
+   absolute path. A matching asset is a dependency like it always was.
+3. If no asset matches and the path isn't a glob, a `./`, `../` or absolute
+   path is used as a file.
+4. If nothing is found, processing raises `Condenser::FileNotFound`. A bare
+   path is never looked up in `base`; the error suggests the `!` form.
+
+A file is a rebuild trigger only: when its contents change the asset is
+rebuilt, but it's never included in the output. A running server notices the
+change if the file is under a load path or a path passed to `watch`.
+
+A glob never raises, even if it matches nothing.
+
+For example, to rebuild a `js.erb` file when `config/credentials.yml` at the
+app root changes:
+
+```js
+// depends_on !config/credentials.yml
+
+const key = <%= YAML.load_file(Rails.root.join('config/credentials.yml'))['mapbox_key'].to_json %>;
+```
+
+Only a `!` path in the `depends_on` directive looks in `base`. Imports, Sass `@import` and
+`@use`, `find`, `resolve`, `link_asset`, `depend_on` and `depend_on_file` never
+do.
+
 ## Cache
 
 Compiling assets is slow. It requires a lot of disk use to pull assets off of

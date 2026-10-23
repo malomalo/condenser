@@ -62,7 +62,7 @@ class Condenser::JSAnalyzer
     if directives = @ss.scan(/(?:\/\/[^\n]*(?:\n|\z))+/)
       directives.split(/\n/).map { |l| l.delete_prefix("//").strip }.each do |directive|
         if directive.start_with?('depends_on')
-          input[:process_dependencies] << directive.sub(/\Adepends_on\s+/, '')
+          input[:depends_on] << directive.sub(/\Adepends_on\s+/, '')
         end
       end
     else
