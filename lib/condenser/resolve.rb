@@ -5,6 +5,7 @@ class Condenser
     
     def initialize(*args, **kws, &block)
       @reverse_mapping = nil
+      @dependency_paths = nil
       @build_cache_options = kws[:listen]
       super
     end
@@ -142,8 +143,18 @@ class Condenser
     # directory of +source_file+, and other relative paths are looked up in
     # the load paths, like imports. Raises FileNotFound if it doesn't exist,
     # and ArgumentError for a "./" or "../" path without a +source_file+.
+    # During a build each path is only looked up once.
     def expand_dependency_path(filename, source_file: nil, directory: false)
       filename = filename.to_s
+      key = [filename, directory, (File.dirname(source_file) if source_file && filename.match?(SOURCE_RELATIVE))]
+      return @dependency_paths[key] if @dependency_paths&.key?(key)
+
+      expanded = find_dependency_path(filename, source_file: source_file, directory: directory)
+      @dependency_paths[key] = expanded if @dependency_paths
+      expanded
+    end
+
+    def find_dependency_path(filename, source_file:, directory:)
       exists = directory ? File.method(:directory?) : File.method(:file?)
       expanded = if File.absolute_path?(filename)
         File.expand_path(filename)
@@ -159,6 +170,7 @@ class Condenser
       end
       expanded
     end
+    private :find_dependency_path
 
     def find_export(filename, base=nil, **kargs)
       build do
@@ -173,12 +185,18 @@ class Condenser
         logger.debug { "build cache semaphore locked by #{Thread.current.object_id}" }
       end
 
-      build_cache.clear_if_npm_changed(npm_path) if @build_cc == 0
+      if @build_cc == 0
+        build_cache.start_build
+        build_cache.clear_if_npm_changed(npm_path)
+        @dependency_paths = {}
+      end
       @build_cc += 1
       yield
     ensure
       @build_cc -= 1
       if @build_cc == 0
+        @dependency_paths = nil
+        build_cache.finish_build
         if build_cache.listening && build_cache.semaphore.owned?
           logger.debug { "build cache semaphore unlocked by #{Thread.current.object_id}" }
           build_cache.semaphore.unlock

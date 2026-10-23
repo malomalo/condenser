@@ -38,6 +38,24 @@ end
 
 class FileDependenciesTest < ActiveSupport::TestCase
 
+  # Counts the File.stat and BuildCache.real_path calls for each path while
+  # Thread.current[:stats] or [:real_paths] is set.
+  module StatSpy
+    def stat(path)
+      Thread.current[:stats][path.to_s] += 1 if Thread.current[:stats]
+      super
+    end
+  end
+  File.singleton_class.prepend(StatSpy)
+
+  module RealPathSpy
+    def real_path(path)
+      Thread.current[:real_paths][path] += 1 if Thread.current[:real_paths]
+      super
+    end
+  end
+  Condenser::BuildCache.singleton_class.prepend(RealPathSpy)
+
   def setup
     super
     @content = File.join(@path, 'content')
@@ -655,6 +673,87 @@ class FileDependenciesTest < ActiveSupport::TestCase
     FileDependencyProcessor.directories = { File.join(@path, 'missing') => {} }
     error = assert_raises(Condenser::FileNotFound) { build(new_env) }
     assert_equal "couldn't find directory '#{File.join(@path, 'missing')}' from #{File.join(@path, 'test.txt')}", error.message
+  end
+
+  test 'a rebuild stats and records each file dependency once' do
+    file 'content/a.html', 'one'
+    path = File.join(@content, 'a.html')
+    FileDependencyProcessor.files = [path]
+    asset = @env.find('test.txt')
+    assert_includes asset.source, 'a.html: one'
+
+    file 'content/a.html', 'two'
+    asset.needs_reprocessing!
+    stats = Thread.current[:stats] = Hash.new(0)
+    real_paths = Thread.current[:real_paths] = Hash.new(0)
+    assert_includes @env.find('test.txt').source, 'a.html: two'
+    assert_equal 1, stats[path]
+    assert_equal (@env.build_cache.listening ? 1 : 0), real_paths[path]
+  ensure
+    Thread.current[:stats] = Thread.current[:real_paths] = nil
+  end
+
+  test 'a file is digested once per build' do
+    file 'content/a.html', 'one'
+    path = File.join(@content, 'a.html')
+
+    first, second = @env.build do
+      digest = @env.build_cache.file_digest(path)
+      File.write(path, 'two, which is longer')
+      [digest, @env.build_cache.file_digest(path)]
+    end
+    assert_equal first, second
+    assert_not_equal first, @env.build_cache.file_digest(path)
+  end
+
+  test 'a dependency path is looked up once per build, and ./ paths for each source directory' do
+    @second = File.realpath(Dir.mktmpdir)
+    file 'config/x.txt', 'second', base: @second
+    file 'a/x.txt', 'a'
+    file 'b/x.txt', 'b'
+    @env.append_path(@second)
+
+    @env.build do
+      assert_equal File.join(@second, 'config/x.txt'), @env.expand_dependency_path('config/x.txt')
+      file 'config/x.txt', 'first'
+      assert_equal File.join(@second, 'config/x.txt'), @env.expand_dependency_path('config/x.txt')
+      assert_equal File.join(@path, 'a/x.txt'), @env.expand_dependency_path('./x.txt', source_file: File.join(@path, 'a/test.txt'))
+      assert_equal File.join(@path, 'b/x.txt'), @env.expand_dependency_path('./x.txt', source_file: File.join(@path, 'b/test.txt'))
+    end
+    assert_equal File.join(@path, 'config/x.txt'), @env.expand_dependency_path('config/x.txt')
+  end
+
+  test 'a dependency path is looked up again when the load paths change during a build' do
+    @second = File.realpath(Dir.mktmpdir)
+    file 'config/x.txt', 'second', base: @second
+    file 'config/x.txt', 'first'
+
+    @env.build do
+      assert_equal File.join(@path, 'config/x.txt'), @env.expand_dependency_path('config/x.txt')
+      @env.prepend_path(@second)
+      assert_equal File.join(@second, 'config/x.txt'), @env.expand_dependency_path('config/x.txt')
+    end
+  end
+
+  test 'a file dependency through a symlink that is retargeted is listened to at its new path after a rebuild' do
+    skip 'needs a listener' if !@env.build_cache.listening
+    @second = File.realpath(Dir.mktmpdir)
+    @env.watch(@second)
+    file 'one/a.html', 'one', base: @second
+    file 'two/a.html', 'two', base: @second
+    link = File.join(@content, 'link')
+    File.symlink(File.join(@second, 'one'), link)
+    FileDependencyProcessor.files = [File.join(link, 'a.html')]
+    asset = @env.find('test.txt')
+    assert_includes asset.source, 'a.html: one'
+
+    File.delete(link)
+    File.symlink(File.join(@second, 'two'), link)
+    asset.needs_reprocessing!
+    assert_includes @env.find('test.txt').source, 'a.html: two'
+
+    file 'two/a.html', 'three', base: @second
+    assert_rebuilds_with 'a.html: three'
   end
 
   test 'expand_dependency_path needs a source file for ./ and ../ paths' do

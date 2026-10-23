@@ -47,8 +47,10 @@ class Condenser
       @directory_dependencies = {}
       @bare_file_dependencies = {}
       @bare_directory_dependencies = {}
+      @recorded_file_dependencies = {}.compare_by_identity
       @file_digests = {}
       @directory_digests = {}
+      @build_file_digests = nil
       @watch_listeners = []
       @watched_paths = []
       @listening = if listen
@@ -245,9 +247,14 @@ class Condenser
     # it's missing. A bare name is also indexed by name, so a file added or
     # removed in another load path that changes where it resolves invalidates
     # the asset.
+    #
+    # Recording the same ones for the asset again in a build is skipped,
+    # since the indexes are only added to.
     def record_file_dependencies(asset, files, directories)
       return if !@listening
+      return if @recorded_file_dependencies[asset] == [files, directories]
 
+      @recorded_file_dependencies[asset] = [files, directories]
       [[files, @file_dependencies, @bare_file_dependencies], [directories, @directory_dependencies, @bare_directory_dependencies]].each do |deps, index, bare_index|
         deps.each do |name, path|
           absolute = File.absolute_path?(name)
@@ -271,8 +278,18 @@ class Condenser
     end
 
     # A digest of the file's contents, or nil if it's missing. It's only
-    # recomputed when the file's stat changes.
+    # recomputed when the file's stat changes, and during a build it's only
+    # checked once.
     def file_digest(path)
+      return @build_file_digests[path] if @build_file_digests&.key?(path)
+
+      digest = current_file_digest(path)
+      @build_file_digests[path] = digest if @build_file_digests
+      digest
+    end
+
+    # A digest of the file's contents, or nil if it's missing.
+    def current_file_digest(path)
       stat = File.stat(path)
       return if !stat.file?
 
@@ -285,6 +302,7 @@ class Condenser
       @file_digests.delete(path)
       nil
     end
+    private :current_file_digest
 
     # A digest of the names of the files in +path+ that match +globs+ and of
     # its subdirectories (and, if +recursive+, the same for each
@@ -320,6 +338,17 @@ class Condenser
       found
     end
     
+    # Called when a build starts, before anything is built.
+    def start_build
+      @recorded_file_dependencies.clear
+      @build_file_digests = {}
+    end
+
+    # Called when a build has finished.
+    def finish_build
+      @build_file_digests = nil
+    end
+
     # node_modules isn't watched by the listener, so clear everything when
     # the npm packages change (e.g. after an `npm install`) instead.
     def clear_if_npm_changed(npm_path)
@@ -348,6 +377,7 @@ class Condenser
       @directory_dependencies.clear
       @bare_file_dependencies.clear
       @bare_directory_dependencies.clear
+      @recorded_file_dependencies.clear
       @npm_packages = nil
       @npm_digests = nil
     end

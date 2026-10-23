@@ -80,6 +80,25 @@ class TailwindTest < ActiveSupport::TestCase
     assert_includes asset.directory_dependencies.map(&:first), File.join(@path, 'views')
   end
 
+  test 'a directory with scanned files is a dependency unless a glob covers it' do
+    file 'top.html', '<div class="flex"></div>'
+    file 'views/users/deep/show.html', '<div class="grid"></div>'
+    file 'components/cards/a.html', '<div class="hidden"></div>'
+    file 'application.css', <<~CSS
+      @import "tailwindcss";
+      @source "./components/cards/*.html";
+    CSS
+
+    asset = @env.find('application.css')
+    asset.process
+    assert_equal [
+      [File.join(@path, ''), ['*'], false],
+      [File.join(@path, 'components'), true],
+      [File.join(@path, 'components/cards'), ['*.html'], false],
+      [File.join(@path, 'views'), true]
+    ], asset.directory_dependencies.map { |d, globs, recursive| recursive ? [d, recursive] : [d, globs, recursive] }.sort_by(&:first)
+  end
+
   test 'a class added to a template rebuilds the CSS' do
     skip 'needs a listener' if !@env.build_cache.listening
     file 'views/index.html', '<div class="flex"></div>'
