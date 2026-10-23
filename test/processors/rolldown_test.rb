@@ -22,9 +22,8 @@ class RolldownTest < ActiveSupport::TestCase
     JS
     
     asset = assert_exported_file 'main.js', 'application/javascript', <<~FILE
-      //#region main.js
+      // main.js
       console.log(cube(5));
-      //#endregion
     FILE
     assert_equal "module", asset.type
   end
@@ -50,14 +49,12 @@ class RolldownTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'main.js', 'application/javascript', <<~FILE
-      //#region math.js
+      // math.js
       function cube(x) {
       	return x * x * x;
       }
-      //#endregion
-      //#region main.js
+      // main.js
       console.log(cube(5));
-      //#endregion
     FILE
   end
   
@@ -74,14 +71,12 @@ class RolldownTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'main.js', 'application/javascript', <<~FILE
-      //#region math.js.erb
+      // math.js.erb
       function cube(x) {
       	return 2 * x * x;
       }
-      //#endregion
-      //#region main.js
+      // main.js
       console.log(cube(5));
-      //#endregion
     FILE
   end
 
@@ -106,14 +101,12 @@ class RolldownTest < ActiveSupport::TestCase
     @env.append_path File.join(@path, 'a')
 
     assert_exported_file 'main.js', 'application/javascript', <<~FILE
-      //#region b/math.js
+      // b/math.js
       function cube(x) {
       	return x * x * x;
       }
-      //#endregion
-      //#region a/main.js
+      // a/main.js
       console.log(cube(5));
-      //#endregion
     FILE
   end
 
@@ -137,19 +130,16 @@ class RolldownTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'main.js', 'application/javascript', <<~FILE
-      //#region maths/cube.js
+      // maths/cube.js
       window.cube = function(x) {
       	return x * x * x;
       };
-      //#endregion
-      //#region maths/square.js
+      // maths/square.js
       window.square = function(x) {
       	return x * x;
       };
-      //#endregion
-      //#region main.js
+      // main.js
       console.log(square(cube(5)));
-      //#endregion
     FILE
   end
 
@@ -177,24 +167,20 @@ class RolldownTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'main.js', 'application/javascript', <<~'FILE'
-      //#region maths/cube.js
+      // maths/cube.js
       function cube(x) {
       	return x * x * x;
       }
-      //#endregion
-      //#region maths/square.js
+      // maths/square.js
       function square(x) {
       	return x * x;
       }
-      //#endregion
-      //#region \0condenser-glob:maths/*
+      // \0condenser-glob:maths/*
       var __default = [cube, square];
-      //#endregion
-      //#region main.js
+      // main.js
       var x = 1;
       for (var i = 0; i < __default.length; i++) x = __default[i](x);
       console.log(x);
-      //#endregion
     FILE
   end
 
@@ -218,15 +204,12 @@ class RolldownTest < ActiveSupport::TestCase
 
 
     assert_exported_file 'main.js', 'application/javascript', <<~FILE
-      //#region module/base.js
+      // module/base.js
       var Base = class {};
-      //#endregion
-      //#region module/base/other.js
+      // module/base/other.js
       var Lower = class extends Base {};
-      //#endregion
-      //#region main.js
+      // main.js
       console.log(Base, Lower);
-      //#endregion
     FILE
   end
 
@@ -246,14 +229,12 @@ class RolldownTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'main.js', 'application/javascript', <<~FILE
-      //#region math.js
+      // math.js
       function cube(x) {
       	return x * x * x;
       }
-      //#endregion
-      //#region main.js
+      // main.js
       console.log(cube(5));
-      //#endregion
     FILE
   end
 
@@ -350,9 +331,8 @@ class RolldownTest < ActiveSupport::TestCase
     @env.logger = Logger.new(log, level: :warn)
     assert_exported_file 'main.js', 'application/javascript', <<~FILE
       import x from "nope";
-      //#region main.js
+      // main.js
       console.log(x);
-      //#endregion
     FILE
     assert_match(/WARN -- : \[UNRESOLVED_IMPORT\] .*Could not resolve 'nope' in main\.js/, log.string)
     assert_not_includes log.string, "\e["
@@ -396,14 +376,12 @@ class RolldownTest < ActiveSupport::TestCase
     out, _ = capture_subprocess_io do
       Timeout.timeout(10) do
         assert_exported_file 'main.js', 'application/javascript', <<~FILE
-          //#region math.js
+          // math.js
           function cube(x) {
           	return x * x * x;
           }
-          //#endregion
-          //#region main.js
+          // main.js
           console.log(cube(5));
-          //#endregion
         FILE
       end
     end
@@ -428,9 +406,8 @@ class RolldownTest < ActiveSupport::TestCase
     out, err = capture_subprocess_io do
       Timeout.timeout(10) do
         assert_exported_file 'main.js', 'application/javascript', <<~FILE
-          //#region main.js
+          // main.js
           console.log(1);
-          //#endregion
         FILE
       end
     end

@@ -10,7 +10,7 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
   end
 
   def without_rolldown_runtime(source)
-    runtime = /^\/\/#region \\0rolldown\/runtime\.js\n.*?^\/\/#endregion\n/m
+    runtime = /^\/\/ \\0rolldown\/runtime\.js\n.*?(?=^\/\/ )/m
     assert_match runtime, source
     source.sub(runtime, '')
   end
@@ -48,30 +48,26 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
     # evaluated, as native dynamic imports would.
     source = without_rolldown_runtime(@env.find('main.js').export.source)
     assert_equal(<<~'FILE'.rstrip, source.rstrip)
-      //#region math/cube.js
+      // math/cube.js
       function cube$1(x) {
       	return x * x * x;
       }
       var init_cube = __esmMin(() => {});
-      //#endregion
-      //#region math/math.js
+      // math/math.js
       var math_exports = /* @__PURE__ */ __exportAll({ cube: () => cube$1 });
       var init_math = __esmMin(() => {
       	init_cube();
       });
-      //#endregion
-      //#region math/b.js
+      // math/b.js
       var b_exports = /* @__PURE__ */ __exportAll({ cube: () => cube$1 });
       var init_b = __esmMin(() => {
       	init_cube();
       	x;
       });
-      //#endregion
-      //#region main.js
+      // main.js
       cube = await Promise.resolve().then(() => (init_math(), math_exports));
       bigCube = await Promise.resolve().then(() => (init_b(), b_exports));
       console.log(cube(5));
-      //#endregion
     FILE
   end
 
@@ -131,11 +127,10 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'main.js', 'application/javascript', <<~FILE
-      //#region main.js
+      // main.js
       cube = await import("/#{@env.find('math/math').path}");
       bigCube = await import("/#{@env.find('math/b').path}");
       console.log(cube(5));
-      //#endregion
     FILE
 
     Dir.mktmpdir do |export_dir|
@@ -165,22 +160,20 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
       assert_written_size export_dir, data['main.js']
       assert_equal main.path, data['main.js']['path']
       assert_equal(<<~JS.rstrip, File.read(File.join(export_dir, data['main.js']['path'])).rstrip)
-        //#region main.js
+        // main.js
         cube = await import("/#{math.path}");
         bigCube = await import("/#{mathb.path}");
         console.log(cube(5));
-        //#endregion
       JS
 
       assert data['math/math.js']
       assert_written_size export_dir, data['math/math.js']
       assert_equal math.path, data['math/math.js']['path']
       assert_equal(<<~JS.rstrip, File.read(File.join(export_dir, data['math/math.js']['path'])).rstrip)
-        //#region math/cube.js
+        // math/cube.js
         function cube(x) {
         	return x * x * x;
         }
-        //#endregion
         export { cube };
       JS
 
@@ -188,14 +181,12 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
       assert_written_size export_dir, data['math/b.js']
       assert_equal mathb.path, data['math/b.js']['path']
       assert_equal(<<~JS.rstrip, File.read(File.join(export_dir, data['math/b.js']['path'])).rstrip)
-        //#region math/cube.js
+        // math/cube.js
         function cube(x) {
         	return x * x * x;
         }
-        //#endregion
-        //#region math/b.js
+        // math/b.js
         x;
-        //#endregion
         export { cube };
       JS
     end
@@ -229,11 +220,10 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'main.js', 'application/javascript', <<~FILE
-      //#region main.js
+      // main.js
       cube = await import("/assets/#{@env.find('math/math').path}");
       bigCube = await import("/assets/#{@env.find('math/b').path}");
       console.log(cube(5));
-      //#endregion
     FILE
 
     Dir.mktmpdir do |export_dir|
@@ -263,22 +253,20 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
       assert_written_size export_dir, data['main.js']
       assert_equal main.path, data['main.js']['path']
       assert_equal(<<~JS.rstrip, File.read(File.join(export_dir, data['main.js']['path'])).rstrip)
-        //#region main.js
+        // main.js
         cube = await import("/assets/#{math.path}");
         bigCube = await import("/assets/#{mathb.path}");
         console.log(cube(5));
-        //#endregion
       JS
 
       assert data['math/math.js']
       assert_written_size export_dir, data['math/math.js']
       assert_equal math.path, data['math/math.js']['path']
       assert_equal(<<~JS.rstrip, File.read(File.join(export_dir, data['math/math.js']['path'])).rstrip)
-        //#region math/cube.js
+        // math/cube.js
         function cube(x) {
         	return x * x * x;
         }
-        //#endregion
         export { cube };
       JS
 
@@ -286,14 +274,12 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
       assert_written_size export_dir, data['math/b.js']
       assert_equal mathb.path, data['math/b.js']['path']
       assert_equal(<<~JS.rstrip, File.read(File.join(export_dir, data['math/b.js']['path'])).rstrip)
-        //#region math/cube.js
+        // math/cube.js
         function cube(x) {
         	return x * x * x;
         }
-        //#endregion
-        //#region math/b.js
+        // math/b.js
         x;
-        //#endregion
         export { cube };
       JS
     end
@@ -325,10 +311,9 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'main.js', 'application/javascript', <<~FILE
-      //#region main.js
+      // main.js
       const cube = await import("/#{@env.find('/math/math').export.path}");
       console.log(cube(5));
-      //#endregion
     FILE
 
     Dir.mktmpdir do |export_dir|
@@ -360,10 +345,9 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
       assert_written_size export_dir, data['main.js']
       assert_equal main.path, data['main.js']['path']
       assert_equal(<<~JS.rstrip, File.read(File.join(export_dir, data['main.js']['path'])).rstrip)
-        //#region main.js
+        // main.js
         const cube = await import("/#{math.path}");
         console.log(cube(5));
-        //#endregion
       JS
 
       # math/cube.js dynamically imports math/math.js, the module being
@@ -375,7 +359,7 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
       assert_written_size export_dir, data['math/math.js']
       assert_equal math.path, data['math/math.js']['path']
       assert_equal(<<~'JS'.rstrip, without_rolldown_runtime(File.read(File.join(export_dir, data['math/math.js']['path']))).rstrip)
-        //#region math/cube.js
+        // math/cube.js
         function cube(x) {
         	return math.number(x) * x * x;
         }
@@ -383,8 +367,7 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
         var init_cube = __esmMin(async () => {
         	math = await init_math().then(() => math_exports);
         });
-        //#endregion
-        //#region math/math.js
+        // math/math.js
         var math_exports = /* @__PURE__ */ __exportAll({
         	cube: () => cube,
         	number: () => number
@@ -395,7 +378,6 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
         var init_math = __esmMin(async () => {
         	await init_cube();
         });
-        //#endregion
         await init_math();
         export { cube, number };
       JS
