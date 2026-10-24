@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Templates (ERB, EJS, EJX, ...) get UTF-8 source instead of binary, and `SVGTransformer` decodes SVGs as UTF-8, so non-ASCII text no longer reaches `JSON.generate` as BINARY (a warning in json 2, an error in json 3). Sources that aren't valid UTF-8 are handled as before.
+
 ## 2.0.0.rc1
 
 Changes since 1.5.1.
