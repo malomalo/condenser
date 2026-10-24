@@ -620,7 +620,7 @@ In development Rails will serve assets from `Condenser::Server`.
 
 ### Version History
 
-Please see the [CHANGELOG](https://github.com/malomalo/condenser/tree/master/CHANGELOG.md)
+Please see the [CHANGELOG](https://github.com/malomalo/condenser/blob/master/CHANGELOG.md)
 
 ## License
-Condenser is released under the [MIT License](MIT-LICENSE).
+Condenser is released under the [MIT License](LICENSE).
