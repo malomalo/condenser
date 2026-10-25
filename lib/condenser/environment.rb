@@ -67,6 +67,11 @@ class Condenser
       end
     end
 
+    # The default #inspect dumps every processor, cache and lookup.
+    def inspect
+      "#<#{self.class.name} paths=#{path.size} npm_path=#{npm_path.inspect} base=#{base.inspect}>"
+    end
+
     def npm_path=(path)
       if path.nil?
         @npm_path = nil
