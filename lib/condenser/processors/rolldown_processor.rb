@@ -6,6 +6,9 @@ class Condenser::RolldownProcessor
 
   SCRIPT = File.expand_path('rolldown_processor.js', __dir__)
   DYNAMIC_IMPORTS = %i[inline keep].freeze
+  # Rolldown's module types, less the ones that emit a file (asset, copy,
+  # css), since only the JavaScript bundle is kept.
+  MODULE_TYPES = %w[base64 binary dataurl empty js json jsx text ts tsx].freeze
   SOURCEMAPS = [false, :linked, :hidden].freeze
 
   @@setup = []
@@ -30,11 +33,12 @@ class Condenser::RolldownProcessor
   def options
     options = {prefix: @prefix, dynamic_imports: @dynamic_imports, aliases: @aliases, minify: @minify, rolldown: @rolldown_version}
     options[:platform] = @platform if @platform != 'neutral'
+    options[:module_types] = @module_types if !@module_types.empty?
     options[:sourcemap] = @sourcemap if @sourcemap
     options
   end
 
-  def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, aliases: {}, platform: 'neutral', minify: false, sourcemap: false, max_memory: Condenser::NodeWorker::MAX_MEMORY)
+  def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, aliases: {}, platform: 'neutral', minify: false, module_types: {}, sourcemap: false, max_memory: Condenser::NodeWorker::MAX_MEMORY)
     unless DYNAMIC_IMPORTS.include?(dynamic_imports)
       raise ArgumentError, "dynamic_imports must be :inline or :keep, got #{dynamic_imports.inspect}"
     end
@@ -55,6 +59,7 @@ class Condenser::RolldownProcessor
     @aliases = aliases
     @platform = platform
     @minify = minify
+    @module_types = normalize_module_types(module_types)
     @sourcemap = sourcemap
     @max_memory = max_memory
     @lock = Mutex.new
@@ -62,8 +67,27 @@ class Condenser::RolldownProcessor
   end
 
   def call(environment, input)
-    Runner.new(@npm_dir, worker: worker, prefix: @prefix, dynamic_imports: @dynamic_imports, aliases: @aliases, platform: @platform, minify: @minify, sourcemap: @sourcemap).call(environment, input)
+    Runner.new(@npm_dir, worker: worker, prefix: @prefix, dynamic_imports: @dynamic_imports, aliases: @aliases, platform: @platform, minify: @minify, module_types: @module_types, sourcemap: @sourcemap).call(environment, input)
   end
+
+  # { png: :dataurl } as { "png" => "dataurl" }, sorted by extension.
+  def normalize_module_types(module_types)
+    unless module_types.is_a?(Hash)
+      raise ArgumentError, "module_types must be a Hash of extension => module type, got #{module_types.inspect}"
+    end
+
+    module_types.to_h do |ext, type|
+      unless (ext.is_a?(Symbol) || ext.is_a?(String)) && ext.to_s.match?(/\A[A-Za-z0-9_-]+\z/)
+        hint = " (without the leading dot: #{ext.to_s.delete_prefix('.').to_sym.inspect})" if ext.to_s.start_with?('.')
+        raise ArgumentError, "module_types keys must be file extensions like :png, got #{ext.inspect}#{hint}"
+      end
+      unless (type.is_a?(Symbol) || type.is_a?(String)) && MODULE_TYPES.include?(type.to_s)
+        raise ArgumentError, "module_types[#{ext.inspect}] must be one of #{MODULE_TYPES.map(&:to_sym).inspect}, got #{type.inspect}"
+      end
+      [ext.to_s, type.to_s]
+    end.sort.to_h
+  end
+  private :normalize_module_types
 
   def worker
     @lock.synchronize do
@@ -85,7 +109,7 @@ class Condenser::RolldownProcessor
   class Runner < Condenser::NodeProcessor
     JSON_TYPE = 'application/json'
 
-    def initialize(dir = nil, worker:, prefix: nil, dynamic_imports: :inline, aliases: {}, platform: 'neutral', minify: false, sourcemap: false)
+    def initialize(dir = nil, worker:, prefix: nil, dynamic_imports: :inline, aliases: {}, platform: 'neutral', minify: false, module_types: {}, sourcemap: false)
       super(dir)
       @worker = worker
       @prefix = prefix
@@ -93,6 +117,7 @@ class Condenser::RolldownProcessor
       @aliases = aliases
       @platform = platform
       @minify = minify
+      @module_types = module_types
       @sourcemap = sourcemap
     end
 
@@ -113,7 +138,8 @@ class Condenser::RolldownProcessor
         modules: npm_path ? ['node_modules', npm_module_path] : [],
         aliases: @aliases,
         platform: @platform,
-        minify: @minify
+        minify: @minify,
+        moduleTypes: @module_types.to_h { |ext, type| [".#{ext}", type] }
       }
       if @sourcemap
         config[:sourcemap] = true
@@ -155,6 +181,8 @@ class Condenser::RolldownProcessor
       case method
       when 'resolve'
         importee, importer = args
+        return module_file(importee, importer) if module_type?(importee)
+
         # npm: false; Rolldown resolves node_modules when this is nil.
         id = @environment.find(importee, importer, accept: @accept)&.source_file
         # JSON needs its extension, as in Node and Rolldown.
@@ -176,6 +204,38 @@ class Condenser::RolldownProcessor
       when 'resolveDynamicImport'
         resolve_dynamic_import(*args)
       end
+    end
+
+    def module_type?(importee)
+      @module_types.key?(File.extname(importee).delete_prefix('.'))
+    end
+
+    # A file imported with a module type is loaded by Rolldown itself, so
+    # Ruby only finds it: an absolute path, "./" or "../" relative to
+    # +importer+, in the load paths, or through an alias. If it's not found
+    # Rolldown tries node_modules, then fails with "Could not resolve".
+    def module_file(importee, importer)
+      path = existing_file(importee, importer) || aliased_file(importee, importer)
+      { id: path } if path
+    end
+
+    # Like Rolldown, an alias matches the whole name or a "name/" prefix.
+    def aliased_file(importee, importer)
+      @aliases.each do |name, targets|
+        name = name.to_s
+        next if importee != name && !importee.start_with?("#{name}/")
+        Array(targets).each do |target|
+          path = existing_file(target + importee.delete_prefix(name), importer) if target.is_a?(String)
+          return path if path
+        end
+      end
+      nil
+    end
+
+    def existing_file(name, importer)
+      @environment.expand_dependency_path(name, source_file: importer)
+    rescue Condenser::FileNotFound
+      nil
     end
 
     # The digest of what `load` returns for +id+: the export input for the
@@ -226,6 +286,10 @@ class Condenser::RolldownProcessor
     end
 
     def resolve_dynamic_import(importee, importer)
+      # A file with a module type is bundled even with dynamic_imports: :keep,
+      # since it isn't a JavaScript file that can be imported on its own.
+      return module_file(importee, importer) if module_type?(importee)
+
       asset = @environment.find(importee, importer, accept: @accept, npm: true)
       asset ||= @environment.find(importee.delete_suffix('.js') + "/index.js", importer, accept: @accept, npm: true)
       asset ||= @environment.find(importee.gsub(/\/[^\/]+$/, '') + "/dist/index.js", importer, accept: @accept, npm: true)

@@ -20,7 +20,7 @@ class Condenser::SVGTransformer
     if source.encoding == Encoding::BINARY
       source = source.dup.force_encoding(Encoding::UTF_8)
       if !source.valid_encoding?
-        raise Condenser::EncodingError, "#{input[:filename]} isn't valid UTF-8"
+        raise Condenser::EncodingError, "#{input[:source_file]} isn't valid UTF-8"
       end
     end
 
