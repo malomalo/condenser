@@ -15,11 +15,13 @@ class Condenser::SVGTransformer
   def self.call(environment, input)
     # SVGs aren't charset-detected, so the source is still binary. The
     # attribute values go through JSON.generate, which needs UTF-8 for
-    # non-ASCII text. Invalid UTF-8 stays binary, as before.
+    # non-ASCII text.
     source = input[:source]
     if source.encoding == Encoding::BINARY
-      utf8 = source.dup.force_encoding(Encoding::UTF_8)
-      source = utf8 if utf8.valid_encoding?
+      source = source.dup.force_encoding(Encoding::UTF_8)
+      if !source.valid_encoding?
+        raise Condenser::EncodingError, "#{input[:filename]} isn't valid UTF-8"
+      end
     end
 
     input[:source] = Condenser::SVGTransformer::Template.new(source).to_module

@@ -7,6 +7,7 @@ class Condenser
   class CommandNotFoundError < Error; end
   # class ArgumentError           < Error; end
   class ContentTypeMismatch     < Error; end
+  class EncodingError           < Error; end
   # class NotImplementedError     < Error; end
   class NotFound                < Error; end
   # class ConversionError         < NotFound; end

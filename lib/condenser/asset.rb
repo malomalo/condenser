@@ -469,11 +469,13 @@ class Condenser
           # Templates run before the charset detection below, so give them
           # UTF-8 text instead of the binary read. Template engines that emit
           # JSON would otherwise pass BINARY strings to JSON.generate (a
-          # warning in json 2, an error in json 3). Invalid UTF-8 stays
-          # binary, as before.
+          # warning in json 2, an error in json 3).
           if data[:source].encoding == Encoding::BINARY && steps.any? { |role, *| role == :template }
-            utf8 = detect_unicode(data[:source].dup)
-            data[:source] = utf8 if utf8.encoding == Encoding::UTF_8 && utf8.valid_encoding?
+            source = detect_unicode(data[:source].dup)
+            if !source.valid_encoding?
+              raise Condenser::EncodingError, "#{@filename} isn't valid UTF-8"
+            end
+            data[:source] = source.encode(Encoding::UTF_8)
           end
 
           steps.each do |role, _, templator|

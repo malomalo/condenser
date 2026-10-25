@@ -116,17 +116,26 @@ class EncodingTest < ActiveSupport::TestCase
     assert_equal %{export default "café ✓";\n}, asset.source
   end
 
-  test 'a template that is not valid UTF-8 is processed as before' do
+  test 'a template that is not valid UTF-8 raises an EncodingError' do
     file 'latin1.txt.erb', "caf\xE9 <%= 1 + 1 %>\n".b
 
-    asset = @env.find('latin1.txt')
-    assert_equal "caf\xE9 2\n".b, asset.source.b
+    error = assert_raises(Condenser::EncodingError) { @env.find('latin1.txt').source }
+    assert_equal "latin1.txt isn't valid UTF-8", error.message
   end
 
-  test 'an SVG that is not valid UTF-8 is transformed as before' do
+  test 'a UTF-16 template with a byte order mark is converted to UTF-8' do
+    file 'utf16.txt.erb', "﻿café <%= 1 + 1 %>\n".encode(Encoding::UTF_16LE).b
+
+    asset = @env.find('utf16.txt')
+    assert_equal Encoding::UTF_8, asset.source.encoding
+    assert_equal "café 2\n", asset.source
+  end
+
+  test 'an SVG that is not valid UTF-8 raises an EncodingError' do
     file 'icon.svg', %{<svg xmlns="http://www.w3.org/2000/svg"><title>caf\xE9</title></svg>\n}.b
 
-    assert_includes @env.find('icon.svg', accept: 'application/javascript').source, '"http://www.w3.org/2000/svg"'
+    error = assert_raises(Condenser::EncodingError) { @env.find('icon.svg', accept: 'application/javascript').source }
+    assert_equal "icon.js isn't valid UTF-8", error.message
   end
 
   test 'EJS template' do

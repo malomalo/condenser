@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Templates (ERB, EJS, EJX, ...) get UTF-8 source instead of binary, and `SVGTransformer` decodes SVGs as UTF-8, so non-ASCII text no longer reaches `JSON.generate` as BINARY (a warning in json 2, an error in json 3). Sources that aren't valid UTF-8 are handled as before.
+- Templates (ERB, EJS, EJX, ...) get UTF-8 source instead of binary, and `SVGTransformer` decodes SVGs as UTF-8, so non-ASCII text no longer reaches `JSON.generate` as BINARY (a warning in json 2, an error in json 3). A template or SVG source that isn't valid UTF-8 now raises `Condenser::EncodingError`; one with a UTF-16 or UTF-32 byte order mark is converted to UTF-8.
 
 ## 2.0.0.rc1
 
