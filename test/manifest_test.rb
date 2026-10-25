@@ -714,7 +714,10 @@ class ManifestTest < ActiveSupport::TestCase
     end
     Condenser::Manifest.new(@dir).clean
 
-    assert_equal [new_path, 'manifest.json'].sort, output_files
+    assert_includes output_files, new_path
+    assert_includes output_files, 'manifest.json'
+    assert_empty output_files.select { |f| f.start_with?(old_path) }
+    assert_empty output_files.reject { |f| f == 'manifest.json' || f.start_with?(new_path) }
   end
 
   test "clobber removes the manifest and everything in the output directory" do

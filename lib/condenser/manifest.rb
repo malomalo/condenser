@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'json'
+require 'set'
 require 'fileutils'
 
 class Condenser
@@ -109,20 +110,40 @@ class Condenser
     # Cleanup old assets in the compile directory. By default it will keep the
     # latest version and remove any other files over 4 weeks old.
     def clean(age = 2419200)
-      clean_dir(@dir, @data.values.map{ |v| v[:path] }, Time.now - age)
+      return if !Dir.exist?(dir)
+
+      # Manifest paths are relative to the output directory; keep each one
+      # and its compressed versions.
+      keep = @data.values.flat_map { |v| [v[:path], v[:map]].compact }
+      keep = keep.flat_map { |path| [path, "#{path}.gz", "#{path}.br"] }.to_set
+      clean_dir(dir, keep, Time.now - age)
     end
 
-    def clean_dir(dir, assets, age)
+    # Remove files in +dir+ that aren't in +keep+ and were last modified
+    # before +before+, then any directories left empty. Returns true if +dir+
+    # is now empty.
+    def clean_dir(dir, keep, before, prefix = nil)
+      empty = true
       Dir.each_child(dir) do |child|
+        relative_path = prefix ? File.join(prefix, child) : child
         child = File.join(dir, child)
-        next if assets.find { |x| child.start_with?(x) }
+        stat = File.lstat(child)
 
-        if File.directory?(child)
-          clean_dir(dir, assets, age)
-        elsif File.file?(child) && File.stat(child).mtime < age
+        # Don't follow symlinks out of the output directory
+        if stat.directory?
+          if clean_dir(child, keep, before, relative_path)
+            Dir.rmdir(child)
+            logger.info "Removed #{child}"
+            next
+          end
+        elsif stat.file? && child != filename && !keep.include?(relative_path) && stat.mtime < before
           File.delete(child)
+          logger.info "Removed #{child}"
+          next
         end
+        empty = false
       end
+      empty
     end
 
     # Wipe directive
