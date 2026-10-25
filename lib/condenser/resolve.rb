@@ -6,14 +6,20 @@ class Condenser
     def initialize(*args, **kws, &block)
       @reverse_mapping = nil
       @dependency_paths = nil
+      @build_cache_lock = Mutex.new
       super
     end
     
+    # Created under a lock so concurrent first requests share one BuildCache
+    # (and one semaphore).
     def build_cache
       return @build_cache if instance_variable_defined?(:@build_cache)
-      @build_cache = BuildCache.new(path, logger: logger, listen: @listen)
-      @watched_paths.each { |p, ignore| @build_cache.watch(p, ignore: ignore) }
-      @build_cache
+      @build_cache_lock.synchronize do
+        return @build_cache if instance_variable_defined?(:@build_cache)
+        cache = BuildCache.new(path, logger: logger, listen: @listen)
+        @watched_paths.each { |p, ignore| cache.watch(p, ignore: ignore) }
+        @build_cache = cache
+      end
     end
     
     def resolve(filename, base=nil, accept: nil, npm: false)
@@ -184,13 +190,19 @@ class Condenser
       end
     end
     
+    # When listening, the outermost build on a thread takes the semaphore
+    # before touching @build_cc, so only one thread builds at a time and the
+    # count is per environment. Without a listener there's no lock; that's
+    # only used single-threaded (e.g. precompiling).
     def build
-      @build_cc += 1
       if build_cache.listening && !build_cache.semaphore.owned?
-        build_cache.semaphore.lock
+        semaphore = build_cache.semaphore
+        semaphore.lock
         logger.debug { "build cache semaphore locked by #{Thread.current.object_id}" }
       end
 
+      @build_cc += 1
+      counted = true
       if @build_cc == 1
         build_cache.start_build
         build_cache.clear_if_npm_changed(npm_path)
@@ -198,13 +210,18 @@ class Condenser
       end
       yield
     ensure
-      @build_cc -= 1
-      if @build_cc == 0
-        @dependency_paths = nil
-        build_cache.finish_build
-        if build_cache.listening && build_cache.semaphore.owned?
+      begin
+        if counted
+          @build_cc -= 1
+          if @build_cc == 0
+            @dependency_paths = nil
+            build_cache.finish_build
+          end
+        end
+      ensure
+        if semaphore&.owned?
           logger.debug { "build cache semaphore unlocked by #{Thread.current.object_id}" }
-          build_cache.semaphore.unlock
+          semaphore.unlock
         end
       end
     end
