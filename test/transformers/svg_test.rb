@@ -1,6 +1,63 @@
 require 'test_helper'
+require 'open3'
 
 class SVGTransformerTest < ActiveSupport::TestCase
+
+  # A minimal DOM: elements record their attributes as setAttribute does,
+  # converting values to strings, and serialize them as outerHTML.
+  FAKE_DOM = <<~JS
+    class FakeElement {
+      constructor(tagName) { this.tagName = tagName; this.attributes = new Map(); this.children = []; }
+      setAttribute(key, value) { this.attributes.set(key, String(value)); }
+      removeAttribute(key) { this.attributes.delete(key); }
+      append(child) { this.children.push(child); }
+      get outerHTML() {
+        const attrs = [...this.attributes].map(([k, v]) => ` ${k}="${v}"`).join('');
+        return `<${this.tagName}${attrs}>${this.children.map((c) => c.outerHTML).join('')}</${this.tagName}>`;
+      }
+    }
+    globalThis.document = {
+      createElement: (tagName) => new FakeElement(tagName),
+      createElementNS: (ns, tagName) => new FakeElement(tagName)
+    };
+  JS
+
+  def run_svg_module(name, script)
+    File.write(File.join(@path, 'svg.mjs'), @env.find(name).source)
+    File.write(File.join(@path, 'run.mjs'), FAKE_DOM + "const svg = await import('./svg.mjs');\n" + script)
+    stdout, stderr, status = Open3.capture3('node', File.join(@path, 'run.mjs'))
+    assert status.success?, stderr
+    stdout
+  end
+
+  test 'attributes passed as null, undefined or false are removed and true is set to ""' do
+    file 'icon.svg', <<~SVG
+      <svg xmlns="http://www.w3.org/2000/svg" fill="red" aria-hidden="true" width="5"><path d="M0 0"/></svg>
+    SVG
+
+    assert_equal <<~OUT, run_svg_module('icon.js', <<~JS)
+      [["xmlns","http://www.w3.org/2000/svg"],["width","10"],["focusable",""],["class","icon"]]
+      [["xmlns","http://www.w3.org/2000/svg"],["fill","red"],["aria-hidden","true"],["width","5"]]
+    OUT
+      const el = svg.default({ fill: null, 'aria-hidden': false, focusable: true, width: 10, class: 'icon', title: undefined });
+      console.log(JSON.stringify([...el.attributes]));
+      console.log(JSON.stringify([...svg.default().attributes]));
+    JS
+  end
+
+  test 'toString returns the markup, with the attributes passed' do
+    file 'icon.svg', <<~SVG
+      <svg xmlns="http://www.w3.org/2000/svg" fill="red" width="5"><path d="M0 0"/></svg>
+    SVG
+
+    assert_equal <<~OUT, run_svg_module('icon.js', <<~JS)
+      <svg xmlns="http://www.w3.org/2000/svg" fill="red" width="5"><path d="M0 0"></path></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" width="10" hidden=""><path d="M0 0"></path></svg>
+    OUT
+      console.log(svg.toString());
+      console.log(svg.toString({ fill: false, width: 10, hidden: true }));
+    JS
+  end
 
   test 'svg transoformation' do
     file 'test.svg', <<~SCSS
@@ -12,7 +69,7 @@ class SVGTransformerTest < ActiveSupport::TestCase
     SCSS
 
     assert_file 'test.js', 'application/javascript', <<~JS
-      export default function (svgAttributes) {
+      export default function render(svgAttributes) {
           var __a = document.createElementNS("http://www.w3.org/2000/svg", "svg");
           __a.setAttribute("version", "1.1");
           __a.setAttribute("xmlns", "http://www.w3.org/2000/svg");
@@ -28,11 +85,20 @@ class SVGTransformerTest < ActiveSupport::TestCase
 
           if (svgAttributes) {
               Object.keys(svgAttributes).forEach(function (key) {
-                  __a.setAttribute(key, svgAttributes[key]);
+                  var value = svgAttributes[key];
+                  if (value === null || value === undefined || value === false) {
+                      __a.removeAttribute(key);
+                  } else {
+                      __a.setAttribute(key, value === true ? "" : value);
+                  }
               });
           }
 
           return __a;
+      }
+
+      export function toString(svgAttributes) {
+          return render(svgAttributes).outerHTML;
       }
     JS
   end
