@@ -505,6 +505,38 @@ it rebuilds the bundles that import it. JSON rendered from a template, such as
 `users.json.erb`, is imported as `users.json`. `RollupProcessor` doesn't
 support importing JSON.
 
+### Importing images, fonts and other files
+
+`module_types:` maps file extensions to the
+[module types](https://rolldown.rs/in-depth/module-types) Rolldown loads them
+as, like esbuild's `loader`:
+
+```ruby
+Condenser::RolldownProcessor.new(npm_path, module_types: { png: :dataurl, ttf: :base64 })
+```
+
+```js
+import logo from 'images/logo.png';    // "data:image/png;base64,…"
+import font from 'fonts/Regular.ttf';  // a base64 String
+```
+
+The types are `:base64`, `:binary` (a `Uint8Array`), `:dataurl`, `:empty`,
+`:text` and the JavaScript and JSON types. `:asset`, `:copy` and `:css` aren't
+supported, since they emit files and only the bundle is kept.
+
+The file is found by its absolute path, `./` or `../` relative to the
+importing file, in the load paths, or else through `aliases:`.
+Rolldown reads it itself, so a module type is used instead of any processing
+condenser does for that extension (with `svg: :text` an `.svg` import is its
+markup, not the `SVGTransformer`'s module). A file that isn't found fails the
+build. A dynamic `import()` of one is bundled, even with
+`dynamic_imports: :keep`.
+
+Replacing a file rebuilds the bundles that import it from the load paths or
+relative to themselves. A file found only through an alias, outside the load
+paths, isn't tracked, as with aliased JavaScript modules. `RollupProcessor`
+doesn't support `module_types:`.
+
 `Condenser::RollupProcessor` is deprecated and will be removed in condenser
 3.0. Until then it can still be used by registering it in place of Rolldown:
 
