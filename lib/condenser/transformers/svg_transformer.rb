@@ -20,7 +20,9 @@ class Condenser::SVGTransformer
     if source.encoding == Encoding::BINARY
       source = source.dup.force_encoding(Encoding::UTF_8)
       if !source.valid_encoding?
-        raise Condenser::EncodingError, "#{input[:filename]} isn't valid UTF-8"
+        # Name the SVG, not the JavaScript asset it's transformed into
+        name = input[:filename].sub(/[^\/]*\z/, File.basename(input[:source_file]))
+        raise Condenser::EncodingError, "#{name} isn't valid UTF-8"
       end
     end
 
