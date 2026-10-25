@@ -465,6 +465,7 @@ class Condenser
           }
         
           steps = processing_steps
+
           steps.each do |role, _, templator|
             next if role != :template
             data[:content_type].pop
@@ -477,7 +478,8 @@ class Condenser
             data[:filename] = data[:filename].gsub(/\.#{extensions.last}$/, '')
           end
 
-          case @environment.mime_types[data[:content_type].last][:charset]
+          # The detectors can return a new String (e.g. without a BOM)
+          data[:source] = case @environment.mime_types[data[:content_type].last][:charset]
           when :unicode
             detect_unicode(data[:source])
           when :css
@@ -485,7 +487,7 @@ class Condenser
           when :html
             detect_html(data[:source])
           else
-            detect(data[:source]) if mime_types.last.start_with?('text/')
+            mime_types.last.start_with?('text/') ? detect(data[:source]) : data[:source]
           end
           
           transformed = false
