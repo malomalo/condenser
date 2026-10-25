@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- `RolldownProcessor` resolves npm packages like Node, from the importing file up, so a package gets the dependency in its own nested `node_modules` instead of the top-level version of it.
+
 ## 2.0.0.rc1
 
 Changes since 1.5.1.
