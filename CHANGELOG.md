@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed / improved
+
+- Concurrent builds on a listening environment no longer deadlock. A build takes the build cache's lock before counting itself, so a second thread waiting on the lock can't stop the first from releasing it. The build cache is created under a lock, so concurrent first requests share one cache and lock.
+
 ## 2.0.0.rc1
 
 Changes since 1.5.1.
