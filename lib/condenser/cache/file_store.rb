@@ -46,8 +46,8 @@ class Condenser::Cache
       # Ensure directory exists
       FileUtils.mkdir_p File.dirname(path)
       
-      # Check if cache exists before writing
-      exists = File.exist?(path)
+      # Size of the cache being replaced, if any
+      old_stat = safe_stat(path)
 
       # Serialize value
       marshaled = Marshal.dump(value)
@@ -69,7 +69,7 @@ class Condenser::Cache
       # Write data
       Condenser::Utils.atomic_write(path) do |f|
         f.write(raw)
-        @size = size + f.size unless exists
+        @size = size + f.size - (old_stat ? old_stat.size : 0)
       end
 
       # GC if necessary

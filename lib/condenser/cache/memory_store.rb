@@ -1,37 +1,34 @@
 # frozen_string_literal: true
 
 class Condenser::Cache
-  # Public: Basic in memory LRU cache.
+  # Public: Basic in memory LRU cache. The default cache of a Condenser
+  # environment.
   #
-  # Assign the instance to the Environment#cache.
+  #     environment.cache = Condenser::Cache::MemoryStore.new(size: 64 * 1024 * 1024)
   #
-  #     environment.cache = Sprockets::Cache::MemoryStore.new(1000)
-  #
-  # See Also
-  #
-  #   ActiveSupport::Cache::MemoryStore
+  # size - The maximum size of the store, in bytes (default: 32MB). Each entry
+  #        counts its key, its value and PER_ENTRY_OVERHEAD bytes. The least
+  #        recently read or written entries are evicted to stay under it.
   #
   class MemoryStore < Condenser::CacheStore
-    # Internal: Default key limit for store.
+    # Internal: Default size limit for the store, in bytes.
     DEFAULT_MAX_SIZE = 33_554_432 # 32 Megabytes
     PER_ENTRY_OVERHEAD = 240
 
     def initialize(options = {})
       @max_size = options[:size] || DEFAULT_MAX_SIZE
       @cache = {}
-      @key_access = {}
       @cache_size = 0
     end
 
     def clear
       @cache.clear
-      @key_access.clear
       @cache_size = 0
     end
     
     def get(key)
-      value = @cache[key]
-      @key_access[key] = Time.now.to_f if value
+      value = @cache.delete(key)
+      @cache[key] = value unless value.nil?
       value
     end
 
@@ -40,19 +37,16 @@ class Condenser::Cache
     end
     
     def set(key, value)
-      if old_value = @cache[key]
-        @cache_size -= (old_value.bytesize - value.bytesize)
-      else
-        @cache_size += cached_size(key, value)
+      if old_value = @cache.delete(key)
+        @cache_size -= cached_size(key, old_value)
       end
       @cache[key] = value
-      @key_access[key] = Time.now.to_f
+      @cache_size += cached_size(key, value)
       prune if @cache_size > @max_size
       value
     end
     
     def delete(key)
-      @key_access.delete(key)
       if value = @cache.delete(key)
         @cache_size -= cached_size(key, value)
         true
@@ -62,10 +56,8 @@ class Condenser::Cache
     end
 
     def prune
-      keys = @key_access.keys.sort { |a, b| @key_access[a].to_f <=> @key_access[b].to_f }
-      keys.each do |key|
-        delete(key)
-        return if @cache_size <= @max_size
+      while @cache_size > @max_size && (entry = @cache.first)
+        delete(entry[0])
       end
     end
 

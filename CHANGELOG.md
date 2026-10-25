@@ -14,6 +14,8 @@
 - `Condenser::Server`, `Condenser`, `Condenser::BuildCache` and `Condenser::Export` have a short `#inspect`. The default one dumped the whole environment, so the Rails routing error page, which prints mounted apps, could fail with Nokogiri's "Document tree depth limit exceeded".
 - `RolldownProcessor` resolves npm packages like Node, from the importing file up, so a package gets the dependency in its own nested `node_modules` instead of the top-level version of it.
 - An import with an explicit extension only resolves to a file with that extension, or one converted to it: `import logo from 'images/logo.png'` no longer bundles `images/logo.svg`'s JavaScript module when both exist. Rolldown is only given the file it asked to load.
+- `Cache::FileStore` accounts for the replaced file when a key is overwritten, so its tracked size no longer drifts from what's on disk and garbage collection runs when it should.
+- `Cache::MemoryStore` keeps its entries in least recently used order, so pruning evicts from the front instead of sorting every key by access time each time the store goes over its size.
 
 ## 2.0.0.rc1
 
