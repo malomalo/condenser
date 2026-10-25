@@ -29,6 +29,11 @@ class Condenser
     def to_s
       @source
     end
+
+    # Without the environment and the source.
+    def inspect
+      "#<#{self.class.name} filename=#{filename.inspect} content_types=#{content_types.inspect} etag=#{etag.inspect}>"
+    end
     
     def length
       @source.bytesize
