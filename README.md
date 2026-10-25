@@ -416,7 +416,7 @@ env.watch(Rails.root, ignore: ['public/assets', 'storage'])
 The processor doesn't call `env.watch` itself: what to ignore under the root
 is up to the app, and a process that gets the CSS from a persistent cache
 doesn't run the processor at all. It logs a warning for each directory it
-scans that isn't watched.
+scans files in that isn't watched.
 
 `minify: true` minifies the CSS like `tailwindcss --minify`, with Tailwind's
 own Lightning CSS pass. Condenser's default CSS minifier,

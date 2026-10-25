@@ -101,6 +101,7 @@ class Condenser::TailwindProcessor
 
       directories << { path: dir }
     end
+    warn_unwatched(environment, directories, result['files'])
     directories.each do |d|
       next if File.directory?(d[:path])
 
@@ -109,7 +110,16 @@ class Condenser::TailwindProcessor
       d[:recursive] = false
     end
     input[:directory_dependencies].merge(directories)
-    warn_unwatched(environment, directories.map { |d| d[:path] })
+  end
+
+  # Whether any of the scanned +files+ is in the directory +d+, or under it
+  # if it's recursive. Tailwind reports globs for directories it found no
+  # files in, such as an app's log/ and tmp/.
+  def scans_files?(d, files)
+    prefix = File.join(d[:path], '')
+    files.any? do |f|
+      d[:recursive] ? f.start_with?(prefix) : File.dirname(f) == d[:path]
+    end
   end
 
   # The directories above +dir+, nearest first.
@@ -120,9 +130,11 @@ class Condenser::TailwindProcessor
   end
 
   # The listener only notices changes under the load paths and the watched
-  # paths.
-  def warn_unwatched(environment, directories)
+  # paths. Directories without scanned files aren't logged.
+  def warn_unwatched(environment, directories, files)
     return if !environment.build_cache.listening
+
+    directories = directories.select { |d| scans_files?(d, files) }.map { |d| d[:path] }
 
     roots = environment.path.map { |p| [Condenser::BuildCache.real_path(p), nil] } +
       environment.watched_paths.map { |p, ignore| [Condenser::BuildCache.real_path(p), ignore] }

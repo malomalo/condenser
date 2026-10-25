@@ -173,6 +173,41 @@ class TailwindTest < ActiveSupport::TestCase
     assert_includes log.string, "Tailwind scans #{@other}, which isn't watched"
   end
 
+  # An app's root, where Tailwind reports globs for log/, tmp/ and storage/
+  # but scans no files in them.
+  def app_root
+    @other = File.realpath(Dir.mktmpdir)
+    file 'components/card.html', '<div class="flex"></div>', base: @other
+    file 'vendor/widget/widget.html', '<div class="grid"></div>', base: @other
+    file 'log/development.log', 'class="grid"', base: @other
+    file 'tmp/cache/entry', 'grid', base: @other
+    file 'storage/ab/cd', 'grid', base: @other
+    file '.gitignore', "/log/*\n/tmp/*\n/storage/*\n", base: @other
+    file 'application.css', %(@import "tailwindcss" source("#{@other}");)
+    @other
+  end
+
+  def unwatched_log
+    log = StringIO.new
+    @env.logger = Logger.new(log)
+    css
+    log.string.scan(/Tailwind scans (\S+), which isn't watched/).flatten.map { |d| d.delete_prefix(@other) }.sort
+  end
+
+  test 'only unwatched directories with scanned files are logged' do
+    skip 'needs a listener' if !@env.build_cache.listening
+    app_root
+
+    assert_equal %w[/components /vendor], unwatched_log
+  end
+
+  test 'directories a watch ignores are only logged if they have scanned files' do
+    skip 'needs a listener' if !@env.build_cache.listening
+    @env.watch(app_root, ignore: ['vendor', 'storage'])
+
+    assert_equal %w[/vendor], unwatched_log
+  end
+
   test 'automatic source detection needs a base' do
     file 'application.css', '@import "tailwindcss";'
     @env.unregister_preprocessor 'text/css', @tailwind
