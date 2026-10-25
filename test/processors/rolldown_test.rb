@@ -212,6 +212,42 @@ class RolldownTest < ActiveSupport::TestCase
     FILE
   end
 
+  test 'importing a .png does not get the module of an .svg with the same name' do
+    file 'images/logo.png', "\x89PNG\r\n"
+    file 'images/logo.svg', '<svg xmlns="http://www.w3.org/2000/svg"></svg>'
+
+    file 'main.js', <<~JS
+      import logo from 'images/logo.png';
+
+      console.log( logo );
+    JS
+    error = assert_raises(RuntimeError) { @env.find('main.js').export }
+    assert_match "Could not resolve 'images/logo.png'", error.message
+
+    file 'main.js', <<~JS
+      import logo from './images/logo.png';
+
+      console.log( logo );
+    JS
+    error = assert_raises(RuntimeError) { @env.find('main.js').export }
+    assert_match "Could not load images/logo.png", error.message
+  end
+
+  test 'importing an .svg gets the svg module' do
+    file 'images/logo.png', "\x89PNG\r\n"
+    file 'images/logo.svg', '<svg xmlns="http://www.w3.org/2000/svg"></svg>'
+    file 'main.js', <<~JS
+      import logo from 'images/logo.svg';
+      import relative from './images/logo.svg';
+
+      console.log( logo, relative );
+    JS
+
+    source = @env.find('main.js').export.source
+    assert_includes source, '// images/logo.svg'
+    assert_includes source, 'createElementNS'
+  end
+
   test 'import an aliased module' do
     @env.unregister_exporter('application/javascript')
     @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path, aliases: { 'maths' => File.join(@path, 'math.js') }))

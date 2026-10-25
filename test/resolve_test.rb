@@ -135,4 +135,19 @@ class ResolveTest < ActiveSupport::TestCase
     assert_equal %w(foo.css foo.js test/foo.css), @env.resolve('**/foo.*', accept: ['text/css', 'application/javascript']).map(&:filename)
   end
   
+  test 'an explicit extension is honoured when accept is given' do
+    @env.register_transformer 'image/svg+xml', 'application/javascript', Condenser::SVGTransformer
+    file 'images/logo.png', 'png'
+    file 'images/logo.svg', '<svg xmlns="http://www.w3.org/2000/svg"></svg>'
+    svg = File.join(@path, 'images/logo.svg')
+
+    assert_nil @env.find('images/logo.png', accept: 'application/javascript')
+    assert_equal File.join(@path, 'images/logo.png'), @env.find('images/logo.png').source_file
+    assert_equal svg, @env.find('images/logo.svg', accept: 'application/javascript').source_file
+    assert_equal svg, @env.find('images/logo.js', accept: 'application/javascript').source_file
+    assert_equal svg, @env.find('images/logo', accept: 'application/javascript').source_file
+    assert_equal svg, @env.find('./logo.svg', 'images/main.js', accept: 'application/javascript').source_file
+    assert_nil @env.find('./logo.png', 'images/main.js', accept: 'application/javascript')
+  end
+
 end

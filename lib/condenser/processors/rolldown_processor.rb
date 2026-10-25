@@ -148,7 +148,7 @@ class Condenser::RolldownProcessor
         id = args.first
         if id == @entry
           { code: utf8(@input[:source]), digest: digest_for(@entry) }
-        elsif (asset = @environment.find(id, accept: accept_for(id)))
+        elsif (asset = asset_for(id))
           { code: utf8(asset.source), digest: asset.hexdigest }
         end
       when 'glob'
@@ -165,8 +165,16 @@ class Condenser::RolldownProcessor
       @digests[id] ||= if id == @entry
         @environment.digestor.hexdigest(@input[:source])
       else
-        @environment.find(id, accept: accept_for(id))&.hexdigest
+        asset_for(id)&.hexdigest
       end
+    end
+
+    # The asset built from the file +id+, or nil if +id+ isn't a file
+    # Condenser can turn into JavaScript (or JSON), so Rolldown loads it
+    # itself rather than getting another file with the same name.
+    def asset_for(id)
+      asset = @environment.find(id, accept: accept_for(id))
+      asset if asset&.source_file == id
     end
 
     def accept_for(id)
