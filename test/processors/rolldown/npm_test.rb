@@ -108,6 +108,28 @@ class RolldownNpmTest < ActiveSupport::TestCase
     assert_no_match(/\brequire\(/, source)
   end
 
+  test 'a package gets its own nested dependency, not the top-level one' do
+    package 'condenser-rolldown-nested-b', {
+      'package.json' => { name: 'condenser-rolldown-nested-b', version: '1.0.0', module: './index.js' },
+      'index.js' => "export default 'b@1';\n"
+    }
+    package 'condenser-rolldown-nested-a', {
+      'package.json' => { name: 'condenser-rolldown-nested-a', version: '1.0.0', module: './index.js' },
+      'index.js' => "import b from 'condenser-rolldown-nested-b';\nexport default 'a uses ' + b;\n",
+      'node_modules/condenser-rolldown-nested-b/package.json' => { name: 'condenser-rolldown-nested-b', version: '2.0.0', module: './index.js' },
+      'node_modules/condenser-rolldown-nested-b/index.js' => "export default 'b@2';\n"
+    }
+    file 'main.js', <<~JS
+      import a from 'condenser-rolldown-nested-a';
+      import b from 'condenser-rolldown-nested-b';
+
+      console.log( a + ', main uses ' + b );
+    JS
+
+    _, stdout = run_bundle('main.js')
+    assert_equal "a uses b@2, main uses b@1\n", stdout
+  end
+
   test 'process.env.NODE_ENV is replaced with "production"' do
     package 'condenser-rolldown-env-test', {
       'package.json' => { name: 'condenser-rolldown-env-test', main: './index.js' },
