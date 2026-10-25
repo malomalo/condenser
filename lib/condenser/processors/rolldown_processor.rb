@@ -101,7 +101,9 @@ class Condenser::RolldownProcessor
         entry: @entry,
         entryDigest: digest_for(@entry),
         cwd: environment.base || Dir.pwd,
-        modules: npm_path ? [npm_module_path] : [],
+        # "node_modules" is looked up from the importer up, like Node, so a
+        # package's nested node_modules come before the npm path's.
+        modules: npm_path ? ['node_modules', npm_module_path] : [],
         aliases: @aliases,
         platform: @platform,
         minify: @minify
