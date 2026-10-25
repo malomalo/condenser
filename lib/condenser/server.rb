@@ -59,6 +59,11 @@ class Condenser
         path = path.sub("-#{fingerprint}", '')
       end
 
+      # A JavaScript export's source map is at its URL plus ".map".
+      if sourcemap = path.end_with?('.js.map')
+        path = path.delete_suffix('.map')
+      end
+
       # URLs containing a `".."` are rejected for security reasons.
       if forbidden_request?(path)
         return forbidden_response(env)
@@ -76,7 +81,7 @@ class Condenser
 
       # Look up the asset.
       asset = @condenser.find_export(path, npm: true)
-      if asset.nil?
+      if asset.nil? || (sourcemap && !asset.sourcemap)
         status = :not_found
       elsif fingerprint && asset.etag != fingerprint
         status = :not_found
@@ -91,7 +96,7 @@ class Condenser
       case status
       when :ok
         logger.info "#{msg} 200 OK (#{time_elapsed.call}ms)"
-        ok_response(asset, env)
+        sourcemap ? sourcemap_response(asset, env) : ok_response(asset, env)
       when :not_modified
         logger.info "#{msg} 304 Not Modified (#{time_elapsed.call}ms)"
         not_modified_response(env, if_none_match)
@@ -140,6 +145,14 @@ class Condenser
         else
           [ 200, headers(env, asset, asset.length), [asset.to_s] ]
         end
+      end
+
+      # Returns a 200 OK response tuple with the export's source map, which
+      # changes when the export does, so it has the same etag.
+      def sourcemap_response(asset, env)
+        headers = { "content-type" => "application/json", "content-length" => asset.sourcemap.bytesize.to_s }
+        headers.merge!(cache_headers(env, asset.etag))
+        [ 200, headers, head_request?(env) ? [] : [asset.sourcemap] ]
       end
 
       # Returns a 304 Not Modified response tuple
@@ -283,7 +296,8 @@ class Condenser
         # Set content length header
         headers["content-length"] = length.to_s
 
-        if asset&.sourcemap
+        # Not for :hidden maps, which browsers shouldn't find on their own.
+        if asset.sourcemap_linked?
           headers['sourcemap'] = env['SCRIPT_NAME'] + env['PATH_INFO'] + '.map'
         end
         
@@ -305,7 +319,7 @@ class Condenser
       #     # => "0aa2105d29558f3eb790d411d7d8fb66"
       #
       def path_fingerprint(path)
-        path[/-([0-9a-f]{7,128})\.[^.]+\z/, 1]
+        path[/-([0-9a-f]{7,128})\.[^.]+(?:\.map)?\z/, 1]
       end
       
       def absolute_path?(path)

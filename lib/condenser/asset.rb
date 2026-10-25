@@ -678,7 +678,7 @@ class Condenser
             filename: @filename.dup,
             content_types: @content_types,
 
-            sourcemap: nil,
+            map: nil,
             linked_assets: [],
             process_dependencies: [],
             export_dependencies: []
@@ -694,6 +694,15 @@ class Condenser
           if minifier = @environment.minifier_for(content_type)
             @environment.logger.info { "Minifing #{self.filename} with #{minifier.name}" }
             minifier.call(@environment, data)
+            # The exporter's map doesn't cover what the minifier changed.
+            data[:map] = nil
+          end
+
+          # The map is named after the export's path, whose etag doesn't
+          # depend on the output, so the comment doesn't change the name.
+          if data[:map] && data[:map_linked]
+            map_name = File.basename(data[:filename]).sub(/\.(\w+)$/) { |ext| "-#{data[:etag]}#{ext}" }
+            data[:source] = data[:source] + "#{"\n" unless data[:source].end_with?("\n")}//# sourceMappingURL=#{map_name}.map\n"
           end
         
           data[:digest] = @environment.digestor.digest(data[:source])

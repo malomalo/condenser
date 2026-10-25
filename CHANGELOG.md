@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- `RolldownProcessor.new(npm_path, sourcemap: :linked | :hidden)` exports a JavaScript source map with the bundle (default `false`, no map). Its `sources` are relative to `base`, the load paths or the npm path, with `sourcesContent`. `Export#sourcemap` returns the map's JSON, and `Asset#export` now carries it (it was set under a key `Export` never read). `:linked` adds a `//# sourceMappingURL=` comment and `Condenser::Server`'s `SourceMap` header; `:hidden` adds neither. Precompiling writes `<name>-<etag>.js.map` (uncompressed) next to the bundle and lists it as `map` in the manifest, and `Condenser::Server` serves it. A separately registered JavaScript minifier drops the map.
+
 ### Fixed / improved
 
 - Concurrent builds on a listening environment no longer deadlock. A build takes the build cache's lock before counting itself, so a second thread waiting on the lock can't stop the first from releasing it. The build cache is created under a lock, so concurrent first requests share one cache and lock.

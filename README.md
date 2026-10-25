@@ -488,6 +488,35 @@ process restarts or a new processor is created.
 An import that can't be resolved, as an asset or an npm package, fails the
 build with an error naming the importing file and the import.
 
+#### Source maps
+
+`RolldownProcessor` can export a source map with the bundle:
+
+```ruby
+condenser.register_exporter('application/javascript', Condenser::RolldownProcessor.new(condenser.npm_path, minify: true, sourcemap: :linked))
+```
+
+- `sourcemap: false` (the default) exports no map, and the bundle is unchanged.
+- `sourcemap: :linked` ends the bundle with a
+  `//# sourceMappingURL=<name>-<etag>.js.map` comment, and
+  `Condenser::Server` sends a `SourceMap` header, so browsers find the map.
+- `sourcemap: :hidden` exports the map without the comment or header, e.g. for
+  uploading to an error tracker.
+
+The map is at the bundle's path plus `.map` (`application-<etag>.js.map`), and
+the etag doesn't depend on the bundle's output, so the comment doesn't change
+it. Precompiling writes the map next to the bundle, uncompressed (no `.gz` or
+`.br`), and lists it as the bundle's `map` in the manifest.
+`Condenser::Server` serves it for both `:linked` and `:hidden`.
+
+The map's `sources` are relative to the environment's `base`, then the load
+paths, then the npm path (e.g. `node_modules/<package>/index.js`), so it's the
+same on every checkout, and `sourcesContent` has the sources. The sources are
+what Rolldown is given, after Condenser's preprocessing (e.g. a template's
+generated JavaScript). Rolldown's `minify: true` is covered by the map; a
+separately registered JavaScript minifier would change the bundle after
+Rolldown, so the map is dropped.
+
 ### Importing JSON
 
 With Rolldown, a `.json` file can be imported like any other asset, from the
