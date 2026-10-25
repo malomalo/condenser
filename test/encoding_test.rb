@@ -97,14 +97,16 @@ class EncodingTest < ActiveSupport::TestCase
     assert_includes @env.find('main.css').export.source, '"ü✓"'
   end
 
-  # Like EJX, which builds its JavaScript with JSON.generate
-  test 'a template that generates JSON from its source' do
+  # Templates get the source as read. One that needs UTF-8, like EJX, which
+  # builds its JavaScript with JSON.generate, sets the encoding itself.
+  test 'a template gets the source as read and sets the encoding it needs' do
     template = Class.new do
       def self.setup(environment)
       end
 
       def self.call(environment, input)
-        input[:source] = "export default #{JSON.generate(input[:source])};\n"
+        source = input[:source].dup.force_encoding(Encoding::UTF_8)
+        input[:source] = "export default #{JSON.generate(source)};\n"
       end
     end
     @env.register_mime_type 'application/jsonish', extensions: '.jsonish'
@@ -116,19 +118,19 @@ class EncodingTest < ActiveSupport::TestCase
     assert_equal %{export default "café ✓";\n}, asset.source
   end
 
-  test 'a template that is not valid UTF-8 raises an EncodingError' do
+  test 'a template that is not valid UTF-8 is processed as before' do
     file 'latin1.txt.erb', "caf\xE9 <%= 1 + 1 %>\n".b
 
-    error = assert_raises(Condenser::EncodingError) { @env.find('latin1.txt').source }
-    assert_equal "latin1.txt isn't valid UTF-8", error.message
+    asset = @env.find('latin1.txt')
+    assert_equal "caf\xE9 2\n".b, asset.source.b
   end
 
-  test 'a UTF-16 template with a byte order mark is converted to UTF-8' do
-    file 'utf16.txt.erb', "﻿café <%= 1 + 1 %>\n".encode(Encoding::UTF_16LE).b
+  test 'a byte order mark is removed from a JavaScript source' do
+    file 'bom.js', "﻿console.log(\"café\");\n"
 
-    asset = @env.find('utf16.txt')
+    asset = @env.find('bom.js')
     assert_equal Encoding::UTF_8, asset.source.encoding
-    assert_equal "café 2\n", asset.source
+    assert asset.source.start_with?('console.log'), asset.source.inspect
   end
 
   test 'an SVG that is not valid UTF-8 raises an EncodingError' do

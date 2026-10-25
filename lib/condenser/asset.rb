@@ -466,18 +466,6 @@ class Condenser
         
           steps = processing_steps
 
-          # Templates run before the charset detection below, so give them
-          # UTF-8 text instead of the binary read. Template engines that emit
-          # JSON would otherwise pass BINARY strings to JSON.generate (a
-          # warning in json 2, an error in json 3).
-          if data[:source].encoding == Encoding::BINARY && steps.any? { |role, *| role == :template }
-            source = detect_unicode(data[:source].dup)
-            if !source.valid_encoding?
-              raise Condenser::EncodingError, "#{@filename} isn't valid UTF-8"
-            end
-            data[:source] = source.encode(Encoding::UTF_8)
-          end
-
           steps.each do |role, _, templator|
             next if role != :template
             data[:content_type].pop
@@ -490,7 +478,8 @@ class Condenser
             data[:filename] = data[:filename].gsub(/\.#{extensions.last}$/, '')
           end
 
-          case @environment.mime_types[data[:content_type].last][:charset]
+          # The detectors can return a new String (e.g. without a BOM)
+          data[:source] = case @environment.mime_types[data[:content_type].last][:charset]
           when :unicode
             detect_unicode(data[:source])
           when :css
@@ -498,7 +487,7 @@ class Condenser
           when :html
             detect_html(data[:source])
           else
-            detect(data[:source]) if mime_types.last.start_with?('text/')
+            mime_types.last.start_with?('text/') ? detect(data[:source]) : data[:source]
           end
           
           transformed = false
