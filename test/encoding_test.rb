@@ -137,11 +137,11 @@ class EncodingTest < ActiveSupport::TestCase
     file 'icon.svg', %{<svg xmlns="http://www.w3.org/2000/svg"><title>caf\xE9</title></svg>\n}.b
 
     error = assert_raises(Condenser::EncodingError) { @env.find('icon.svg', accept: 'application/javascript').source }
-    assert_equal "icon.svg isn't valid UTF-8", error.message
+    assert_equal "#{File.join(@path, 'icon.svg')} isn't valid UTF-8", error.message
 
     file 'icons/logo.svg', %{<svg xmlns="http://www.w3.org/2000/svg"><title>caf\xE9</title></svg>\n}.b
     error = assert_raises(Condenser::EncodingError) { @env.find('icons/logo.js').source }
-    assert_equal "icons/logo.svg isn't valid UTF-8", error.message
+    assert_equal "#{File.join(@path, 'icons/logo.svg')} isn't valid UTF-8", error.message
   end
 
   test 'EJS template' do
