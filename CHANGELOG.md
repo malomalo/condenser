@@ -7,6 +7,7 @@
 - Concurrent builds on a listening environment no longer deadlock. A build takes the build cache's lock before counting itself, so a second thread waiting on the lock can't stop the first from releasing it. The build cache is created under a lock, so concurrent first requests share one cache and lock.
 - `SVGTransformer` decodes SVGs as UTF-8, so non-ASCII text no longer reaches `JSON.generate` as BINARY (a warning in json 2, an error in json 3), and raises `Condenser::EncodingError` for an SVG that isn't valid UTF-8. Templates still get the source as read; a template that needs an encoding sets it itself (EJX does from malomalo/ejx#14).
 - A byte order mark is now removed from text sources: the charset detection's result was being discarded.
+- `Condenser::Server`, `Condenser`, `Condenser::BuildCache` and `Condenser::Export` have a short `#inspect`. The default one dumped the whole environment, so the Rails routing error page, which prints mounted apps, could fail with Nokogiri's "Document tree depth limit exceeded".
 - `RolldownProcessor` resolves npm packages like Node, from the importing file up, so a package gets the dependency in its own nested `node_modules` instead of the top-level version of it.
 
 ## 2.0.0.rc1
