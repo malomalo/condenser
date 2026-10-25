@@ -184,6 +184,10 @@ class Condenser
       end
     end
 
+    def inspect
+      "#<#{self.class.name} listening=#{@listening}>"
+    end
+
     # Listens for changes under +path+, which isn't on the load path, so the
     # file dependencies there invalidate the assets that depend on them.
     # +ignore+ is a list of Regexps matched against the paths relative to

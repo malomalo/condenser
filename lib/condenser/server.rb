@@ -18,6 +18,12 @@ class Condenser
       @condenser.logger
     end
 
+    # Rails prints mounted Rack apps with #inspect (routing error page,
+    # `rails routes`), so keep it short.
+    def inspect
+      "#<#{self.class.name} #{@condenser.inspect}>"
+    end
+
     # `call` implements the Rack 1.x specification which accepts an
     # `env` Hash and returns a three item tuple with the status code,
     # headers, and body.
