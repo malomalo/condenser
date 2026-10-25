@@ -30,6 +30,7 @@ class Condenser
       
       cache_key = [dirname, basename].flatten.join('/')
       cache_key = "/#{cache_key}" if !cache_key.start_with?('/')
+      cache_key << extensions.join if extensions
       cache_key << "@#{accept.join(',')}" if accept
       cache_key << "@npm" if npm
       build_cache.fetch(cache_key) do
@@ -56,6 +57,11 @@ class Condenser
               next if !File.file?(f)
           
               f_dirname, f_basename, f_extensions, f_mime_types = decompose_path(f)
+              # An explicit extension ("logo.png") must be the file's own
+              # ("logo.png", "logo.png.erb") or the type it's converted to
+              # ("logo.js" from "logo.svg"), even if +accept+ is given.
+              next if !mime_types.empty? && f_mime_types.first(mime_types.length) != mime_types &&
+                reverse_mapping[f_mime_types]&.include?(mime_types) != true
               if (basename == '*' || basename == f_basename)
                 if accept == ['*/*'] || mime_type_match_accept?(f_mime_types, accept)
                   asset_dir = f_dirname.delete_prefix(path).delete_prefix('/')

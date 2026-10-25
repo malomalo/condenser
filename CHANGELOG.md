@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- An import with an explicit extension only resolves to a file with that extension, or one converted to it: `import logo from 'images/logo.png'` no longer bundles `images/logo.svg`'s JavaScript module when both exist. Rolldown is only given the file it asked to load.
+
 ## 2.0.0.rc1
 
 Changes since 1.5.1.
