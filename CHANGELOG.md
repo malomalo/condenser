@@ -17,6 +17,11 @@
 - `Cache::FileStore` accounts for the replaced file when a key is overwritten, so its tracked size no longer drifts from what's on disk and garbage collection runs when it should.
 - `Cache::MemoryStore` keeps its entries in least recently used order, so pruning evicts from the front instead of sorting every key by access time each time the store goes over its size.
 
+### Removed
+
+- Unused internals: `Asset#all_process_dependencies`, `Condenser::Utils.module_include`, and `ParseHelpers#next_word`, `#current_line` and `#gobble`.
+- The gemspec no longer sets `test_files`, so the gem no longer packages `test/`.
+
 ## 2.0.0.rc1
 
 Changes since 1.5.1.
