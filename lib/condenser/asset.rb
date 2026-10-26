@@ -342,11 +342,15 @@ class Condenser
     # Sets up the processors this asset uses. A warm build reads an asset's
     # dependencies from the cache without processing it, and some setups
     # change how those resolve (EJX adds its asset directory to the load
-    # path), so this runs before cached dependencies are resolved.
+    # path), so this runs before cached dependencies are resolved, and before
+    # processing. A registered instance with a #setup is set up too, after
+    # its class.
     def load_pipeline_processors
       return if @pipeline_processors_loaded
       @pipeline_processors_loaded = true
-      @environment.load_processors(pipeline_processors.map { |_, _, p| p.is_a?(Class) ? p : p.class })
+      @environment.load_processors(pipeline_processors.flat_map { |_, _, p|
+        p.is_a?(Class) ? [p] : [p.class, *(p if p.respond_to?(:setup))]
+      })
     end
 
     def cache_key
@@ -427,7 +431,8 @@ class Condenser
     
     def process
       return if @processed
-      
+      load_pipeline_processors
+
       result = @environment.build do
         @environment.cache.fetch_if(Proc.new {"process/#{cache_key}/#{process_cache_version}"}, "process-deps/#{cache_key}") do
           @source = File.binread(@source_file)
