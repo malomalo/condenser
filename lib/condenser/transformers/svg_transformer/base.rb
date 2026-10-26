@@ -16,7 +16,12 @@ class Condenser::SVGTransformer::Base
       #{@children.last.to_js(var_generator: var_generator)}
           if (svgAttributes) {
               Object.keys(svgAttributes).forEach(function (key) {
-                  __a.setAttribute(key, svgAttributes[key]);
+                  var value = svgAttributes[key];
+                  if (value === null || value === undefined || value === false) {
+                      __a.removeAttribute(key);
+                  } else {
+                      __a.setAttribute(key, value === true ? "" : value);
+                  }
               });
           }
 
