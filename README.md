@@ -373,13 +373,13 @@ env.register_preprocessor 'text/css', Condenser::TailwindProcessor.new(env.npm_p
 @source "../../../vendor/components";
 ```
 
-When the processor is created, `tailwindcss`, `@tailwindcss/node` and
-`@tailwindcss/oxide` are installed with `npm` into the npm path if they aren't
-there, and their versions are read for the cache keys. Tailwind runs in a node
-process that's kept running between builds, and each build scans and compiles
-from scratch, so the output is the same as the `tailwindcss` CLI's, with
-`base:` as its `--cwd`, and a class removed from the templates is removed from
-the CSS.
+When the processor is created, `tailwindcss`, `@tailwindcss/node`,
+`@tailwindcss/oxide` and `ignore` are installed with `npm` into the npm path if
+they aren't there, and their versions are read for the cache keys. Tailwind
+runs in a node process that's kept running between builds, and each build
+scans and compiles from scratch, so the output is the same as the
+`tailwindcss` CLI's, with `base:` as its `--cwd`, and a class removed from the
+templates is removed from the CSS.
 
 `base:` is the directory Tailwind's automatic source detection scans, like the
 CLI's `--cwd`. Without it a stylesheet has to say what to scan with
@@ -417,6 +417,11 @@ The processor doesn't call `env.watch` itself: what to ignore under the root
 is up to the app, and a process that gets the CSS from a persistent cache
 doesn't run the processor at all. It logs a warning for each directory it
 scans that isn't watched.
+
+Automatic source detection skips gitignored files, and the gitignored
+directories it finds, like `log/`, `tmp/` and `storage/`, aren't tracked
+either, so files added there don't rebuild the CSS. Explicit `@source` paths
+are always tracked, even in a gitignored directory like `node_modules/`.
 
 `minify: true` minifies the CSS like `tailwindcss --minify`, with Tailwind's
 own Lightning CSS pass. Condenser's default CSS minifier,

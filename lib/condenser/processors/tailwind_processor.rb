@@ -10,15 +10,16 @@ require 'set'
 #     register_preprocessor 'text/css', Condenser::TailwindProcessor.new(npm_path, base: Rails.root)
 #
 # Every file Tailwind scans for class names, and every directory it scans,
-# is recorded as a file or directory dependency.
+# is recorded as a file or directory dependency, except gitignored
+# directories found by automatic source detection.
 class Condenser::TailwindProcessor
 
   SCRIPT = File.expand_path('tailwind_processor.js', __dir__)
-  PACKAGES = %w[tailwindcss @tailwindcss/node @tailwindcss/oxide].freeze
+  PACKAGES = %w[tailwindcss @tailwindcss/node @tailwindcss/oxide ignore].freeze
   IMPORT = /@import\s+(?:url\(\s*)?["']tailwindcss["'\/]|@reference\b/
 
-  # Whether it minifies, and the versions of the Tailwind packages, which are
-  # part of the pipeline digest.
+  # Whether it minifies, and the versions of the Tailwind packages and
+  # `ignore`, which are part of the pipeline digest.
   attr_reader :options
 
   def self.setup(environment)

@@ -10,6 +10,13 @@ class TailwindTest < ActiveSupport::TestCase
   end
   Process.singleton_class.prepend(SpawnSpy)
 
+  module BuildSpy
+    def call(environment, input)
+      super.tap { |result| Thread.current[:tailwind_builds]&.push(input[:filename]) if result }
+    end
+  end
+  Condenser::TailwindProcessor.prepend(BuildSpy)
+
   def setup
     super
     @tailwind = Condenser::TailwindProcessor.new(@env.npm_path, base: @path)
@@ -20,6 +27,7 @@ class TailwindTest < ActiveSupport::TestCase
     super
     Thread.current[:tailwind_spawns] = nil
     Thread.current[:tailwind_spawn_args] = nil
+    Thread.current[:tailwind_builds] = nil
     FileUtils.remove_entry(@cache_dir, true) if @cache_dir
     FileUtils.remove_entry(@other, true) if @other
   end
@@ -173,6 +181,128 @@ class TailwindTest < ActiveSupport::TestCase
     assert_includes log.string, "Tailwind scans #{@other}, which isn't watched"
   end
 
+  # An app's root with a Rails app's .gitignore, and files with classes in
+  # the gitignored directories.
+  def gitignored_app(base = @path, gitignore: true)
+    file 'app/views/index.html', '<div class="flex"></div>', base: base
+    file 'log/development.log', 'class="grid"', base: base
+    file 'log/.keep', '', base: base
+    file 'tmp/cache/entry.html', '<div class="grid"></div>', base: base
+    file 'storage/ab/cd.html', '<div class="grid"></div>', base: base
+    file 'node_modules/pkg/card.html', '<div class="italic"></div>', base: base
+    file '.gitignore', "/log/*\n/tmp/*\n/storage/*\n!/log/.keep\nnode_modules\n", base: base if gitignore
+  end
+
+  def directory_dependencies(asset)
+    asset.directory_dependencies.map { |d, *| d.delete_prefix(@path) }.sort
+  end
+
+  def ignored?(dir)
+    %w[/log /tmp /storage /node_modules].any? { |d| dir == d || dir.start_with?("#{d}/") }
+  end
+
+  test 'gitignored directories found by automatic source detection are not dependencies' do
+    gitignored_app
+    file 'application.css', '@import "tailwindcss";'
+
+    asset = @env.find('application.css')
+    asset.process
+    assert_includes asset.source, '.flex {'
+    assert_not_includes asset.source, '.grid {'
+    assert_includes asset.file_dependencies, File.join(@path, 'app/views/index.html')
+    assert_not_includes asset.file_dependencies, File.join(@path, 'log/.keep')
+    assert_includes directory_dependencies(asset), '/app'
+    assert_empty directory_dependencies(asset).select { |d| ignored?(d) }
+  end
+
+  test 'a file added to a gitignored directory does not rebuild the CSS in a new process' do
+    gitignored_app
+    file 'application.css', '@import "tailwindcss";'
+    assert_includes css(new_env), '.flex {'
+    key = new_env.find('application.css').process_cache_version
+    builds = Thread.current[:tailwind_builds] = []
+
+    file 'log/test.log', 'class="hidden"'
+    file 'log/new.html', '<div class="hidden"></div>'
+    file 'tmp/new.html', '<div class="hidden"></div>'
+    file 'storage/ef/gh.html', '<div class="hidden"></div>'
+    file 'node_modules/other/index.html', '<div class="hidden"></div>'
+    assert_equal key, new_env.find('application.css').process_cache_version
+    assert_not_includes css(new_env), '.hidden {'
+    assert_empty builds
+
+    file 'app/views/users/show.html', '<div class="hidden"></div>'
+    assert_includes css(new_env), '.hidden {'
+    assert_equal ['application.css'], builds
+  end
+
+  test 'an explicit @source in a gitignored directory is a dependency' do
+    gitignored_app
+    file 'application.css', <<~CSS
+      @import "tailwindcss";
+      @source "./node_modules/pkg";
+    CSS
+
+    asset = new_env.find('application.css')
+    assert_includes asset.source, '.italic {'
+    assert_includes asset.file_dependencies, File.join(@path, 'node_modules/pkg/card.html')
+    assert_includes directory_dependencies(asset), '/node_modules/pkg'
+    assert_empty directory_dependencies(asset).select { |d| ignored?(d) && !d.start_with?('/node_modules/pkg') }
+
+    file 'node_modules/pkg/card.html', '<div class="underline"></div>'
+    assert_includes css(new_env), '.underline {'
+    file 'node_modules/pkg/sub/new.html', '<div class="hidden"></div>'
+    assert_includes css(new_env), '.hidden {'
+  end
+
+  test 'a nested .gitignore applies to its directory' do
+    file 'app/views/index.html', '<div class="flex"></div>'
+    file 'app/cache/a/b.html', '<div class="grid"></div>'
+    file 'app/.gitignore', "/cache/*\n"
+    file 'application.css', '@import "tailwindcss";'
+
+    asset = new_env.find('application.css')
+    assert_not_includes asset.source, '.grid {'
+    assert_includes directory_dependencies(asset), '/app/views'
+    assert_empty directory_dependencies(asset).select { |d| d.start_with?('/app/cache') }
+  end
+
+  test 'without a .gitignore every directory Tailwind reports is a dependency' do
+    gitignored_app(gitignore: false)
+    file 'application.css', '@import "tailwindcss";'
+
+    asset = @env.find('application.css')
+    asset.process
+    assert_includes asset.source, '.grid {'
+    assert_includes directory_dependencies(asset), '/app'
+    %w[/log /tmp /storage].each do |dir|
+      assert directory_dependencies(asset).any? { |d| d == dir || d.start_with?("#{dir}/") }, "#{dir} isn't a dependency"
+    end
+  end
+
+  test 'the CSS is the same as without the gitignored directories' do
+    gitignored_app
+    file 'application.css', '@import "tailwindcss";'
+    source = css(new_env)
+
+    %w[log tmp storage node_modules .gitignore].each { |f| FileUtils.rm_r(File.join(@path, f)) }
+    assert_equal source, css(new_env)
+  end
+
+  test 'gitignored directories are not logged as unwatched' do
+    skip 'needs a listener' if !@env.build_cache.listening
+    @other = File.realpath(Dir.mktmpdir)
+    gitignored_app(@other)
+    file 'application.css', %(@import "tailwindcss" source("#{@other}");)
+    log = StringIO.new
+    @env.logger = Logger.new(log)
+
+    css
+    warned = log.string.scan(/Tailwind scans (\S+), which isn't watched/).flatten.map { |d| d.delete_prefix(@other) }
+    assert_includes warned, '/app'
+    assert_empty warned.select { |d| ignored?(d) }
+  end
+
   test 'automatic source detection needs a base' do
     file 'application.css', '@import "tailwindcss";'
     @env.unregister_preprocessor 'text/css', @tailwind
@@ -281,7 +411,7 @@ class TailwindTest < ActiveSupport::TestCase
   end
 
   test 'the installed package versions are in the options' do
-    versions = %w[tailwindcss @tailwindcss/node @tailwindcss/oxide].to_h do |package|
+    versions = %w[tailwindcss @tailwindcss/node @tailwindcss/oxide ignore].to_h do |package|
       [package.to_sym, JSON.parse(File.read(File.join(@npm_dir, 'node_modules', package, 'package.json')))['version']]
     end
     assert_equal({ minify: false, **versions }, @tailwind.options)
