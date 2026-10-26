@@ -12,7 +12,7 @@ class TailwindTest < ActiveSupport::TestCase
 
   def setup
     super
-    @tailwind = Condenser::TailwindProcessor.new(@env.npm_path, base: @path)
+    @tailwind = Condenser::TailwindProcessor.new(@env.npm_path)
     @env.register_preprocessor 'text/css', @tailwind
   end
 
@@ -196,16 +196,7 @@ class TailwindTest < ActiveSupport::TestCase
     assert_includes log.string, "Tailwind scans #{@other}, which isn't watched"
   end
 
-  test 'automatic source detection needs a base' do
-    file 'application.css', '@import "tailwindcss";'
-    @env.unregister_preprocessor 'text/css', @tailwind
-    @env.register_preprocessor 'text/css', Condenser::TailwindProcessor.new(@env.npm_path)
-
-    error = assert_raises(Condenser::Error) { css }
-    assert_match(/\Aapplication\.css: .*automatic source detection, which needs the TailwindProcessor's base:/, error.message)
-  end
-
-  test 'a stylesheet with @reference compiles @apply without Tailwind\'s CSS and without a base' do
+  test 'a stylesheet with @reference compiles @apply without Tailwind\'s CSS and without scanning' do
     file 'views/index.html', '<div class="grid"></div>'
     file 'tailwind.css', <<~CSS
       @import "tailwindcss";
@@ -215,8 +206,6 @@ class TailwindTest < ActiveSupport::TestCase
       @reference "./tailwind.css";
       .btn { @apply px-4 text-brand; }
     CSS
-    @env.unregister_preprocessor 'text/css', @tailwind
-    @env.register_preprocessor 'text/css', Condenser::TailwindProcessor.new(@env.npm_path)
 
     asset = @env.find('application.css')
     source = asset.source
@@ -307,7 +296,7 @@ class TailwindTest < ActiveSupport::TestCase
     versions = %w[tailwindcss @tailwindcss/node @tailwindcss/oxide].to_h do |package|
       [package.to_sym, JSON.parse(File.read(File.join(@npm_dir, 'node_modules', package, 'package.json')))['version']]
     end
-    assert_equal({ minify: false, base: @path, sources: [], **versions }, @tailwind.options)
+    assert_equal({ minify: false, sources: [], **versions }, @tailwind.options)
     assert_match(/\A4\./, @tailwind.options[:tailwindcss])
   end
 
@@ -336,7 +325,7 @@ class TailwindTest < ActiveSupport::TestCase
     assert_raises(Errno::ESRCH) { Process.kill(0, pids.first) }
   end
 
-  test 'the default base is the app directory in the environment base' do
+  test 'without sources: the environment base is scanned and not watched' do
     file 'app/views/index.html.erb', '<div class="flex"></div>'
     file 'lib/card.html', '<div class="grid"></div>'
     file 'card.html', '<div class="hidden"></div>'
@@ -346,60 +335,39 @@ class TailwindTest < ActiveSupport::TestCase
     asset = env.find('application.css')
     source = asset.source
     assert_includes source, ".flex {\n    display: flex;\n  }"
-    assert_not_includes source, '.grid {'
-    assert_not_includes source, '.hidden {'
+    assert_includes source, '.grid {'
+    assert_includes source, '.hidden {'
     assert_includes asset.file_dependencies, File.join(@path, 'app/views/index.html.erb')
-    assert_not_includes asset.file_dependencies, File.join(@path, 'lib/card.html')
-    assert_includes env.watched_paths, [File.join(@path, 'app'), []]
+    assert_includes asset.file_dependencies, File.join(@path, 'lib/card.html')
+    assert_empty env.watched_paths
   end
 
-  test 'the default app directory is watched, so a class added to a view rebuilds the CSS without a warning' do
+  test 'without sources: an unwatched environment base is logged' do
     skip 'needs a listener' if !@env.build_cache.listening
-    file 'app/views/index.html.erb', '<div class="flex"></div>'
+    file 'card.html', '<div class="flex"></div>'
     file 'app/assets/stylesheets/application.css', '@import "tailwindcss";'
     env = app_env(Condenser::TailwindProcessor.new(@npm_dir))
     log = StringIO.new
     env.logger = Logger.new(log)
 
-    assert_not_includes app_css(env), '.grid {'
-    file 'app/views/index.html.erb', '<div class="flex grid"></div>'
-    assert wait_until { app_css(env).include?('.grid {') }
-    file 'app/components/card.html', '<div class="hidden"></div>'
-    assert wait_until { app_css(env).include?('.hidden {') }
-    assert_not_includes log.string, "isn't watched"
+    app_css(env)
+    assert_includes log.string, "Tailwind scans #{@path}, which isn't watched"
   end
 
-  test 'base: overrides the default app directory and is not watched' do
-    file 'app/views/index.html.erb', '<div class="flex"></div>'
-    file 'lib/card.html', '<div class="grid"></div>'
-    file 'app/assets/stylesheets/application.css', '@import "tailwindcss";'
-    env = app_env(Condenser::TailwindProcessor.new(@npm_dir, base: @path))
-
-    source = app_css(env)
-    assert_includes source, '.flex {'
-    assert_includes source, '.grid {'
-    assert_empty env.watched_paths
+  test 'base: is not an option' do
+    error = assert_raises(ArgumentError) { Condenser::TailwindProcessor.new(@npm_dir, base: @path) }
+    assert_equal 'unknown keyword: :base', error.message
   end
 
-  test 'a relative base: is relative to the environment base' do
-    file 'app/views/index.html.erb', '<div class="flex"></div>'
-    file 'lib/card.html', '<div class="grid"></div>'
-    file 'app/assets/stylesheets/application.css', '@import "tailwindcss";'
-    env = app_env(Condenser::TailwindProcessor.new(@npm_dir, base: 'lib'))
-
-    source = app_css(env)
-    assert_not_includes source, '.flex {'
-    assert_includes source, '.grid {'
-  end
-
-  test 'sources: are scanned like @source paths and recorded as dependencies' do
+  test 'sources: are scanned instead of the environment base and recorded as dependencies' do
     @other = File.realpath(Dir.mktmpdir)
     file 'app/views/index.html.erb', '<div class="flex"></div>'
     file 'lib/components/card.html', '<div class="grid"></div>'
     file 'lib/other.html', '<div class="block"></div>'
+    file 'card.html', '<div class="italic"></div>'
     file 'views/show.html.erb', '<div class="hidden"></div>', base: @other
     file 'app/assets/stylesheets/application.css', '@import "tailwindcss";'
-    env = app_env(Condenser::TailwindProcessor.new(@npm_dir, sources: ['lib/components', File.join(@other, 'views')]))
+    env = app_env(Condenser::TailwindProcessor.new(@npm_dir, sources: ['app', 'lib/components', File.join(@other, 'views')]))
 
     asset = env.find('application.css')
     source = asset.source
@@ -407,18 +375,58 @@ class TailwindTest < ActiveSupport::TestCase
     assert_includes source, ".grid {\n    display: grid;\n  }"
     assert_includes source, '.hidden {'
     assert_not_includes source, '.block {'
+    assert_not_includes source, '.italic {'
     assert_includes asset.file_dependencies, File.join(@path, 'lib/components/card.html')
     assert_includes asset.file_dependencies, File.join(@other, 'views/show.html.erb')
-    assert_includes asset.directory_dependencies.map(&:first), File.join(@path, 'lib/components')
-    assert_includes asset.directory_dependencies.map(&:first), File.join(@other, 'views')
+    assert_not_includes asset.file_dependencies, File.join(@path, 'card.html')
+    dirs = asset.directory_dependencies.map(&:first)
+    assert_includes dirs, File.join(@path, 'lib/components')
+    assert_includes dirs, File.join(@other, 'views')
+    assert_not_includes dirs, File.join(@path, '')
+    assert_not_includes dirs, @path
   end
 
   test 'sources: are scanned with source(none)' do
     file 'lib/components/card.html', '<div class="grid"></div>'
+    file 'app/views/index.html.erb', '<div class="flex"></div>'
     file 'app/assets/stylesheets/application.css', '@import "tailwindcss" source(none);'
     env = app_env(Condenser::TailwindProcessor.new(@npm_dir, sources: ['lib/components']))
 
-    assert_includes app_css(env), '.grid {'
+    source = app_css(env)
+    assert_includes source, '.grid {'
+    assert_not_includes source, '.flex {'
+  end
+
+  test 'source(...) on the import replaces the environment base and sources: are still scanned' do
+    file 'app/views/index.html.erb', '<div class="flex"></div>'
+    file 'lib/components/card.html', '<div class="grid"></div>'
+    file 'card.html', '<div class="hidden"></div>'
+    file 'app/assets/stylesheets/application.css', '@import "tailwindcss" source("../../views");'
+
+    assert_includes app_css(app_env(Condenser::TailwindProcessor.new(@npm_dir))), '.flex {'
+    assert_not_includes app_css(app_env(Condenser::TailwindProcessor.new(@npm_dir))), '.hidden {'
+
+    source = app_css(app_env(Condenser::TailwindProcessor.new(@npm_dir, sources: ['lib/components'])))
+    assert_includes source, '.flex {'
+    assert_includes source, '.grid {'
+    assert_not_includes source, '.hidden {'
+  end
+
+  test '@source paths in the stylesheet are scanned with sources:' do
+    file 'app/views/index.html.erb', '<div class="flex"></div>'
+    file 'lib/components/card.html', '<div class="grid"></div>'
+    file 'vendor/ui/button.html', '<div class="hidden"></div>'
+    file 'app/assets/stylesheets/application.css', <<~CSS
+      @import "tailwindcss";
+      @source "../../../vendor/ui";
+      @source not "../../views";
+    CSS
+    env = app_env(Condenser::TailwindProcessor.new(@npm_dir, sources: ['app', 'lib/components']))
+
+    source = app_css(env)
+    assert_includes source, '.grid {'
+    assert_includes source, '.hidden {'
+    assert_not_includes source, '.flex {'
   end
 
   test 'sources: are watched, so an edit or a new file there rebuilds the CSS' do
@@ -426,13 +434,13 @@ class TailwindTest < ActiveSupport::TestCase
     @other = File.realpath(Dir.mktmpdir)
     file 'views/show.html.erb', '<div class="flex"></div>', base: @other
     file 'app/assets/stylesheets/application.css', '@import "tailwindcss";'
-    env = app_env(Condenser::TailwindProcessor.new(@npm_dir, sources: [File.join(@other, 'views'), 'lib']))
     FileUtils.mkdir_p(File.join(@path, 'lib'))
+    env = app_env(Condenser::TailwindProcessor.new(@npm_dir, sources: [File.join(@other, 'views'), 'lib']))
     log = StringIO.new
     env.logger = Logger.new(log)
 
     assert_not_includes app_css(env), '.grid {'
-    assert_includes env.watched_paths, [File.join(@other, 'views'), []]
+    assert_equal [[File.join(@other, 'views'), []], [File.join(@path, 'lib'), []]], env.watched_paths
     file 'views/show.html.erb', '<div class="grid"></div>', base: @other
     assert wait_until { app_css(env).include?('.grid {') }
     file 'lib/components/card.html', '<div class="hidden"></div>'
@@ -458,7 +466,7 @@ class TailwindTest < ActiveSupport::TestCase
     file 'views/show.html.erb', '<div class="flex"></div>', base: @other
     file 'app/views/index.html.erb', '<div class="block"></div>'
     file 'app/assets/stylesheets/application.css', '@import "tailwindcss";'
-    tailwind = Condenser::TailwindProcessor.new(@npm_dir, sources: [File.join(@other, 'views')])
+    tailwind = Condenser::TailwindProcessor.new(@npm_dir, sources: ['app', File.join(@other, 'views')])
     assert_includes app_css(app_env(tailwind, cache: true)), '.flex {'
     Condenser::NodeWorker.stop_workers
 
@@ -475,16 +483,21 @@ class TailwindTest < ActiveSupport::TestCase
     assert wait_until { app_css(env).include?('.hidden {') }
   end
 
-  test 'sources: and base: are in the options and the pipeline digest' do
+  test 'sources: are in the options and the pipeline digest, relative to the environment base' do
     a = Condenser::TailwindProcessor.new(@npm_dir)
     b = Condenser::TailwindProcessor.new(@npm_dir, sources: [Pathname.new('lib/components')])
-    c = Condenser::TailwindProcessor.new(@npm_dir, base: Pathname.new(@path))
-    assert_equal [nil, []], a.options.values_at(:base, :sources)
-    assert_equal [nil, ['lib/components']], b.options.values_at(:base, :sources)
-    assert_equal [@path, []], c.options.values_at(:base, :sources)
+    c = Condenser::TailwindProcessor.new(@npm_dir, sources: [File.join(@path, 'lib/components')])
+    assert_equal [], a.options[:sources]
+    assert_equal ['lib/components'], b.options[:sources]
+    assert_equal [File.join(@path, 'lib/components')], c.options[:sources]
 
     digests = [a, b, c].map { |p| @env.pipeline_digest_for([[:preprocessor, 'text/css', p]]) }
     assert_equal 3, digests.uniq.size
+
+    @other = File.realpath(Dir.mktmpdir)
+    other = Condenser.new(@other, logger: Logger.new('/dev/null'), npm_path: @npm_dir, base: @other)
+    moved = Condenser::TailwindProcessor.new(@npm_dir, sources: [File.join(@other, 'lib/components')])
+    assert_equal digests[2], other.pipeline_digest_for([[:preprocessor, 'text/css', moved]])
   end
 
   test 'a source: that does not exist raises' do
@@ -495,14 +508,34 @@ class TailwindTest < ActiveSupport::TestCase
     assert_equal "TailwindProcessor source lib/components isn't a directory (#{File.join(@path, 'lib/components')})", error.message
   end
 
-  test 'without an environment base automatic source detection still needs base:' do
+  test 'a source: that is a file raises' do
+    file 'app/assets/stylesheets/application.css', '@import "tailwindcss";'
+    file 'card.html', '<div class="flex"></div>'
+    env = app_env(Condenser::TailwindProcessor.new(@npm_dir, sources: ['card.html']))
+
+    error = assert_raises(Condenser::Error) { app_css(env) }
+    assert_equal "TailwindProcessor source card.html isn't a directory (#{File.join(@path, 'card.html')})", error.message
+  end
+
+  test 'without an environment base automatic source detection needs sources:' do
     file 'app/views/index.html.erb', '<div class="flex"></div>'
     file 'app/assets/stylesheets/application.css', '@import "tailwindcss";'
     env = app_env(Condenser::TailwindProcessor.new(@npm_dir), base: nil)
 
     error = assert_raises(Condenser::Error) { app_css(env) }
-    assert_match(/\Aapplication\.css: .*automatic source detection, which needs the TailwindProcessor's base:/, error.message)
+    assert_match(/\Aapplication\.css: .*automatic source detection, which needs the environment's base or the TailwindProcessor's sources:/, error.message)
     assert_empty env.watched_paths
+  end
+
+  test 'without an environment base absolute sources: are scanned' do
+    file 'app/views/index.html.erb', '<div class="flex"></div>'
+    file 'card.html', '<div class="hidden"></div>'
+    file 'app/assets/stylesheets/application.css', '@import "tailwindcss";'
+    env = app_env(Condenser::TailwindProcessor.new(@npm_dir, sources: [File.join(@path, 'app')]), base: nil)
+
+    source = app_css(env)
+    assert_includes source, '.flex {'
+    assert_not_includes source, '.hidden {'
   end
 
   test 'without an environment base a relative source: raises' do

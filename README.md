@@ -376,42 +376,47 @@ When the processor is created, `tailwindcss`, `@tailwindcss/node` and
 `@tailwindcss/oxide` are installed with `npm` into the npm path if they aren't
 there, and their versions are read for the cache keys. Tailwind runs in a node
 process that's kept running between builds, and each build scans and compiles
-from scratch, so the output is the same as the `tailwindcss` CLI's, with
-`base:` as its `--cwd`, and a class removed from the templates is removed from
-the CSS.
+from scratch, so the output is the same as the `tailwindcss` CLI's, and a class
+removed from the templates is removed from the CSS.
 
-`base:` is the directory Tailwind's automatic source detection scans, like the
-CLI's `--cwd`. It defaults to the `app` directory in the environment's `base`
-(`Rails.root.join('app')`), so automatic detection only scans `app/`: the
-views, components, helpers and JavaScript, but not `lib/`, `config/`, gems or
-`node_modules`. Pass `base:`, relative to the environment's `base` or
-absolute, to scan something else, e.g. `base: Rails.root` to scan the whole app
-like the Tailwind CLI. Without an `app` directory or `base:`, a stylesheet has
-to say what to scan with `@import "tailwindcss" source("../views")` or
-`source(none)` and `@source`. `@source` paths are relative to the stylesheet, as
-in Tailwind.
+Without `sources:`, Tailwind's automatic source detection scans the
+environment's `base`, like the Tailwind CLI run from the app's root. That
+directory isn't watched, since it has `tmp/`, `public/assets` and the like in
+it, so an app that scans it watches what it needs itself (see below). Without
+an environment `base`, a stylesheet has to say what to scan with `@import
+"tailwindcss" source("../views")` or `source(none)` and `@source`.
 
-Templates outside the base, in `lib/`, a gem or an engine, are added with
-`sources:`. Each is a directory, relative to the environment's `base` or
-absolute, that's scanned like an `@source` path, so the stylesheet stays just
-`@import "tailwindcss"`. It has to exist, or the build raises:
+`sources:` scans exactly the directories given instead, as if the stylesheet
+had `@import "tailwindcss" source(none);` and an `@source` for each, so the
+stylesheet stays just `@import "tailwindcss"`. Each is relative to the
+environment's `base` or absolute, and has to be an existing directory, or the
+build raises. For a Rails app, scan `app/`, plus any templates in `lib/` and
+in gems or engines, by absolute path:
 
 ```ruby
 env.register_preprocessor 'text/css', Condenser::TailwindProcessor.new(env.npm_path, sources: [
+  'app',
   'lib/components',
   File.join(Gem.loaded_specs['some_engine'].full_gem_path, 'app/views')
 ])
 ```
 
-`base:` and `sources:` are part of the processor's options, so changing them
-rebuilds the CSS; paths under the environment's `base` are relative to it in
-the cache keys, so the cache survives a new deploy directory.
+What the stylesheet says still applies, as Tailwind defines it. `source(...)`
+on the import replaces the environment's `base` as the directory automatic
+detection scans, and the `sources:` are still scanned with it. `source(none)`
+turns off scanning the `base`, which `sources:` already does, and the
+`sources:` are still scanned. `@source` and `@source not` lines are added on
+top, relative to the stylesheet. So `sources:` only replaces the default, the
+environment's `base`, and is always scanned.
+
+`sources:` is part of the processor's options, so changing it rebuilds the
+CSS; paths under the environment's `base` are relative to it in the cache
+keys, so the cache survives a new deploy directory.
 
 A stylesheet that's built separately, and only needs `@apply`, `theme()` or
 custom variants, can `@reference` the main one instead of importing Tailwind
 again. It gets the main stylesheet's theme, utilities and variants but none of
-its CSS, and since it has no utilities to generate nothing is scanned and it
-doesn't need `base:`:
+its CSS, and since it has no utilities to generate nothing is scanned:
 
 ```css
 /* app/assets/stylesheets/admin.css */
@@ -428,17 +433,17 @@ directory it scans as a directory dependency (see [Depending on files that
 aren't assets](#depending-on-files-that-arent-assets)), so editing a template's
 classes, or adding a template, rebuilds the CSS. A running process only
 notices that if the files are on the load path or a watched path. The
-processor watches (see `env.watch`) the default `app` directory and the
-`sources:`, from its `setup`, which runs before a stylesheet is built or its
-cached dependencies are read, so they're watched in a process that gets the
-CSS from a persistent cache too. That covers a Rails app's views and
-components, and the gems' templates, which aren't on the load path.
+processor watches (see `env.watch`) the `sources:`, from its `setup`, which
+runs before a stylesheet is built or its cached dependencies are read, so
+they're watched in a process that gets the CSS from a persistent cache too.
+That covers a Rails app's views and components, and the gems' templates,
+which aren't on the load path.
 
-A `base:` that's given isn't watched, since what to ignore under it is up to
-the app. Watch it, or the directories under it Tailwind scans:
+Without `sources:`, or for `source(...)` and `@source` paths, watch the
+directories Tailwind scans yourself:
 
 ```ruby
-env.watch(Rails.root, ignore: ['public/assets', 'storage'])
+env.watch(Rails.root, ignore: ['public/assets', 'storage', 'tmp', 'log'])
 ```
 
 With a listener, the processor logs a warning for each directory it scans that

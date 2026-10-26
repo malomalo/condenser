@@ -9,20 +9,20 @@ require 'set'
 #
 #     register_preprocessor 'text/css', Condenser::TailwindProcessor.new(npm_path)
 #
-# Tailwind's automatic source detection scans the environment's
-# `base/app` directory, or +base:+, and the +sources:+ are scanned like
-# `@source` paths. Every file Tailwind scans for class names, and every
-# directory it scans, is recorded as a file or directory dependency.
-# The default `app` directory and the +sources:+ are watched, so a change
-# there rebuilds the CSS in a running process.
+# Tailwind's automatic source detection scans the environment's base, like
+# the Tailwind CLI from its working directory, or only the +sources:+ if
+# they're given. Every file Tailwind scans for class names, and every
+# directory it scans, is recorded as a file or directory dependency. The
+# +sources:+ are watched, so a change there rebuilds the CSS in a running
+# process; the environment's base isn't.
 class Condenser::TailwindProcessor
 
   SCRIPT = File.expand_path('tailwind_processor.js', __dir__)
   PACKAGES = %w[tailwindcss @tailwindcss/node @tailwindcss/oxide].freeze
   IMPORT = /@import\s+(?:url\(\s*)?["']tailwindcss["'\/]|@reference\b/
 
-  # Whether it minifies, the base: and sources: as given, and the versions of
-  # the Tailwind packages, which are part of the pipeline digest.
+  # Whether it minifies, the sources: as given, and the versions of the
+  # Tailwind packages, which are part of the pipeline digest.
   attr_reader :options
 
   def self.setup(environment)
@@ -30,31 +30,28 @@ class Condenser::TailwindProcessor
 
   # npm_path  - The directory Tailwind's packages are installed into, with
   #              `npm`, if they aren't there.
-  # base:      - The directory Tailwind's automatic source detection scans,
-  #              like `tailwindcss --cwd`, relative to the environment's base
-  #              or absolute. Default the environment's `base/app`, if it
-  #              exists, which is watched. Pass `Rails.root` to scan the whole
-  #              app like the Tailwind CLI. Without either a stylesheet needs
-  #              `source(...)` or `source(none)`.
-  # sources:   - More directories to scan, like `@source` paths, relative to
-  #              the environment's base or absolute, for templates outside
-  #              the base, such as in `lib/` or a gem. They're watched and
-  #              have to exist.
+  # sources:   - The directories to scan instead of the environment's base,
+  #              like `source(none)` and an `@source` for each, relative to
+  #              the environment's base or absolute, such as `app`, `lib/` or
+  #              a gem's `app/views`. They're watched and have to exist. A
+  #              `source(...)` on the stylesheet's import replaces the
+  #              environment's base, and the sources are still scanned.
+  #              Without them, and without an environment base, a stylesheet
+  #              needs `source(...)` or `source(none)`.
   # minify:    - Minify the CSS like `tailwindcss --minify`. Default false.
   # max_memory - The node process is restarted after a build that leaves it
   #              using more than this many bytes.
-  def initialize(npm_path, base: nil, sources: [], minify: false, max_memory: Condenser::NodeWorker::MAX_MEMORY)
+  def initialize(npm_path, sources: [], minify: false, max_memory: Condenser::NodeWorker::MAX_MEMORY)
     node = Condenser::NodeProcessor.new(npm_path)
     node.npm_install(PACKAGES)
     @binary = node.binary
     @modules = node.npm_module_path
-    @base = base&.to_s
     @sources = Array(sources).map(&:to_s)
     @minify = minify
     @max_memory = max_memory
     @lock = Mutex.new
     @unwatched = Set.new
-    @options = { minify: minify, base: @base, sources: @sources }
+    @options = { minify: minify, sources: @sources }
     PACKAGES.each do |package|
       @options[package.to_sym] = JSON.parse(File.read(File.join(@modules, package, 'package.json')))['version']
     end
@@ -64,12 +61,11 @@ class Condenser::TailwindProcessor
     self.class.name
   end
 
-  # Watches the default base and the sources, before an asset's cached
-  # dependencies are resolved, so it's done when the CSS isn't rebuilt.
+  # Watches the sources, before an asset's cached dependencies are resolved,
+  # so it's done when the CSS isn't rebuilt. The environment's base isn't
+  # watched, since it has `tmp/`, `public/assets` and the like in it.
   def setup(environment)
-    base, sources = resolve(environment)
-    sources += [base] if !@base && base
-    sources.each { |dir| environment.watch(dir) }
+    resolve(environment).each { |dir| environment.watch(dir) }
   end
 
   def call(environment, input)
@@ -89,15 +85,10 @@ class Condenser::TailwindProcessor
     end
   end
 
-  # The base and the sources, as absolute paths.
+  # The sources, as absolute paths.
   def resolve(environment)
     root = environment.base&.to_s
-    base = if @base
-      File.expand_path(@base, root)
-    elsif root && File.directory?(app = File.join(root, 'app'))
-      app
-    end
-    sources = @sources.map do |source|
+    @sources.map do |source|
       if root.nil? && !source.start_with?('/')
         raise Condenser::Error, "TailwindProcessor source #{source} is relative, which needs the environment's base"
       end
@@ -107,12 +98,10 @@ class Condenser::TailwindProcessor
 
       path
     end
-    [base, sources]
   end
 
   def build(environment, input)
-    base, sources = resolve(environment)
-    config = { file: input[:source_file], css: input[:source].dup.force_encoding(Encoding::UTF_8), base: base, sources: sources, minify: @minify }
+    config = { file: input[:source_file], css: input[:source].dup.force_encoding(Encoding::UTF_8), base: environment.base&.to_s, sources: resolve(environment), minify: @minify }
     attempts = 0
     message = begin
       worker.build(config, logger: environment.logger)

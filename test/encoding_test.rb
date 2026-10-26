@@ -183,7 +183,7 @@ class EncodingTest < ActiveSupport::TestCase
   end
 
   test 'CSS through Tailwind' do
-    @env.register_preprocessor 'text/css', Condenser::TailwindProcessor.new(@env.npm_path, base: @path)
+    @env.register_preprocessor 'text/css', Condenser::TailwindProcessor.new(@env.npm_path)
     file 'views/index.html', %{<div class="flex">café ✓</div>\n}
     file 'application.css', %{@import "tailwindcss";\n/* café ✓ */\n.x:after { content: "✓"; }\n}
 
