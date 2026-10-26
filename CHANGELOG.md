@@ -5,7 +5,6 @@
 ### Added
 
 - `RolldownProcessor`'s `module_types:` option maps file extensions to Rolldown module types, e.g. `module_types: { png: :dataurl, ttf: :base64 }`, to import images, fonts and other files into a bundle. The files are found through the load paths, relative to the importer, by absolute path or through `aliases:`, and loaded by Rolldown. A module type is used instead of a transformer for its extension (e.g. `svg: :text`). The option is part of the export cache key and etag.
-- An SVG's JavaScript module exports `toString(svgAttributes)`, which returns the element's markup (`outerHTML`), with the same attribute handling as the default export.
 
 ### Fixed / improved
 

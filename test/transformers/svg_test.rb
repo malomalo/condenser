@@ -4,17 +4,13 @@ require 'open3'
 class SVGTransformerTest < ActiveSupport::TestCase
 
   # A minimal DOM: elements record their attributes as setAttribute does,
-  # converting values to strings, and serialize them as outerHTML.
+  # converting values to strings.
   FAKE_DOM = <<~JS
     class FakeElement {
       constructor(tagName) { this.tagName = tagName; this.attributes = new Map(); this.children = []; }
       setAttribute(key, value) { this.attributes.set(key, String(value)); }
       removeAttribute(key) { this.attributes.delete(key); }
       append(child) { this.children.push(child); }
-      get outerHTML() {
-        const attrs = [...this.attributes].map(([k, v]) => ` ${k}="${v}"`).join('');
-        return `<${this.tagName}${attrs}>${this.children.map((c) => c.outerHTML).join('')}</${this.tagName}>`;
-      }
     }
     globalThis.document = {
       createElement: (tagName) => new FakeElement(tagName),
@@ -45,20 +41,6 @@ class SVGTransformerTest < ActiveSupport::TestCase
     JS
   end
 
-  test 'toString returns the markup, with the attributes passed' do
-    file 'icon.svg', <<~SVG
-      <svg xmlns="http://www.w3.org/2000/svg" fill="red" width="5"><path d="M0 0"/></svg>
-    SVG
-
-    assert_equal <<~OUT, run_svg_module('icon.js', <<~JS)
-      <svg xmlns="http://www.w3.org/2000/svg" fill="red" width="5"><path d="M0 0"></path></svg>
-      <svg xmlns="http://www.w3.org/2000/svg" width="10" hidden=""><path d="M0 0"></path></svg>
-    OUT
-      console.log(svg.toString());
-      console.log(svg.toString({ fill: false, width: 10, hidden: true }));
-    JS
-  end
-
   test 'svg transoformation' do
     file 'test.svg', <<~SCSS
       <?xml version="1.0" encoding="utf-8"?>
@@ -69,7 +51,7 @@ class SVGTransformerTest < ActiveSupport::TestCase
     SCSS
 
     assert_file 'test.js', 'application/javascript', <<~JS
-      export default function render(svgAttributes) {
+      export default function (svgAttributes) {
           var __a = document.createElementNS("http://www.w3.org/2000/svg", "svg");
           __a.setAttribute("version", "1.1");
           __a.setAttribute("xmlns", "http://www.w3.org/2000/svg");
@@ -95,10 +77,6 @@ class SVGTransformerTest < ActiveSupport::TestCase
           }
 
           return __a;
-      }
-
-      export function toString(svgAttributes) {
-          return render(svgAttributes).outerHTML;
       }
     JS
   end

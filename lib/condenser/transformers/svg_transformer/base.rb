@@ -12,7 +12,7 @@ class Condenser::SVGTransformer::Base
     var_generator = Condenser::SVGTransformer::VarGenerator.new
 
     <<~JS
-      export default function render(svgAttributes) {
+      export default function (svgAttributes) {
       #{@children.last.to_js(var_generator: var_generator)}
           if (svgAttributes) {
               Object.keys(svgAttributes).forEach(function (key) {
@@ -26,10 +26,6 @@ class Condenser::SVGTransformer::Base
           }
 
           return __a;
-      }
-
-      export function toString(svgAttributes) {
-          return render(svgAttributes).outerHTML;
       }
     JS
   end
