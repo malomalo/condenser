@@ -14,6 +14,7 @@
 - `Condenser::Server`, `Condenser`, `Condenser::BuildCache` and `Condenser::Export` have a short `#inspect`. The default one dumped the whole environment, so the Rails routing error page, which prints mounted apps, could fail with Nokogiri's "Document tree depth limit exceeded".
 - `RolldownProcessor` resolves npm packages like Node, from the importing file up, so a package gets the dependency in its own nested `node_modules` instead of the top-level version of it.
 - An import with an explicit extension only resolves to a file with that extension, or one converted to it: `import logo from 'images/logo.png'` no longer bundles `images/logo.svg`'s JavaScript module when both exist. Rolldown is only given the file it asked to load.
+- The attributes passed to an SVG's JavaScript module follow DOM conventions: `null`, `undefined` and `false` remove the attribute and `true` sets it to `""`, instead of setting the strings `"null"`, `"undefined"`, `"false"` and `"true"`.
 - `Condenser::Manifest#clean` (`assets:clean`) only removes files that aren't in the manifest and are older than `age`. It compared absolute file paths with the manifest's relative ones, so it removed current assets and the manifest itself, and it recursed into the output directory again for each subdirectory until the stack overflowed. It now keeps each manifest entry's file and its `.gz`/`.br` versions, never removes the manifest or follows symlinks out of the output directory, removes directories left empty, and reads each directory once.
 
 ### Removed
