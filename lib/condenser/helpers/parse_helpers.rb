@@ -39,34 +39,11 @@ module Condenser::ParseHelpers
     @index = pos
   end
 
-  def next_word
-    nw = @source.match(/\s*(\S+)/, @index)
-    nw.nil? ? nil : nw[1]
-  end
-
-  def current_line
-    start = (@source.rindex(/(\n|\z)/, @old_index) || 0) + 1
-    uptop = @source.index(/(\n|\z)/, @index) || (@old_index + @matched.length)
-    @source[start..uptop]
-  end
-
   def cursor
     start = (@source.rindex("\n", @old_index) || 0) + 1
     uptop = @source.index("\n", @index) || (@old_index + @matched.length)
     lineno = @source[0..start].count("\n") + 1
     "#{lineno.to_s.rjust(4)}: " + @source[start..uptop] + "\n      #{'-'* (@index-1-start)}#{'^'*(@matched.length)}"
-  end
-
-  def gobble(r)
-    if r.is_a?(Regexp)
-      m = @source.match(r, @index)
-      if m&.begin(0) == @index
-        scan_until(r)
-      end
-    else
-      forward(1)
-      @source[@index-1];
-    end
   end
 
   def peek(n=1)

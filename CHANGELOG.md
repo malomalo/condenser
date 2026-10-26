@@ -16,6 +16,11 @@
 - An import with an explicit extension only resolves to a file with that extension, or one converted to it: `import logo from 'images/logo.png'` no longer bundles `images/logo.svg`'s JavaScript module when both exist. Rolldown is only given the file it asked to load.
 - `TailwindProcessor` only warns about an unwatched directory if Tailwind scanned files in it. Tailwind reports globs for directories it found no files in, such as an app's `log/`, `tmp/` and `storage/`, which were logged on every build.
 
+### Removed
+
+- Unused internals: `Asset#all_process_dependencies`, `Condenser::Utils.module_include`, and `ParseHelpers#next_word`, `#current_line` and `#gobble`.
+- The gemspec no longer sets `test_files`, so the gem no longer packages `test/`.
+
 ## 2.0.0.rc1
 
 Changes since 1.5.1.
