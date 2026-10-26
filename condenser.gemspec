@@ -14,7 +14,6 @@ Gem::Specification.new do |s|
   s.rdoc_options.concat ['--main', 'README.md']
 
   s.files         = `git ls-files -- README.md CHANGELOG.md LICENSE {lib,ext}/*`.split("\n")
-  s.test_files    = `git ls-files -- test/*`.split("\n")
   s.executables   = `git ls-files -- bin/*`.split("\n").map{ |f| File.basename(f) }
   s.require_paths = %w(lib)
   
