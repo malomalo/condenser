@@ -16,6 +16,11 @@
 - An import with an explicit extension only resolves to a file with that extension, or one converted to it: `import logo from 'images/logo.png'` no longer bundles `images/logo.svg`'s JavaScript module when both exist. Rolldown is only given the file it asked to load.
 - `Condenser::Manifest#clean` (`assets:clean`) only removes files that aren't in the manifest and are older than `age`. It compared absolute file paths with the manifest's relative ones, so it removed current assets and the manifest itself, and it recursed into the output directory again for each subdirectory until the stack overflowed. It now keeps each manifest entry's file and its `.gz`/`.br` versions, never removes the manifest or follows symlinks out of the output directory, removes directories left empty, and reads each directory once.
 
+### Removed
+
+- Unused internals: `Asset#all_process_dependencies`, `Condenser::Utils.module_include`, and `ParseHelpers#next_word`, `#current_line` and `#gobble`.
+- The gemspec no longer sets `test_files`, so the gem no longer packages `test/`.
+
 ## 2.0.0.rc1
 
 Changes since 1.5.1.
