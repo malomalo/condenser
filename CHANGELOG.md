@@ -9,10 +9,12 @@
 - Optional gems and npm packages are loaded in `setup`, so they're only needed if an asset uses the processor: `LightningCSSExporter.new` and `LightningCSSMinifier.new` no longer raise without the `lightningcss` gem (setting up does, and so does `options`, which has its version). `JstTransformer` installs Babel into its npm path, or the environment's if it has none.
 - `RollupProcessor`, `PurgeCSSProcessor` and `TerserMinifier` are registered with their npm path, e.g. `RollupProcessor.new(npm_path)`; `PurgeCSSProcessor.new(npm_path, content: [...])` no longer defaults `content` to the HTML and JavaScript files under `base`.
 - The pipeline digests include each processor's `options` (`{}` by default), so cache keys and etags change and assets are rebuilt once.
+- `TailwindProcessor`'s `sources:` replaces `base:`, which is removed (passing it raises `ArgumentError`). Without `sources:`, automatic source detection scans the environment's `base`, the app's root, like the Tailwind CLI from its working directory, and it isn't watched; it raised "needs the TailwindProcessor's base:" before. With `sources:`, only those directories are scanned, as with `source(none)` and an `@source` for each. For a Rails app, `sources: ['app']` scans what `base: Rails.root.join('app')` did. A `source(...)` on the stylesheet's import replaces the environment's `base`, and the `sources:` are still scanned with it and with `source(none)`.
 
 ### Added
 
 - `Condenser::Processor`, the base class for processors (see "Writing a processor" in the README).
+- `TailwindProcessor`'s `sources:` option: the directories to scan, for templates in `app/`, `lib/` or a gem's `app/views`. They're relative to the environment's `base` or absolute, have to be existing directories, are recorded as dependencies and are part of the options, relative to the environment's `base` in the cache keys. They're watched, so a change there rebuilds the CSS in a running process, including one that got the CSS from a persistent cache.
 
 - `RolldownProcessor`'s `module_types:` option maps file extensions to Rolldown module types, e.g. `module_types: { png: :dataurl, ttf: :base64 }`, to import images, fonts and other files into a bundle. The files are found through the load paths, relative to the importer, by absolute path or through `aliases:`, and loaded by Rolldown. A module type is used instead of a transformer for its extension (e.g. `svg: :text`). The option is part of the export cache key and etag.
 
