@@ -8,10 +8,17 @@ class RolldownSourcemapTest < ActiveSupport::TestCase
 
   BASE64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 
-  # Rewrites the bundle, as a minifier that doesn't know about maps would.
+  # Rewrites the bundle without updating the map, so it clears it.
   class RewritingMinifier < Condenser::Processor
     def call(environment, input)
       input[:source] = "/* minified */\n" + input[:source]
+      input[:map] = nil
+    end
+  end
+
+  # Leaves the bundle and its map as they are.
+  class NoopMinifier < Condenser::Processor
+    def call(environment, input)
     end
   end
 
@@ -192,7 +199,7 @@ class RolldownSourcemapTest < ActiveSupport::TestCase
     assert_equal ['node_modules/condenser-rolldown-sourcemap-test/index.js', 'npm.js'], map['sources']
   end
 
-  test 'a separate minifier drops the map' do
+  test 'a minifier that clears the map exports none' do
     rolldown(sourcemap: :linked)
     @env.register_minifier('application/javascript', RewritingMinifier.new)
     export = @env.find('main.js').export
@@ -200,6 +207,51 @@ class RolldownSourcemapTest < ActiveSupport::TestCase
     assert export.source.start_with?("/* minified */\n")
     assert_nil export.sourcemap
     assert_not_includes export.source, 'sourceMappingURL'
+  end
+
+  test 'a minifier that leaves the map keeps it' do
+    rolldown(sourcemap: :linked)
+    @env.register_minifier('application/javascript', NoopMinifier.new)
+    export = @env.find('main.js').export
+
+    assert_equal ['lib/math.js', 'main.js'], JSON.parse(export.sourcemap)['sources']
+    assert export.source.end_with?("\n//# sourceMappingURL=#{File.basename(export.path)}.map\n")
+  end
+
+  test 'TerserMinifier maps the minified bundle back to the sources' do
+    rolldown(sourcemap: :linked)
+    @env.register_minifier('application/javascript', Condenser::TerserMinifier.new(@npm_dir))
+    export = @env.find('main.js').export
+    map = JSON.parse(export.sourcemap)
+
+    assert_equal "function cube(c){return c*c*c}console.log(cube(5));\n//# sourceMappingURL=#{File.basename(export.path)}.map\n", export.source
+    assert_equal 1, export.source.scan('sourceMappingURL').size
+    assert_equal ['lib/math.js', 'main.js'], map['sources']
+    assert_equal File.read(File.join(@path, 'lib/math.js')), map['sourcesContent'][0]
+    assert_equal File.read(File.join(@path, 'main.js')), map['sourcesContent'][1]
+    assert_equal ['lib/math.js', 5, 2], original_position(export.source, map, 'return')
+    assert_equal ['main.js', 3, 0], original_position(export.source, map, 'console.log')
+  end
+
+  test 'TerserMinifier with sourcemap: :hidden exports the map without linking it' do
+    rolldown(sourcemap: :hidden)
+    @env.register_minifier('application/javascript', Condenser::TerserMinifier.new(@npm_dir))
+    export = @env.find('main.js').export
+    map = JSON.parse(export.sourcemap)
+
+    assert_equal 'function cube(c){return c*c*c}console.log(cube(5));', export.source
+    assert_equal ['lib/math.js', 'main.js'], map['sources']
+    assert_equal ['lib/math.js', 5, 2], original_position(export.source, map, 'return')
+    assert_not export.sourcemap_linked?
+  end
+
+  test 'TerserMinifier without sourcemap exports no map' do
+    rolldown
+    @env.register_minifier('application/javascript', Condenser::TerserMinifier.new(@npm_dir))
+    export = @env.find('main.js').export
+
+    assert_equal 'function cube(c){return c*c*c}console.log(cube(5));', export.source
+    assert_nil export.sourcemap
   end
 
   test 'precompiling writes the map next to the bundle and lists it in the manifest' do
