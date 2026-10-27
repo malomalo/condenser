@@ -231,6 +231,36 @@ class TailwindTest < ActiveSupport::TestCase
     assert_equal %w[/vendor], unwatched_log
   end
 
+  test 'without sources: only directories of the environment base with scanned files are logged' do
+    skip 'needs a listener' if !@env.build_cache.listening
+    file 'app/views/index.html.erb', '<div class="flex"></div>'
+    file 'log/development.log', 'class="grid"'
+    file 'tmp/cache/entry', 'grid'
+    file 'storage/ab/cd', 'grid'
+    file '.gitignore', "/log/*\n/tmp/*\n/storage/*\n"
+    file 'app/assets/stylesheets/application.css', '@import "tailwindcss";'
+    env = app_env(Condenser::TailwindProcessor.new(@npm_dir))
+    log = StringIO.new
+    env.logger = Logger.new(log)
+
+    assert_includes app_css(env), '.flex {'
+    assert_equal [File.join(@path, 'app')], log.string.scan(/Tailwind scans (\S+), which isn't watched/).flatten
+  end
+
+  test 'with sources: directories in them are not logged' do
+    skip 'needs a listener' if !@env.build_cache.listening
+    file 'app/views/index.html.erb', '<div class="flex"></div>'
+    file 'app/tmp/cache/entry', 'grid'
+    file 'app/.gitignore', "/tmp/*\n"
+    file 'app/assets/stylesheets/application.css', '@import "tailwindcss";'
+    env = app_env(Condenser::TailwindProcessor.new(@npm_dir, sources: ['app']))
+    log = StringIO.new
+    env.logger = Logger.new(log)
+
+    assert_includes app_css(env), '.flex {'
+    assert_not_includes log.string, "isn't watched"
+  end
+
   test 'a stylesheet with @reference compiles @apply without Tailwind\'s CSS and without scanning' do
     file 'views/index.html', '<div class="grid"></div>'
     file 'tailwind.css', <<~CSS
