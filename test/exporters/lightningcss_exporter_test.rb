@@ -92,7 +92,7 @@ class LightningCSSExporterTest < ActiveSupport::TestCase
   end
 
   test 'runs before the minifier' do
-    @env.register_minifier('text/css', Condenser::SassMinifier)
+    @env.register_minifier('text/css', Condenser::SassMinifier.new)
     @env.register_exporter('text/css', Condenser::LightningCSSExporter.new(targets: { safari: 12 }))
     file 'main.css', <<~CSS
       .a {
@@ -142,14 +142,15 @@ class LightningCSSExporterTest < ActiveSupport::TestCase
     with_lightningcss_constant(:Backend, nil) do
       Condenser::LightningCSSExporter.stubs(:require).with('lightningcss').raises(LoadError)
 
-      error = assert_raises(LoadError) { Condenser::LightningCSSExporter.new }
+      exporter = Condenser::LightningCSSExporter.new
+      error = assert_raises(LoadError) { exporter.setup(@env) }
       assert_equal "Condenser::LightningCSSExporter requires the lightningcss gem, add `gem 'lightningcss', '>= 1.33.0.2'` to your Gemfile", error.message
     end
   end
 
   test 'raises when the lightningcss gem is too old' do
     with_lightningcss_constant(:VERSION, '1.33.0.1') do
-      error = assert_raises(LoadError) { Condenser::LightningCSSExporter.new }
+      error = assert_raises(LoadError) { Condenser::LightningCSSExporter.new.setup(@env) }
       assert_equal 'Condenser::LightningCSSExporter requires lightningcss 1.33.0.2 or later, 1.33.0.1 is installed', error.message
     end
   end
