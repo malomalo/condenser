@@ -326,6 +326,52 @@ class TailwindTest < ActiveSupport::TestCase
     assert_empty warned.select { |d| ignored?(d) }
   end
 
+  test 'gitignored directories in sources: are not dependencies, with the .gitignore files above them' do
+    file 'app/views/index.html.erb', '<div class="flex"></div>'
+    file 'app/tmp/a/b.html', '<div class="grid"></div>'
+    file 'app/cache/a/b.html', '<div class="grid"></div>'
+    file 'app/.gitignore', "/cache/*\n"
+    file '.gitignore', "/app/tmp/*\n"
+    file 'app/assets/stylesheets/application.css', '@import "tailwindcss";'
+    env = app_env(Condenser::TailwindProcessor.new(@npm_dir, sources: ['app']))
+
+    asset = env.find('application.css')
+    assert_includes asset.source, '.flex {'
+    assert_not_includes asset.source, '.grid {'
+    assert_includes directory_dependencies(asset), '/app'
+    assert_includes directory_dependencies(asset), '/app/views'
+    assert_empty directory_dependencies(asset).select { |d| d.start_with?('/app/tmp', '/app/cache') }
+  end
+
+  test 'a gitignored directory given as a source: is a dependency, with what is in it' do
+    file 'vendor/ui/button.html', '<div class="flex"></div>'
+    file 'vendor/ui/cards/card.html', '<div class="grid"></div>'
+    file '.gitignore', "/vendor/\n"
+    file 'app/assets/stylesheets/application.css', '@import "tailwindcss";'
+    env = app_env(Condenser::TailwindProcessor.new(@npm_dir, sources: ['vendor/ui']))
+
+    asset = env.find('application.css')
+    assert_includes asset.source, '.flex {'
+    assert_includes asset.source, '.grid {'
+    assert_includes asset.file_dependencies, File.join(@path, 'vendor/ui/cards/card.html')
+    assert_includes directory_dependencies(asset), '/vendor/ui'
+    assert_includes directory_dependencies(asset), '/vendor/ui/cards'
+  end
+
+  test '.gitignore files above the repository a source: is in do not apply' do
+    file 'repo/.git/HEAD', ''
+    file 'repo/app/views/index.html', '<div class="flex"></div>'
+    file 'repo/app/cache/a.html', '<div class="grid"></div>'
+    file '.gitignore', "/repo/app/cache/*\n"
+    file 'app/assets/stylesheets/application.css', '@import "tailwindcss";'
+    env = app_env(Condenser::TailwindProcessor.new(@npm_dir, sources: ['repo/app']))
+
+    asset = env.find('application.css')
+    assert_includes asset.source, '.grid {'
+    assert_includes asset.file_dependencies, File.join(@path, 'repo/app/cache/a.html')
+    assert_includes directory_dependencies(asset), '/repo/app/cache'
+  end
+
   test 'a stylesheet with @reference compiles @apply without Tailwind\'s CSS and without scanning' do
     file 'views/index.html', '<div class="grid"></div>'
     file 'tailwind.css', <<~CSS

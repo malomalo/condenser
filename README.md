@@ -491,8 +491,11 @@ isn't watched.
 
 Automatic source detection skips gitignored files, and the gitignored
 directories it finds, like `log/`, `tmp/` and `storage/`, aren't tracked
-either, so files added there don't rebuild the CSS. Explicit `@source` paths
-are always tracked, even in a gitignored directory like `node_modules/`.
+either, so files added there don't rebuild the CSS. That's the case under the
+environment's `base`, `source(...)` and each of the `sources:`, with the
+`.gitignore` files from the repository's root down, as Tailwind reads them.
+The `sources:` themselves and explicit `@source` paths are always tracked,
+even in a gitignored directory like `vendor/` or `node_modules/`.
 
 `minify: true` minifies the CSS like `tailwindcss --minify`, with Tailwind's
 own Lightning CSS pass. Condenser's default CSS minifier,
