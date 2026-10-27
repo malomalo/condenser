@@ -12,7 +12,7 @@ require 'set'
 # Every file Tailwind scans for class names, and every directory it scans,
 # is recorded as a file or directory dependency, except gitignored
 # directories found by automatic source detection.
-class Condenser::TailwindProcessor
+class Condenser::TailwindProcessor < Condenser::Processor
 
   SCRIPT = File.expand_path('tailwind_processor.js', __dir__)
   PACKAGES = %w[tailwindcss @tailwindcss/node @tailwindcss/oxide ignore].freeze
@@ -21,9 +21,6 @@ class Condenser::TailwindProcessor
   # Whether it minifies, and the versions of the Tailwind packages and
   # `ignore`, which are part of the pipeline digest.
   attr_reader :options
-
-  def self.setup(environment)
-  end
 
   # npm_path  - The directory Tailwind's packages are installed into, with
   #              `npm`, if they aren't there.
@@ -47,10 +44,6 @@ class Condenser::TailwindProcessor
     PACKAGES.each do |package|
       @options[package.to_sym] = JSON.parse(File.read(File.join(@modules, package, 'package.json')))['version']
     end
-  end
-
-  def name
-    self.class.name
   end
 
   def call(environment, input)

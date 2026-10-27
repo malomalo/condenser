@@ -2,7 +2,7 @@
 
 require 'json'
 
-class Condenser::RolldownProcessor
+class Condenser::RolldownProcessor < Condenser::Processor
 
   SCRIPT = File.expand_path('rolldown_processor.js', __dir__)
   DYNAMIC_IMPORTS = %i[inline keep].freeze
@@ -23,10 +23,6 @@ class Condenser::RolldownProcessor
     JSON.parse(File.read(File.join(bundler_path, 'package.json')))['version']
   rescue Errno::ENOENT
     nil
-  end
-
-  def name
-    self.class.name
   end
 
   def options

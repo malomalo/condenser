@@ -30,9 +30,9 @@ class CacheNullStoreTest < ActiveSupport::TestCase
     file 'main.css.erb', "body { width: <%= 1 + 2 %>px; }\n"
 
     # Count ERB renders; each environment should render both assets again.
-    erb = Condenser::Erubi.method(:call)
+    erb = Condenser::Erubi.instance_method(:call)
     renders = 0
-    Condenser::Erubi.define_singleton_method(:call) { |*args| renders += 1; erb.call(*args) }
+    Condenser::Erubi.define_method(:call) { |*args| renders += 1; erb.bind_call(self, *args) }
 
     2.times do
       @env = new_env
@@ -41,7 +41,7 @@ class CacheNullStoreTest < ActiveSupport::TestCase
     end
     assert_equal 4, renders
   ensure
-    Condenser::Erubi.define_singleton_method(:call, erb) if erb
+    Condenser::Erubi.define_method(:call, erb) if erb
   end
 
   test 'fetch and fetch_if always run the block and store nothing' do

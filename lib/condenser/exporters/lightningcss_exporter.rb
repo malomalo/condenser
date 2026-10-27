@@ -16,7 +16,7 @@
 # `new` takes `targets:` and other `LightningCSS.transform` options, e.g.
 # `minify` (default false), `error_recovery` or `scope`. `filename` and
 # `css_modules` raise an ArgumentError.
-class Condenser::LightningCSSExporter
+class Condenser::LightningCSSExporter < Condenser::Processor
 
   # The oldest lightningcss gem that applies targets without minifying,
   # accepts minor versions and gives errors a location.
@@ -33,34 +33,11 @@ class Condenser::LightningCSSExporter
   DEFAULT_OPTIONS = { minify: false }.freeze
   FORCED_OPTIONS = {}.freeze
 
-  def self.setup(environment)
+  # The gem is loaded when the processor is set up, so it's only needed once
+  # CSS is exported or minified.
+  def setup(environment)
     require_lightningcss!
   end
-
-  # Loads the lightningcss gem, raising a LoadError naming the class if it's
-  # missing or too old.
-  def self.require_lightningcss!
-    begin
-      require 'lightningcss' unless defined?(::LightningCSS::Backend)
-    rescue LoadError
-      raise LoadError, "#{name} requires the lightningcss gem, add `gem 'lightningcss', '>= #{MINIMUM_VERSION}'` to your Gemfile"
-    end
-
-    if Gem::Version.new(::LightningCSS::VERSION) < Gem::Version.new(MINIMUM_VERSION)
-      raise LoadError, "#{name} requires lightningcss #{MINIMUM_VERSION} or later, #{::LightningCSS::VERSION} is installed"
-    end
-  end
-
-  # The lightningcss gem's version, which is the version of Lightning CSS it
-  # bundles. Raises a LoadError if it isn't installed or is too old.
-  def self.version
-    require_lightningcss!
-    ::LightningCSS::VERSION
-  end
-
-  # The targets, Lightning CSS options and version, which are part of the
-  # export pipeline digest.
-  attr_reader :options
 
   # targets - Hash of browser to version, the oldest browsers to transform the
   #           CSS for, e.g. `{ safari: 15.4, chrome: 100 }`. A version is a
@@ -72,10 +49,6 @@ class Condenser::LightningCSSExporter
   # options - Options passed to `LightningCSS.transform`. Raises an
   #           ArgumentError for a key in RESERVED_OPTIONS.
   def initialize(targets: nil, **options)
-    # Condenser doesn't set up exporters or minifier instances, so the gem is
-    # loaded (and its version checked) here instead of in #call.
-    version = self.class.version
-
     options = self.class::DEFAULT_OPTIONS.merge(options)
     options.each_key do |key|
       next unless (instead = self.class::RESERVED_OPTIONS[key.to_sym])
@@ -84,11 +57,13 @@ class Condenser::LightningCSSExporter
     options[:targets] = targets.transform_keys(&:to_s).sort.to_h if targets
 
     @transform_options = options.merge(self.class::FORCED_OPTIONS).freeze
-    @options = @transform_options.merge(lightningcss: version).freeze
   end
 
-  def name
-    self.class.name
+  # The targets, Lightning CSS options and version, which are part of the
+  # export pipeline digest. Raises a LoadError if the gem isn't installed or
+  # is too old.
+  def options
+    @options ||= @transform_options.merge(lightningcss: version).freeze
   end
 
   # Transforms the input's source, logging warnings with their location and
@@ -106,6 +81,27 @@ class Condenser::LightningCSSExporter
   end
 
   private
+
+  # Loads the lightningcss gem, raising a LoadError naming the class if it's
+  # missing or too old.
+  def require_lightningcss!
+    begin
+      require 'lightningcss' unless defined?(::LightningCSS::Backend)
+    rescue LoadError
+      raise LoadError, "#{name} requires the lightningcss gem, add `gem 'lightningcss', '>= #{MINIMUM_VERSION}'` to your Gemfile"
+    end
+
+    if Gem::Version.new(::LightningCSS::VERSION) < Gem::Version.new(MINIMUM_VERSION)
+      raise LoadError, "#{name} requires lightningcss #{MINIMUM_VERSION} or later, #{::LightningCSS::VERSION} is installed"
+    end
+  end
+
+  # The lightningcss gem's version, which is the version of Lightning CSS it
+  # bundles. Raises a LoadError if it isn't installed or is too old.
+  def version
+    require_lightningcss!
+    ::LightningCSS::VERSION
+  end
 
   # Returns "file:line:column: message", or the message prefixed with
   # +filename+ if there's no location. Location columns count from 0, the

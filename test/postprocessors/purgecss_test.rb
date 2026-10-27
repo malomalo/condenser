@@ -4,7 +4,7 @@ class PurgeCSSTest < ActiveSupport::TestCase
   
   def setup
     super
-    @env.register_postprocessor('text/css', Condenser::PurgeCSSProcessor)
+    @env.register_postprocessor('text/css', Condenser::PurgeCSSProcessor.new(@npm_dir, content: [File.join(@path, '**/*.html'), File.join(@path, '**/*.js')]))
     @env.unregister_minifier('text/css')
   end
   

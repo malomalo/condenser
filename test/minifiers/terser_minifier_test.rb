@@ -5,7 +5,7 @@ class TerserMinifierTest < ActiveSupport::TestCase
   def setup
     super
     @env.unregister_exporter('application/javascript')
-    @env.register_minifier('application/javascript', Condenser::TerserMinifier)
+    @env.register_minifier('application/javascript', Condenser::TerserMinifier.new(@npm_dir))
   end
 
   test 'simple example' do

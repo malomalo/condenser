@@ -228,6 +228,45 @@ change after it has found an asset; create a new environment to see them.
 `Rake::CondenserTask`'s default environment doesn't listen. When you set your
 own `environment` on the task, pass `listen: false` to it.
 
+### Writing a processor
+
+Templates, preprocessors, transformers, postprocessors, exporters and minifiers
+are instances of a `Condenser::Processor` subclass. `call(environment, input)`
+changes `input[:source]` (and the other keys of `input`) in place:
+
+```ruby
+class BannerProcessor < Condenser::Processor
+  def initialize(banner)
+    @banner = banner
+  end
+
+  # Gems and npm packages the processor needs are loaded here, so they're
+  # only needed if an asset uses it.
+  def setup(environment)
+    require 'banner'
+  end
+
+  # What changes the output besides the source; it's part of the cache keys.
+  def options
+    { banner: @banner }
+  end
+
+  def call(environment, input)
+    input[:source] = "/* #{@banner} */\n#{input[:source]}"
+  end
+end
+
+env.register_postprocessor 'text/css', BannerProcessor.new('(c) Example')
+```
+
+`setup(environment)` is called once per environment, before the processor is
+first used and before the cached dependencies of an asset it processes are
+read, so it can add to the load path. By default it does nothing and `options`
+is `{}`. Registering anything other than a `Condenser::Processor`, like a
+processor class, raises an `ArgumentError`. An instance can be registered in
+several environments and called from several threads at once, so keep
+per-call state out of instance variables.
+
 ### Depending on files that aren't assets
 
 A processor whose output depends on files that aren't assets, like the
@@ -547,7 +586,7 @@ doesn't support `module_types:`.
 
 ```ruby
 condenser.unregister_exporter('application/javascript')
-condenser.register_exporter('application/javascript', Condenser::RollupProcessor)
+condenser.register_exporter('application/javascript', Condenser::RollupProcessor.new(condenser.npm_path))
 ```
 
 
@@ -586,7 +625,7 @@ config.assets.css_minifier = :lightning_css
 If you're not using Rails, configure this directly on the "environment".
 
 ``` ruby
-environment.register_minifier 'text/css', Condenser::LightningCSSMinifier
+environment.register_minifier 'text/css', Condenser::LightningCSSMinifier.new
 ```
 
 `Condenser.new`'s default pipeline minifies JavaScript with Rolldown (see
@@ -616,7 +655,7 @@ environment.register_minifier 'text/css', Condenser::LightningCSSMinifier.new(ta
 already use the `sass-embedded` gem and don't want another native gem:
 
 ``` ruby
-environment.register_minifier 'text/css', Condenser::SassMinifier
+environment.register_minifier 'text/css', Condenser::SassMinifier.new
 ```
 
 If you are using Condenser directly with a Rack app, don't forget to add

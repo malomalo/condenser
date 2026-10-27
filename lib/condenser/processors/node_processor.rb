@@ -6,22 +6,9 @@ require 'open3'
 require 'securerandom'
 
 class Condenser
-  class NodeProcessor
+  class NodeProcessor < Processor
     
     attr_accessor :npm_path
-    
-    def self.setup(environment)
-    end
-  
-    def name
-      self.class.name
-    end
-
-    def self.call(environment, input)
-      @instances ||= {}
-      @instances[environment] ||= new(environment.npm_path)
-      @instances[environment].call(environment, input)
-    end
     
     def initialize(npm_dir = nil)
       self.npm_path = npm_dir

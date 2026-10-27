@@ -1,16 +1,9 @@
 # frozen_string_literal: true
 
-class Condenser::CSSMediaCombinerProcessor
+class Condenser::CSSMediaCombinerProcessor < Condenser::Processor
   
   include Condenser::ParseHelpers
   
-  def self.setup(env)
-  end
-  
-  def self.call(environment, input)
-    new.call(environment, input)
-  end
-
   def reduce_media_query(queries)
     output = String.new
     queries.each do |query, contents|
@@ -24,7 +17,12 @@ class Condenser::CSSMediaCombinerProcessor
     output
   end
   
+  # The parser's state is kept on a copy, so an instance can be shared.
   def call(environment, input)
+    dup.combine(environment, input)
+  end
+
+  def combine(environment, input)
     seek(0)
     @sourcefile = input[:source_file]
     @source = input[:source]

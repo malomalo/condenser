@@ -16,6 +16,7 @@ class Condenser
   
   prepend Environment, Pipeline, Resolve
   
+  autoload :Processor,        'condenser/processor'
   autoload :BabelProcessor,   'condenser/processors/babel_processor'
   autoload :RollupProcessor,  'condenser/processors/rollup_processor'
   autoload :RolldownProcessor,'condenser/processors/rolldown_processor'
@@ -69,11 +70,11 @@ class Condenser
       configure(&block)
     elsif pipeline != false
       self.configure do
-        register_preprocessor 'application/javascript', Condenser::JSAnalyzer
+        register_preprocessor 'application/javascript', Condenser::JSAnalyzer.new
         # register_preprocessor 'application/javascript', Condenser::BabelProcessor
         register_exporter     'application/javascript', Condenser::RolldownProcessor.new(npm_path, minify: true)
         
-        register_minifier  'text/css', Condenser::LightningCSSMinifier
+        register_minifier  'text/css', Condenser::LightningCSSMinifier.new
       
         register_writer Condenser::FileWriter.new
         register_writer Condenser::ZlibWriter.new
@@ -139,7 +140,7 @@ Condenser.configure do
 
   # ERB
   register_mime_type 'application/erb', extension: '.erb'
-  register_template  'application/erb', Condenser::Erubi
+  register_template  'application/erb', Condenser::Erubi.new
   
   # CSS
   register_mime_type 'text/css', extension: '.css', charset: :css
@@ -153,21 +154,21 @@ Condenser.configure do
   
   # SCSS
   register_mime_type    'text/scss', extensions: %w(.scss .css.scss)
-  register_transformer  'text/scss', 'text/css', Condenser::ScssTransformer
+  register_transformer  'text/scss', 'text/css', Condenser::ScssTransformer.new
   
   # Javascript
   register_mime_type    'application/javascript', extension: '.js', charset: :unicode
   
   # EJS
   register_mime_type 'application/ejs', extensions: '.ejs', charset: :unicode
-  register_template  'application/ejs', Condenser::EjsTemplate
+  register_template  'application/ejs', Condenser::EjsTemplate.new
   
   # JST
   register_mime_type    'application/jst', extensions: '.jst', charset: :unicode
-  register_transformer  'application/jst', 'application/javascript', Condenser::JstTransformer
+  register_transformer  'application/jst', 'application/javascript', Condenser::JstTransformer.new
   
   # SVG
-  register_transformer  'image/svg+xml', 'application/javascript', Condenser::SVGTransformer
+  register_transformer  'image/svg+xml', 'application/javascript', Condenser::SVGTransformer.new
   
   # Writers
   register_mime_type 'application/gzip',    extensions: %w(.gz .gzip)

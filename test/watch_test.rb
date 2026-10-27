@@ -1,16 +1,13 @@
 require 'test_helper'
 
 # Depends on the files configured for each asset and appends their contents.
-class WatchedFilesProcessor
+class WatchedFilesProcessor < Condenser::Processor
   class << self
     attr_accessor :files
   end
 
-  def self.setup(environment)
-  end
-
-  def self.call(environment, input)
-    input[:source] = input[:source] + (files[input[:filename]] || []).map do |f|
+  def call(environment, input)
+    input[:source] = input[:source] + (self.class.files[input[:filename]] || []).map do |f|
       input[:file_dependencies] << f
       "#{File.basename(f)}: #{File.file?(f) ? File.read(f).strip : 'missing'}\n"
     end.join
@@ -23,7 +20,7 @@ class WatchTest < ActiveSupport::TestCase
     super
     @root = File.realpath(Dir.mktmpdir)
     WatchedFilesProcessor.files = {}
-    @env.register_preprocessor 'text/plain', WatchedFilesProcessor
+    @env.register_preprocessor 'text/plain', WatchedFilesProcessor.new
     skip 'needs a listener' if !@env.build_cache.listening
   end
 
@@ -65,7 +62,7 @@ class WatchTest < ActiveSupport::TestCase
   test 'a path watched before the listener starts is noticed' do
     env = Condenser.new(@path, logger: Logger.new('/dev/null'), base: @path)
     env.watch(@root)
-    env.register_preprocessor 'text/plain', WatchedFilesProcessor
+    env.register_preprocessor 'text/plain', WatchedFilesProcessor.new
     assert_equal [[@root, []]], env.watched_paths
     file 'a.txt', "a\n"
     file 'a.html', 'one', base: @root
