@@ -2,7 +2,17 @@
 
 ## Unreleased
 
+### Breaking changes / upgrade notes
+
+- Processors (templates, preprocessors, transformers, postprocessors, exporters and minifiers) are instances of a `Condenser::Processor` subclass. Registering anything else, including a processor class like `register_minifier 'text/css', Condenser::SassMinifier`, raises an `ArgumentError`; register an instance, e.g. `Condenser::SassMinifier.new`. The built-in processors' class-level `call`, `setup`, `instance` and `options` are removed, and the default pipeline registers instances. Writers are unchanged.
+- `setup(environment)` is an instance method, called once per environment before the processor is first used and before the cached dependencies of an asset it processes are read. It's now called for exporters and minifiers too. `Condenser::Processor` defines `setup` (does nothing), `options` (`{}`), `name` and `call` (raises `NotImplementedError`). A processor class's `self.setup` is no longer called.
+- Optional gems and npm packages are loaded in `setup`, so they're only needed if an asset uses the processor: `LightningCSSExporter.new` and `LightningCSSMinifier.new` no longer raise without the `lightningcss` gem (setting up does, and so does `options`, which has its version). `JstTransformer` installs Babel into its npm path, or the environment's if it has none.
+- `RollupProcessor`, `PurgeCSSProcessor` and `TerserMinifier` are registered with their npm path, e.g. `RollupProcessor.new(npm_path)`; `PurgeCSSProcessor.new(npm_path, content: [...])` no longer defaults `content` to the HTML and JavaScript files under `base`.
+- The pipeline digests include each processor's `options` (`{}` by default), so cache keys and etags change and assets are rebuilt once.
+
 ### Added
+
+- `Condenser::Processor`, the base class for processors (see "Writing a processor" in the README).
 
 - `RolldownProcessor`'s `module_types:` option maps file extensions to Rolldown module types, e.g. `module_types: { png: :dataurl, ttf: :base64 }`, to import images, fonts and other files into a bundle. The files are found through the load paths, relative to the importer, by absolute path or through `aliases:`, and loaded by Rolldown. A module type is used instead of a transformer for its extension (e.g. `svg: :text`). The option is part of the export cache key and etag.
 

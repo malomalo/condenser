@@ -5,7 +5,7 @@ class SassMinifierTest < ActiveSupport::TestCase
 
   def setup
     super
-    @env.register_minifier('text/css', Condenser::SassMinifier)
+    @env.register_minifier('text/css', Condenser::SassMinifier.new)
   end
 
   test 'simple example' do

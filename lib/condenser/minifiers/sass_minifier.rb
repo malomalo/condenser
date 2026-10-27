@@ -1,26 +1,14 @@
 # frozen_string_literal: true
 
-class Condenser::SassMinifier
+class Condenser::SassMinifier < Condenser::Processor
 
   RESERVED_OPTIONS = {
     syntax: 'the minifier always compiles CSS',
     url: "condenser sets it to the asset's"
   }.freeze
 
-  def self.setup(environment)
+  def setup(environment)
     Condenser::Sass.require_sass_embedded!(name)
-  end
-
-  def self.instance
-    @instance ||= new
-  end
-
-  def self.call(environment, input)
-    instance.call(environment, input)
-  end
-
-  def self.options
-    instance.options
   end
 
   # The Dart Sass options and version, which are part of the export
@@ -40,12 +28,7 @@ class Condenser::SassMinifier
     @options = @sass_options.merge(dart_sass: Condenser::Sass.version).compact.freeze
   end
 
-  def name
-    self.class.name
-  end
-
   def call(environment, input)
-    self.class.setup(environment)
     result = ::Sass.compile_string(input[:source], **{
       syntax: :css,
       url: Condenser::Sass::Importer.url(Condenser::Sass::Importer::SCHEME, input[:filename]),

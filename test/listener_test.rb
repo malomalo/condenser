@@ -166,14 +166,12 @@ class ListenerTest < ActiveSupport::TestCase
   test 'a directory dependency under a watched path notices a file in a new directory' do
     root = File.realpath(Dir.mktmpdir)
     @env.watch(root)
-    @env.register_preprocessor 'text/plain', Class.new {
-      define_singleton_method(:setup) { |env| }
-      define_singleton_method(:name) { 'ListingProcessor' }
-      define_singleton_method(:call) do |env, input|
+    @env.register_preprocessor 'text/plain', Class.new(Condenser::Processor) {
+      define_method(:call) do |env, input|
         input[:directory_dependencies] << { path: root, glob: '*.html' }
         input[:source] = Dir.glob('**/*.html', base: root).sort.join(',')
       end
-    }
+    }.new
     file 'a.html', 'a', base: root
     file 'test.txt', ''
     assert_equal 'a.html', @env.find('test.txt').source
@@ -189,14 +187,12 @@ class ListenerTest < ActiveSupport::TestCase
     link = File.join(File.realpath(Dir.mktmpdir), 'link')
     File.symlink(root, link)
     @env.watch(link)
-    @env.register_preprocessor 'text/plain', Class.new {
-      define_singleton_method(:setup) { |env| }
-      define_singleton_method(:name) { 'SymlinkProcessor' }
-      define_singleton_method(:call) do |env, input|
+    @env.register_preprocessor 'text/plain', Class.new(Condenser::Processor) {
+      define_method(:call) do |env, input|
         input[:file_dependencies] << File.join(link, 'a.html')
         input[:source] = File.read(File.join(link, 'a.html'))
       end
-    }
+    }.new
     file 'a.html', 'a', base: root
     file 'test.txt', ''
     assert_equal 'a', @env.find('test.txt').source

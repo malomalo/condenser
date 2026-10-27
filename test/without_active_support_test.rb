@@ -12,7 +12,7 @@ class WithoutActiveSupportTest < ActiveSupport::TestCase
 
     dir, npm_path, cache = ARGV
     env = Condenser.new(dir, listen: false, npm_path: npm_path, logger: Logger.new(File::NULL), cache: Condenser::Cache::FileStore.new(cache))
-    env.register_postprocessor 'text/css', Condenser::CSSMediaCombinerProcessor
+    env.register_postprocessor 'text/css', Condenser::CSSMediaCombinerProcessor.new
     manifest = Condenser::Manifest.new(env, File.join(dir, 'out'))
     manifest.compile(%w(main.js main.css page.html icon.svg))
     abort 'ActiveSupport was loaded' if defined?(ActiveSupport)

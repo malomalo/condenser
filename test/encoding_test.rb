@@ -63,7 +63,7 @@ class EncodingTest < ActiveSupport::TestCase
       presets: [ ['@babel/preset-env', { modules: false, targets: { browsers: 'firefox > 41' } }] ]
     )
     @env.unregister_exporter('application/javascript')
-    @env.register_minifier('application/javascript', Condenser::TerserMinifier)
+    @env.register_minifier('application/javascript', Condenser::TerserMinifier.new(@npm_dir))
     file 'main.js', %{const s = "café ✓";\nconsole.log(s);\n}
 
     assert_includes @env.find('main.js').source, 'var s = "café ✓";'
@@ -72,7 +72,7 @@ class EncodingTest < ActiveSupport::TestCase
 
   test 'JavaScript bundled by Rollup' do
     @env.unregister_exporter('application/javascript')
-    @env.register_exporter('application/javascript', Condenser::RollupProcessor)
+    @env.register_exporter('application/javascript', Condenser::RollupProcessor.new(@npm_dir))
     file 'b.js', %{export default "naïve ✓";\n}
     file 'main.js', %{import b from './b';\nconsole.log("café ✓", b);\n}
 
@@ -100,15 +100,12 @@ class EncodingTest < ActiveSupport::TestCase
   # Templates get the source as read. One that needs UTF-8, like EJX, which
   # builds its JavaScript with JSON.generate, sets the encoding itself.
   test 'a template gets the source as read and sets the encoding it needs' do
-    template = Class.new do
-      def self.setup(environment)
-      end
-
-      def self.call(environment, input)
+    template = Class.new(Condenser::Processor) do
+      def call(environment, input)
         source = input[:source].dup.force_encoding(Encoding::UTF_8)
         input[:source] = "export default #{JSON.generate(source)};\n"
       end
-    end
+    end.new
     @env.register_mime_type 'application/jsonish', extensions: '.jsonish'
     @env.register_template 'application/jsonish', template
     file 'tmpl.js.jsonish', %{café ✓}
@@ -171,7 +168,7 @@ class EncodingTest < ActiveSupport::TestCase
   end
 
   test 'CSS through PurgeCSS' do
-    @env.register_postprocessor('text/css', Condenser::PurgeCSSProcessor)
+    @env.register_postprocessor('text/css', Condenser::PurgeCSSProcessor.new(@npm_dir, content: [File.join(@path, '**/*.html'), File.join(@path, '**/*.js')]))
     @env.unregister_minifier('text/css')
     file 'main.css', %{/* café ✓ */\n.used:after { content: "✓"; }\n.unused { color: red; }\n}
     file 'index.html', %{<div class="used">café ✓</div>\n}
