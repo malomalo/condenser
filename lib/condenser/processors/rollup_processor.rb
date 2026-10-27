@@ -3,15 +3,11 @@
 require 'json'
 require 'tmpdir'
 
-class Condenser::RollupProcessor
+class Condenser::RollupProcessor < Condenser::Processor
 
   DYNAMIC_IMPORTS = %i[inline keep].freeze
 
   @@setup = []
-  
-  def self.setup(environment)
-    install_npm_packages(environment.npm_path)
-  end
   
   def self.install_npm_packages(npm_path)
     return if @@setup.include?(npm_path)
@@ -25,10 +21,6 @@ class Condenser::RollupProcessor
     @@setup << npm_path
   end
   
-  def self.call(environment, input)
-    new(environment.npm_path).call(environment, input)
-  end
-
   DEPRECATION = 'Condenser::RollupProcessor is deprecated and will be removed in condenser 3.0; use Condenser::RolldownProcessor instead'
   @deprecation_lock = Mutex.new
   @deprecation_warned = false
@@ -42,10 +34,6 @@ class Condenser::RollupProcessor
     logger ? logger.warn(DEPRECATION) : Kernel.warn(DEPRECATION)
   end
 
-  def name
-    self.class.name
-  end
-  
   def options
     {prefix: @prefix, dynamic_imports: @dynamic_imports}
   end

@@ -1,16 +1,17 @@
 require 'test_helper'
+require 'forwardable'
 
 # Records the files and directories it's configured with as dependencies and
 # appends what it finds in them to the source.
-class FileDependencyProcessor
+class FileDependencyProcessor < Condenser::Processor
   class << self
     attr_accessor :files, :directories, :calls, :switches
   end
 
-  def self.setup(environment)
-  end
+  extend Forwardable
+  def_delegators 'self.class', :files, :directories, :calls, :switches
 
-  def self.call(environment, input)
+  def call(environment, input)
     calls[input[:filename]] += 1
     lines = files.map do |f|
       f, read = Array(f)
@@ -64,7 +65,7 @@ class FileDependenciesTest < ActiveSupport::TestCase
     FileDependencyProcessor.directories = {}
     FileDependencyProcessor.calls = Hash.new(0)
     FileDependencyProcessor.switches = {}
-    @env.register_preprocessor 'text/plain', FileDependencyProcessor
+    @env.register_preprocessor 'text/plain', FileDependencyProcessor.new
     file 'test.txt', "test\n"
   end
 
@@ -99,7 +100,7 @@ class FileDependenciesTest < ActiveSupport::TestCase
     @cache_dir ||= File.realpath(Dir.mktmpdir)
     paths = [@path] if paths.empty?
     env = Condenser.new(*paths, logger: Logger.new('/dev/null'), npm_path: @npm_dir, base: base, cache: Condenser::Cache::FileStore.new(@cache_dir))
-    env.register_preprocessor 'text/plain', FileDependencyProcessor
+    env.register_preprocessor 'text/plain', FileDependencyProcessor.new
     env
   end
 

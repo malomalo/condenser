@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
-class Condenser::Erubi
+class Condenser::Erubi < Condenser::Processor
 
-  def self.setup(environment)
+  def setup(environment)
     require "erubi" unless defined?(::Erubi::Engine)
   end
 
-  def self.call(environment, data)
+  def call(environment, data)
     source = ::Erubi::Engine.new(data[:source], {
       preamble:   "@output_buffer = String.new;",
       bufvar:     "@output_buffer",

@@ -1,28 +1,25 @@
 require 'test_helper'
 
 # Counts how often it's set up; registered where a test needs a processor.
-class CountingProcessor
+class CountingProcessor < Condenser::Processor
   class << self
     attr_accessor :setups
   end
 
-  def self.setup(environment)
-    self.setups += 1
+  def setup(environment)
+    self.class.setups += 1
   end
 
-  def self.call(environment, input)
+  def call(environment, input)
   end
 end
 
 # A processor with options, which are part of the pipeline digest.
-class OptionsProcessor
+class OptionsProcessor < Condenser::Processor
   attr_reader :options
 
   def initialize(options = {})
     @options = options
-  end
-
-  def self.setup(environment)
   end
 
   def call(environment, input)
@@ -30,25 +27,18 @@ class OptionsProcessor
 end
 
 # A JavaScript "minifier" that upcases the source.
-class UpcaseMinifier
-  def self.options
-    {}
-  end
-
-  def self.call(environment, input)
+class UpcaseMinifier < Condenser::Processor
+  def call(environment, input)
     input[:source] = input[:source].upcase
   end
 end
 
 # A template whose output depends on its options.
-class GreetingTemplate
+class GreetingTemplate < Condenser::Processor
   attr_reader :options
 
   def initialize(options = {})
     @options = options
-  end
-
-  def self.setup(environment)
   end
 
   def call(environment, input)
@@ -82,11 +72,11 @@ class PipelineDigestTest < ActiveSupport::TestCase
   test 'a processor for a type no asset uses is never set up' do
     file 'main.js', "console.log(1);\n"
 
-    environment = env { |e| e.register_preprocessor('text/x-unused', CountingProcessor) }
+    environment = env { |e| e.register_preprocessor('text/x-unused', CountingProcessor.new) }
     environment.find('main.js').export
     assert_equal 0, CountingProcessor.setups
 
-    environment = env { |e| e.register_preprocessor('application/javascript', CountingProcessor) }
+    environment = env { |e| e.register_preprocessor('application/javascript', CountingProcessor.new) }
     environment.find('main.js').export
     assert_equal 1, CountingProcessor.setups
   end
@@ -100,7 +90,7 @@ class PipelineDigestTest < ActiveSupport::TestCase
     after = env { |e| e.register_transformer('text/scss', 'text/css', OptionsProcessor.new(style: :compressed)) }.find('main.js')
     assert_equal before.cache_key, after.cache_key
 
-    Condenser::JSAnalyzer.expects(:call).never
+    Condenser::JSAnalyzer.any_instance.expects(:call).never
     after.process
   end
 
@@ -145,14 +135,14 @@ class PipelineDigestTest < ActiveSupport::TestCase
     end
     minified = env { |e|
       unminified_rolldown.call(e)
-      e.register_minifier('application/javascript', UpcaseMinifier)
+      e.register_minifier('application/javascript', UpcaseMinifier.new)
     }.find('main.js')
     minified_export = minified.export
 
     not_minified = env(&unminified_rolldown).find('main.js')
     assert_equal minified.cache_key, not_minified.cache_key
 
-    Condenser::JSAnalyzer.expects(:call).never
+    Condenser::JSAnalyzer.any_instance.expects(:call).never
     not_minified_export = not_minified.export
     assert_not_equal minified_export.source, not_minified_export.source
     assert_not_equal minified.etag, not_minified.etag

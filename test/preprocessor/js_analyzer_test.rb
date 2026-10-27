@@ -4,7 +4,7 @@ class JSAnalyzerTest < ActiveSupport::TestCase
   
   test 'file with exports gets marked as module and exports as module' do
     @env.clear_pipeline
-    @env.register_preprocessor 'application/javascript', Condenser::JSAnalyzer
+    @env.register_preprocessor 'application/javascript', Condenser::JSAnalyzer.new
     
     file 'export.js', <<~JS
       var t = { 'var': () => { return 2; } };
@@ -29,7 +29,7 @@ class JSAnalyzerTest < ActiveSupport::TestCase
 
   test 'file with imports gets marked as module and exports as module' do
     @env.clear_pipeline
-    @env.register_preprocessor 'application/javascript', Condenser::JSAnalyzer
+    @env.register_preprocessor 'application/javascript', Condenser::JSAnalyzer.new
     
     file 'import.js', <<~JS
       import name1 from 'export'

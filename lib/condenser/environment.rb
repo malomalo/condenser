@@ -20,8 +20,10 @@ class Condenser
       super
     end
     
+    # Calls each processor's #setup, once per environment.
     def load_processors(*processors)
       processors.flatten!
+      processors.compact!
       (Set.new(processors) - @loaded_processors).each do |processor|
         processor.setup(self)
         @loaded_processors << processor

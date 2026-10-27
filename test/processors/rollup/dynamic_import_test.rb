@@ -5,7 +5,7 @@ class RollupDynamicImportTestTest < ActiveSupport::TestCase
   def setup
     super
     @env.unregister_exporter('application/javascript')
-    @env.register_exporter('application/javascript', Condenser::RollupProcessor)
+    @env.register_exporter('application/javascript', Condenser::RollupProcessor.new(@npm_dir))
   end
  
   test 'dynamic imports get inlined' do

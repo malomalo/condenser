@@ -4,7 +4,7 @@ class MediaCombinerTest < ActiveSupport::TestCase
   
   def setup
     super
-    @env.register_postprocessor('text/css', Condenser::CSSMediaCombinerProcessor)
+    @env.register_postprocessor('text/css', Condenser::CSSMediaCombinerProcessor.new)
     @env.unregister_minifier('text/css')
   end
   
