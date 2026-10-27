@@ -25,7 +25,10 @@ class Condenser::TerserMinifier < Condenser::NodeProcessor
       # 'sourceMapTarget' => input[:filename]
       # # 'inputSourceMap'
     }.merge(@options)
-    
+    # Maps the minified code back through the exporter's map. Without a
+    # url Terser adds no sourceMappingURL comment; Asset#export does.
+    opts[:sourceMap] = { content: input[:map] } if input[:map]
+
     result = exec_runtime(<<-JS)
       const Terser = require("#{npm_module_path('terser')}");
       const source = #{JSON.generate(input[:filename] => input[:source])}
@@ -33,7 +36,7 @@ class Condenser::TerserMinifier < Condenser::NodeProcessor
 
 
       Terser.minify(source, options).then((result) => {
-        console.log(JSON.stringify(result));
+        console.log(JSON.stringify({ code: result.code, map: result.map, warnings: result.warnings }));
       }, (error) => {
         console.log(JSON.stringify({'error': error.name + ": " + error.message}));
         process.exit(1);

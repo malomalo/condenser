@@ -659,8 +659,6 @@ class Condenser
           if minifier = @environment.minifier_for(content_type)
             @environment.logger.info { "Minifing #{self.filename} with #{minifier.name}" }
             minifier.call(@environment, data)
-            # The exporter's map doesn't cover what the minifier changed.
-            data[:map] = nil
           end
 
           # The map is named after the export's path, whose etag doesn't

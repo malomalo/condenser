@@ -267,6 +267,11 @@ processor class, raises an `ArgumentError`. An instance can be registered in
 several environments and called from several threads at once, so keep
 per-call state out of instance variables.
 
+An exporter can set `input[:map]` to a source map's JSON (see
+[Source maps](#source-maps)). A minifier that changes `input[:source]` updates
+`input[:map]` to match, as `TerserMinifier` does, or sets it to `nil`;
+Condenser exports whatever map the minifier leaves.
+
 ### Depending on files that aren't assets
 
 A processor whose output depends on files that aren't assets, like the
@@ -552,9 +557,10 @@ The map's `sources` are relative to the environment's `base`, then the load
 paths, then the npm path (e.g. `node_modules/<package>/index.js`), so it's the
 same on every checkout, and `sourcesContent` has the sources. The sources are
 what Rolldown is given, after Condenser's preprocessing (e.g. a template's
-generated JavaScript). Rolldown's `minify: true` is covered by the map; a
-separately registered JavaScript minifier would change the bundle after
-Rolldown, so the map is dropped.
+generated JavaScript). Rolldown's `minify: true` is covered by the map, and so
+is a registered `TerserMinifier`, which maps its output back through Rolldown's
+map. Another JavaScript minifier has to update or clear the map itself (see
+[Writing a processor](#writing-a-processor)).
 
 ### Importing JSON
 
