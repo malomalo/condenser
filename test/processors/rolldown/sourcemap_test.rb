@@ -9,8 +9,8 @@ class RolldownSourcemapTest < ActiveSupport::TestCase
   BASE64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 
   # Rewrites the bundle, as a minifier that doesn't know about maps would.
-  class RewritingMinifier
-    def self.call(environment, input)
+  class RewritingMinifier < Condenser::Processor
+    def call(environment, input)
       input[:source] = "/* minified */\n" + input[:source]
     end
   end
@@ -194,7 +194,7 @@ class RolldownSourcemapTest < ActiveSupport::TestCase
 
   test 'a separate minifier drops the map' do
     rolldown(sourcemap: :linked)
-    @env.register_minifier('application/javascript', RewritingMinifier)
+    @env.register_minifier('application/javascript', RewritingMinifier.new)
     export = @env.find('main.js').export
 
     assert export.source.start_with?("/* minified */\n")

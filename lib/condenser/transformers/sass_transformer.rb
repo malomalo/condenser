@@ -11,7 +11,7 @@ require 'json'
 #   https://sass-lang.com/dart-sass/
 #   https://github.com/sass-contrib/sass-embedded-host-ruby
 #
-class Condenser::SassTransformer
+class Condenser::SassTransformer < Condenser::Processor
 
   attr_accessor :options
 
@@ -31,27 +31,8 @@ class Condenser::SassTransformer
     :indented
   end
 
-  def self.setup(environment)
+  def setup(environment)
     Condenser::Sass.require_sass_embedded!(name)
-  end
-
-  # Public: Return singleton instance with default options.
-  #
-  # Returns SassProcessor object.
-  def self.instance
-    @instance ||= new
-  end
-
-  def self.call(environment, input)
-    instance.call(environment, input)
-  end
-
-  def self.options
-    instance.options
-  end
-
-  def name
-    self.class.name
   end
 
   # Public: Initialize template with custom options.

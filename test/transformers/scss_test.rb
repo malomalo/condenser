@@ -26,7 +26,7 @@ class CondenserSCSSTest < ActiveSupport::TestCase
 
   test 'sass syntax' do
     @env.register_mime_type 'text/sass', extensions: %w(.sass)
-    @env.register_transformer 'text/sass', 'text/css', Condenser::SassTransformer
+    @env.register_transformer 'text/sass', 'text/css', Condenser::SassTransformer.new
     file 'a.scss', "div { color: red; }"
     file 'test.sass', <<~SASS
     @import 'a'
@@ -335,7 +335,7 @@ class CondenserSCSSTest < ActiveSupport::TestCase
 
   test 'relative imports in the indented syntax' do
     @env.register_mime_type 'text/sass', extensions: %w(.sass)
-    @env.register_transformer 'text/sass', 'text/css', Condenser::SassTransformer
+    @env.register_transformer 'text/sass', 'text/css', Condenser::SassTransformer.new
     file 'utilities.scss', '.top { color: red; }'
     file 'dir/utilities.scss', '.dir { color: green; }'
     file 'dir/more.sass', <<~SASS
@@ -573,7 +573,7 @@ class CondenserSCSSTest < ActiveSupport::TestCase
 
   test 'importing a templated .sass file from scss' do
     @env.register_mime_type 'text/sass', extensions: %w(.sass)
-    @env.register_transformer 'text/sass', 'text/css', Condenser::SassTransformer
+    @env.register_transformer 'text/sass', 'text/css', Condenser::SassTransformer.new
     file 'a.sass.erb', "div\n  color: <%= 'red' %>\n"
     file 'test.scss', "@import './a';"
 
@@ -586,7 +586,7 @@ class CondenserSCSSTest < ActiveSupport::TestCase
 
   test 'importing a templated .scss file from sass' do
     @env.register_mime_type 'text/sass', extensions: %w(.sass)
-    @env.register_transformer 'text/sass', 'text/css', Condenser::SassTransformer
+    @env.register_transformer 'text/sass', 'text/css', Condenser::SassTransformer.new
     file 'a.scss.erb', "div { color: <%= 'red' %>; }"
     file 'test.sass', "@import 'a'\n"
 
@@ -599,7 +599,7 @@ class CondenserSCSSTest < ActiveSupport::TestCase
 
   test 'a templated .sass file importing a relative file' do
     @env.register_mime_type 'text/sass', extensions: %w(.sass)
-    @env.register_transformer 'text/sass', 'text/css', Condenser::SassTransformer
+    @env.register_transformer 'text/sass', 'text/css', Condenser::SassTransformer.new
     file 'dir/b.scss', "div { color: red; }"
     file 'dir/a.sass.erb', "@import ./b\n"
     file 'b.scss', "div { color: blue; }"
@@ -860,18 +860,16 @@ class CondenserSCSSTest < ActiveSupport::TestCase
 
   test "the Dart Sass version is part of the cache key" do
     file 'test.scss', 'div { color: red; }'
-    @env.register_minifier('text/css', Condenser::SassMinifier)
+    @env.register_minifier('text/css', Condenser::SassMinifier.new)
     before = @env.find('test.css').cache_key
     export_before = @env.export_pipeline_digest('text/css')
 
     Condenser::Sass.stubs(:version).returns('0.0.1')
-    [Condenser::ScssTransformer, Condenser::SassMinifier].each { |c| c.instance_variable_set(:@instance, nil) }
     env = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: @npm_dir, base: @path)
-    env.register_minifier('text/css', Condenser::SassMinifier)
+    env.register_transformer('text/scss', 'text/css', Condenser::ScssTransformer.new)
+    env.register_minifier('text/css', Condenser::SassMinifier.new)
     assert_not_equal before, env.find('test.css').cache_key
     assert_not_equal export_before, env.export_pipeline_digest('text/css')
-  ensure
-    [Condenser::ScssTransformer, Condenser::SassMinifier].each { |c| c.instance_variable_set(:@instance, nil) }
   end
 
   test "sass options" do
