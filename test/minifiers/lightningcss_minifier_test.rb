@@ -68,10 +68,10 @@ class LightningCSSMinifierTest < ActiveSupport::TestCase
 
   test 'names the minifier when the lightningcss gem is missing' do
     backend = LightningCSS::Backend
-    Condenser::LightningCSSMinifier.stubs(:require).with('lightningcss').raises(LoadError)
+    minifier = Condenser::LightningCSSMinifier.new
+    minifier.stubs(:require).with('lightningcss').raises(LoadError)
     LightningCSS.send(:remove_const, :Backend)
 
-    minifier = Condenser::LightningCSSMinifier.new
     error = assert_raises(LoadError) { minifier.setup(@env) }
     assert_equal "Condenser::LightningCSSMinifier requires the lightningcss gem, add `gem 'lightningcss', '>= 1.33.0.2'` to your Gemfile", error.message
   ensure
@@ -111,7 +111,7 @@ class LightningCSSMinifierTest < ActiveSupport::TestCase
   end
 
   test 'the default pipeline loads without the lightningcss gem and raises when CSS is minified' do
-    Condenser::LightningCSSMinifier.stubs(:require_lightningcss!).raises(LoadError, "Condenser::LightningCSSMinifier requires the lightningcss gem")
+    Condenser::LightningCSSMinifier.any_instance.stubs(:require_lightningcss!).raises(LoadError, "Condenser::LightningCSSMinifier requires the lightningcss gem")
 
     env = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: @npm_dir, base: @path)
     assert_instance_of Condenser::LightningCSSMinifier, env.minifier_for('text/css')

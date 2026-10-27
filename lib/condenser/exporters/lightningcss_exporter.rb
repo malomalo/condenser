@@ -36,28 +36,7 @@ class Condenser::LightningCSSExporter < Condenser::Processor
   # The gem is loaded when the processor is set up, so it's only needed once
   # CSS is exported or minified.
   def setup(environment)
-    self.class.require_lightningcss!
-  end
-
-  # Loads the lightningcss gem, raising a LoadError naming the class if it's
-  # missing or too old.
-  def self.require_lightningcss!
-    begin
-      require 'lightningcss' unless defined?(::LightningCSS::Backend)
-    rescue LoadError
-      raise LoadError, "#{name} requires the lightningcss gem, add `gem 'lightningcss', '>= #{MINIMUM_VERSION}'` to your Gemfile"
-    end
-
-    if Gem::Version.new(::LightningCSS::VERSION) < Gem::Version.new(MINIMUM_VERSION)
-      raise LoadError, "#{name} requires lightningcss #{MINIMUM_VERSION} or later, #{::LightningCSS::VERSION} is installed"
-    end
-  end
-
-  # The lightningcss gem's version, which is the version of Lightning CSS it
-  # bundles. Raises a LoadError if it isn't installed or is too old.
-  def self.version
     require_lightningcss!
-    ::LightningCSS::VERSION
   end
 
   # targets - Hash of browser to version, the oldest browsers to transform the
@@ -84,7 +63,7 @@ class Condenser::LightningCSSExporter < Condenser::Processor
   # export pipeline digest. Raises a LoadError if the gem isn't installed or
   # is too old.
   def options
-    @options ||= @transform_options.merge(lightningcss: self.class.version).freeze
+    @options ||= @transform_options.merge(lightningcss: version).freeze
   end
 
   # Transforms the input's source, logging warnings with their location and
@@ -102,6 +81,27 @@ class Condenser::LightningCSSExporter < Condenser::Processor
   end
 
   private
+
+  # Loads the lightningcss gem, raising a LoadError naming the class if it's
+  # missing or too old.
+  def require_lightningcss!
+    begin
+      require 'lightningcss' unless defined?(::LightningCSS::Backend)
+    rescue LoadError
+      raise LoadError, "#{name} requires the lightningcss gem, add `gem 'lightningcss', '>= #{MINIMUM_VERSION}'` to your Gemfile"
+    end
+
+    if Gem::Version.new(::LightningCSS::VERSION) < Gem::Version.new(MINIMUM_VERSION)
+      raise LoadError, "#{name} requires lightningcss #{MINIMUM_VERSION} or later, #{::LightningCSS::VERSION} is installed"
+    end
+  end
+
+  # The lightningcss gem's version, which is the version of Lightning CSS it
+  # bundles. Raises a LoadError if it isn't installed or is too old.
+  def version
+    require_lightningcss!
+    ::LightningCSS::VERSION
+  end
 
   # Returns "file:line:column: message", or the message prefixed with
   # +filename+ if there's no location. Location columns count from 0, the
