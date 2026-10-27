@@ -133,7 +133,7 @@ class RolldownSourcemapTest < ActiveSupport::TestCase
     assert_nil export.sourcemap
     assert_nil export.sourcemap_path
     assert_not export.sourcemap_linked?
-    assert_not export.to_json.key?(:map)
+    assert_nil export.to_json.fetch(:map)
   end
 
   test 'sourcemap: :linked exports a map and links it from the bundle' do
@@ -263,11 +263,15 @@ class RolldownSourcemapTest < ActiveSupport::TestCase
 
     assert_equal export.sourcemap, File.read(File.join(@dir, "#{export.path}.map"))
     assert File.exist?(File.join(@dir, "#{export.path}.gz"))
-    assert_not File.exist?(File.join(@dir, "#{export.path}.map.gz"))
+    assert_equal export.sourcemap, Zlib::GzipReader.open(File.join(@dir, "#{export.path}.map.gz"), &:read)
 
     data = JSON.parse(File.read(manifest.filename))
     assert_equal export.path, data['main.js']['path']
     assert_equal "#{export.path}.map", data['main.js']['map']
+
+    outputs = export.write(File.join(@dir, 'again'))
+    assert_includes outputs, 'main.js.map'
+    assert_includes outputs, 'main.js.map.gz'
   end
 
   test 'precompiling without a map lists none' do
@@ -275,7 +279,7 @@ class RolldownSourcemapTest < ActiveSupport::TestCase
     manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
     manifest.compile('main.js')
 
-    assert_not JSON.parse(File.read(manifest.filename))['main.js'].key?('map')
+    assert_nil JSON.parse(File.read(manifest.filename))['main.js'].fetch('map')
     assert_empty Dir.glob(File.join(@dir, '*.map'))
   end
 

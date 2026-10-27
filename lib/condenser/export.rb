@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-require 'fileutils'
-require 'condenser/utils'
-
 class Condenser
   class Export
+
+    # The source map, as an asset for the writers.
+    Sourcemap = Struct.new(:path, :filename, :source, :content_types, keyword_init: true)
 
     attr_reader :filename, :source, :sourcemap, :content_types, :digest, :digest_name, :etag, :type
 
@@ -79,38 +79,37 @@ class Condenser
         type: type,
         size: size,
         digest: hexdigest,
-        integrity: integrity
-      }.tap { |json| json[:map] = sourcemap_path if @sourcemap }
+        integrity: integrity,
+        map: @sourcemap ? sourcemap_path : nil
+      }
     end
     
     def write(output_directory)
-      files = @environment.writers_for_mime_type(content_type).map do |writer|
-        if writer.exist?(self)
-          @environment.logger.debug "Skipping #{ self.path }, already exists"
-        else
-          @environment.logger.info "Writing #{ self.path }"
-          writer.call(output_directory, self)
-        end
-      end
-      files << write_sourcemap(output_directory) if @sourcemap
-      files.flatten.compact
+      files = write_asset(output_directory, self)
+      files += write_asset(output_directory, sourcemap_export) if @sourcemap
+      files
     end
 
-    # Uncompressed: maps are only fetched by devtools and error trackers.
-    def write_sourcemap(output_directory)
-      filename = File.join(output_directory, sourcemap_path)
-      if ::File.exist?(filename)
-        @environment.logger.debug "Skipping #{ sourcemap_path }, already exists"
-      else
-        @environment.logger.info "Writing #{ sourcemap_path }"
-        FileUtils.mkdir_p(File.dirname(filename))
-        Utils.atomic_write(filename) { |file| file.write(@sourcemap) }
-      end
-      "#{self.filename}.map"
+    def sourcemap_export
+      Sourcemap.new(path: sourcemap_path, filename: "#{filename}.map", source: @sourcemap, content_types: ['application/json'])
     end
     
     def ext
       File.extname(filename)
+    end
+
+    private
+
+    def write_asset(output_directory, asset)
+      files = @environment.writers_for_mime_type(asset.content_types.last).map do |writer|
+        if writer.exist?(asset)
+          @environment.logger.debug "Skipping #{ asset.path }, already exists"
+        else
+          @environment.logger.info "Writing #{ asset.path }"
+          writer.call(output_directory, asset)
+        end
+      end
+      files.flatten.compact
     end
     
   end
