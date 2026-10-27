@@ -15,7 +15,7 @@ require 'set'
 # directory it scans, is recorded as a file or directory dependency. The
 # +sources:+ are watched, so a change there rebuilds the CSS in a running
 # process; the environment's base isn't.
-class Condenser::TailwindProcessor
+class Condenser::TailwindProcessor < Condenser::Processor
 
   SCRIPT = File.expand_path('tailwind_processor.js', __dir__)
   PACKAGES = %w[tailwindcss @tailwindcss/node @tailwindcss/oxide].freeze
@@ -24,9 +24,6 @@ class Condenser::TailwindProcessor
   # Whether it minifies, the sources: as given, and the versions of the
   # Tailwind packages, which are part of the pipeline digest.
   attr_reader :options
-
-  def self.setup(environment)
-  end
 
   # npm_path  - The directory Tailwind's packages are installed into, with
   #              `npm`, if they aren't there.
@@ -57,14 +54,11 @@ class Condenser::TailwindProcessor
     end
   end
 
-  def name
-    self.class.name
-  end
-
   # Watches the sources, before an asset's cached dependencies are resolved,
   # so it's done when the CSS isn't rebuilt. The environment's base isn't
   # watched, since it has `tmp/`, `public/assets` and the like in it.
   def setup(environment)
+    super
     resolve(environment).each { |dir| environment.watch(dir) }
   end
 

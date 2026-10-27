@@ -16,12 +16,13 @@ class PipelineTest < ActiveSupport::TestCase
   end
   
   test 'clear_pipeline' do
+    processor = Condenser::Processor.new
     @env.register_mime_type      'application/javascript', extension: 'js', charset: :unicode
-    @env.register_template       'application/erb', PipelineTest
-    @env.register_preprocessor   'application/javascript', PipelineTest
-    @env.register_transformer    'application/scss', 'application/css', PipelineTest
-    @env.register_postprocessor  'application/javascript', PipelineTest
-    @env.register_minifier       'application/javascript', PipelineTest
+    @env.register_template       'application/erb', processor
+    @env.register_preprocessor   'application/javascript', processor
+    @env.register_transformer    'application/scss', 'application/css', processor
+    @env.register_postprocessor  'application/javascript', processor
+    @env.register_minifier       'application/javascript', processor
     @env.register_writer         PipelineTest::Writer.new
 
     vars = %w(templates preprocessors transformers postprocessors minifiers writers)

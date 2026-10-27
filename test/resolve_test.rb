@@ -7,8 +7,8 @@ class ResolveTest < ActiveSupport::TestCase
     @env.clear_pipeline
     @env.clear_path
     @env.append_path(@path)
-    @env.register_template    'application/erb', Condenser::Erubi
-    @env.register_transformer 'text/scss', 'text/css', Condenser::Erubi
+    @env.register_template    'application/erb', Condenser::Erubi.new
+    @env.register_transformer 'text/scss', 'text/css', Condenser::Erubi.new
     @env.register_exporter    'application/javascript', Condenser::RollupProcessor.new(@npm_dir)
     @env.register_writer      Condenser::ZlibWriter.new(mime_types: 'application/javascript')
   end
@@ -136,7 +136,7 @@ class ResolveTest < ActiveSupport::TestCase
   end
   
   test 'an explicit extension is honoured when accept is given' do
-    @env.register_transformer 'image/svg+xml', 'application/javascript', Condenser::SVGTransformer
+    @env.register_transformer 'image/svg+xml', 'application/javascript', Condenser::SVGTransformer.new
     file 'images/logo.png', 'png'
     file 'images/logo.svg', '<svg xmlns="http://www.w3.org/2000/svg"></svg>'
     svg = File.join(@path, 'images/logo.svg')

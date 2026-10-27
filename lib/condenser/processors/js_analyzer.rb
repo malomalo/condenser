@@ -2,7 +2,7 @@
 
 require 'strscan'
 
-class Condenser::JSAnalyzer
+class Condenser::JSAnalyzer < Condenser::Processor
 
   WHITESPACE    = /[\s\p{Zs}\uFEFF\u2028\u2029]+/
   LINE_COMMENT  = /\/\/[^\n\r\u2028\u2029]*/
@@ -37,14 +37,12 @@ class Condenser::JSAnalyzer
   KEYWORDS['from'] = :from
   KEYWORDS.freeze
 
-  def self.setup(env)
-  end
-  
-  def self.call(environment, input)
-    new.call(environment, input)
-  end
-  
+  # The parser's state is kept on a copy, so an instance can be shared.
   def call(environment, input)
+    dup.analyze(environment, input)
+  end
+
+  def analyze(environment, input)
     @input = input
     @sourcefile = input[:source_file]
     @source = scannable(input[:source])

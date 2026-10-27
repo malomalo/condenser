@@ -40,8 +40,6 @@ class Condenser
       @pcv                  = nil
       @export               = nil
       @ecv                  = nil
-      @processors_loaded    = false
-      @processors           = Set.new
     end
     
     def path
@@ -254,15 +252,6 @@ class Condenser
       @type
     end
 
-    def load_processors
-      return if @processors_loaded
-
-      @processors_loaded = true
-      process
-      @processors.map! { |p| p.is_a?(String) ? Object.const_get(p) : p }
-      @environment.load_processors(*@processors)
-    end
-    
     def all_dependenies(deps, visited, meth, &block)
       deps.each do |dep|
         if !visited.include?(dep.source_file)
@@ -343,14 +332,11 @@ class Condenser
     # dependencies from the cache without processing it, and some setups
     # change how those resolve (EJX adds its asset directory to the load
     # path), so this runs before cached dependencies are resolved, and before
-    # processing. A registered instance with a #setup is set up too, after
-    # its class.
+    # processing.
     def load_pipeline_processors
       return if @pipeline_processors_loaded
       @pipeline_processors_loaded = true
-      @environment.load_processors(pipeline_processors.flat_map { |_, _, p|
-        p.is_a?(Class) ? [p] : [p.class, *(p if p.respond_to?(:setup))]
-      })
+      @environment.load_processors(pipeline_processors.map(&:last))
     end
 
     def cache_key
@@ -452,8 +438,7 @@ class Condenser
             file_dependencies: Set.new,
             directory_dependencies: Set.new,
             
-            depends_on: Set.new,
-            processors: Set.new
+            depends_on: Set.new
           }
         
           steps = processing_steps
@@ -461,11 +446,6 @@ class Condenser
           steps.each do |role, _, templator|
             next if role != :template
             data[:content_type].pop
-
-            templator_klass = (templator.is_a?(Class) ? templator : templator.class)
-            data[:processors] << templator_klass.name
-            @environment.load_processors(templator_klass)
-
             templator.call(@environment, data)
             data[:filename] = data[:filename].gsub(/\.#{extensions.last}$/, '')
           end
@@ -485,10 +465,6 @@ class Condenser
           transformed = false
           steps.each do |role, from_mime_type, processor, to_mime_type|
             next if role == :template
-
-            processor_klass = (processor.is_a?(Class) ? processor : processor.class)
-            data[:processors] << processor_klass.name
-            @environment.load_processors(processor_klass)
 
             case role
             when :preprocessor
@@ -537,8 +513,6 @@ class Condenser
           @env_dependencies = data[:env_dependencies]
           @default_export = data[:default_export]
           @exports = data[:exports]
-          @processors = data[:processors]
-          @processors_loaded = true
           @processed = true
           @type = data[:type]
 
@@ -568,9 +542,7 @@ class Condenser
       @env_dependencies = result[:env_dependencies] || []
       @default_export = result[:default_export]
       @exports = result[:exports]
-      @processors = result[:processors]
       @type = result[:type]
-      load_processors
 
       @processed = true
     end
@@ -655,7 +627,8 @@ class Condenser
 
     def export
       return @export if @export
-      
+      @environment.load_processors(@environment.exporters[content_type], @environment.minifier_for(content_type))
+
       @export = @environment.build do
         data = @environment.cache.fetch_if(Proc.new {"export/#{cache_key}/#{export_cache_version}/#{@environment.export_pipeline_digest(content_type)}"}, "export-deps/#{cache_key}") do
           process

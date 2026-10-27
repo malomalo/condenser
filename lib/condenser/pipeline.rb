@@ -41,9 +41,7 @@ class Condenser
         values.map do |value|
           pipline_to_json(value)
         end
-      elsif values.is_a?(Class) && values.respond_to?(:options)
-        { values.name => pipline_to_json(values.options) }
-      elsif values.is_a?(Class) || values.is_a?(Module)
+      elsif values.is_a?(Module)
         values.name
       elsif values.is_a?(String)
         @base ? values.delete_prefix(@base) : values
@@ -87,12 +85,22 @@ class Condenser
       @reverse_mapping = nil
     end
     
+    # Processors are registered as instances of Condenser::Processor, so a
+    # class raises an ArgumentError.
+    def check_processor!(engine)
+      return if engine.is_a?(Condenser::Processor)
+      raise ArgumentError, "#{engine.inspect} isn't a Condenser::Processor instance#{" (register #{engine.name}.new)" if engine.is_a?(Class)}"
+    end
+    private :check_processor!
+
     def register_template(mime_type, engine)
+      check_processor!(engine)
       @templates[mime_type] = engine
       @reverse_mapping = nil
     end
 
     def register_preprocessor(mime_type, engine)
+      check_processor!(engine)
       @preprocessors[mime_type] ||= []
       @preprocessors[mime_type] << engine
     end
@@ -106,17 +114,20 @@ class Condenser
     end
 
     def register_transformer(from_mime_type, to_mime_type, engine)
+      check_processor!(engine)
       @transformers[from_mime_type] ||= {}
       @transformers[from_mime_type][to_mime_type] = engine
       @reverse_mapping = nil
     end
     
     def register_postprocessor(mime_type, engine)
+      check_processor!(engine)
       @postprocessors[mime_type] ||= []
       @postprocessors[mime_type] << engine
     end
     
     def register_exporter(mime_type, engine)
+      check_processor!(engine)
       @exporters[mime_type] ||= []
       @exporters[mime_type] << engine
     end
@@ -130,6 +141,7 @@ class Condenser
     end
     
     def register_minifier(mime_type, engine)
+      check_processor!(engine)
       @minifiers[mime_type] = engine
     end
     

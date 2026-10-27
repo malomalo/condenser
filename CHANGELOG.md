@@ -4,12 +4,17 @@
 
 ### Breaking changes / upgrade notes
 
+- Processors (templates, preprocessors, transformers, postprocessors, exporters and minifiers) are instances of a `Condenser::Processor` subclass. Registering anything else, including a processor class like `register_minifier 'text/css', Condenser::SassMinifier`, raises an `ArgumentError`; register an instance, e.g. `Condenser::SassMinifier.new`. The built-in processors' class-level `call`, `setup`, `instance` and `options` are removed, and the default pipeline registers instances. Writers are unchanged.
+- `setup(environment)` is an instance method, called once per environment before the processor is first used and before the cached dependencies of an asset it processes are read. It's now called for exporters and minifiers too. `Condenser::Processor` defines `setup` (does nothing), `options` (`{}`), `name` and `call` (raises `NotImplementedError`). A processor class's `self.setup` is no longer called.
+- Optional gems and npm packages are loaded in `setup`, so they're only needed if an asset uses the processor: `LightningCSSExporter.new` and `LightningCSSMinifier.new` no longer raise without the `lightningcss` gem (setting up does, and so does `options`, which has its version). `JstTransformer` installs Babel into its npm path, or the environment's if it has none.
+- `RollupProcessor`, `PurgeCSSProcessor` and `TerserMinifier` are registered with their npm path, e.g. `RollupProcessor.new(npm_path)`; `PurgeCSSProcessor.new(npm_path, content: [...])` no longer defaults `content` to the HTML and JavaScript files under `base`.
+- The pipeline digests include each processor's `options` (`{}` by default), so cache keys and etags change and assets are rebuilt once.
 - `TailwindProcessor`'s `sources:` replaces `base:`, which is removed (passing it raises `ArgumentError`). Without `sources:`, automatic source detection scans the environment's `base`, the app's root, like the Tailwind CLI from its working directory, and it isn't watched; it raised "needs the TailwindProcessor's base:" before. With `sources:`, only those directories are scanned, as with `source(none)` and an `@source` for each. For a Rails app, `sources: ['app']` scans what `base: Rails.root.join('app')` did. A `source(...)` on the stylesheet's import replaces the environment's `base`, and the `sources:` are still scanned with it and with `source(none)`.
 
 ### Added
 
+- `Condenser::Processor`, the base class for processors (see "Writing a processor" in the README).
 - `TailwindProcessor`'s `sources:` option: the directories to scan, for templates in `app/`, `lib/` or a gem's `app/views`. They're relative to the environment's `base` or absolute, have to be existing directories, are recorded as dependencies and are part of the options, relative to the environment's `base` in the cache keys. They're watched, so a change there rebuilds the CSS in a running process, including one that got the CSS from a persistent cache.
-- A processor instance registered in the pipeline gets `setup(environment)` too, if it defines it, after its class's `setup`. It runs before an asset is processed and before its cached dependencies are read.
 
 - `RolldownProcessor`'s `module_types:` option maps file extensions to Rolldown module types, e.g. `module_types: { png: :dataurl, ttf: :base64 }`, to import images, fonts and other files into a bundle. The files are found through the load paths, relative to the importer, by absolute path or through `aliases:`, and loaded by Rolldown. A module type is used instead of a transformer for its extension (e.g. `svg: :text`). The option is part of the export cache key and etag.
 

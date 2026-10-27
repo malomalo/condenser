@@ -1,16 +1,17 @@
 require 'test_helper'
 
 # A processor whose setup adds a directory to the load path, like EJX does.
-class PathAddingProcessor
+class PathAddingProcessor < Condenser::Processor
   class << self
     attr_accessor :path
   end
 
-  def self.setup(environment)
+  def setup(environment)
+    path = self.class.path
     environment.append_path(path) if !environment.path.include?(path)
   end
 
-  def self.call(environment, input)
+  def call(environment, input)
   end
 end
 
@@ -487,7 +488,7 @@ class CacheTest < ActiveSupport::TestCase
     # A new environment sharing the cache each time, like a deploy
     build = lambda do
       env = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: @npm_dir, base: @path, cache: @env.cache)
-      env.register_preprocessor('application/javascript', PathAddingProcessor)
+      env.register_preprocessor('application/javascript', PathAddingProcessor.new)
       env.find('main.js').export
     end
 
