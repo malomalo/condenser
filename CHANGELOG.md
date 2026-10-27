@@ -27,6 +27,7 @@
 - `RolldownProcessor` resolves npm packages like Node, from the importing file up, so a package gets the dependency in its own nested `node_modules` instead of the top-level version of it.
 - An import with an explicit extension only resolves to a file with that extension, or one converted to it: `import logo from 'images/logo.png'` no longer bundles `images/logo.svg`'s JavaScript module when both exist. Rolldown is only given the file it asked to load.
 - The attributes passed to an SVG's JavaScript module follow DOM conventions: `null`, `undefined` and `false` remove the attribute and `true` sets it to `""`, instead of setting the strings `"null"`, `"undefined"`, `"false"` and `"true"`.
+- `NodeProcessor#npm_install` holds an exclusive lock on `.condenser-npm.lock` in the npm path while it checks what's missing and runs `npm install`, so processes installing into the same npm path at once (e.g. parallel tests) no longer overwrite each other's `node_modules` and `package.json`. It creates the npm path and a `package.json` there if they're missing, so npm doesn't install into a parent directory's `package.json`.
 
 ### Removed
 
