@@ -65,7 +65,7 @@ class RolldownWorkerTest < ActiveSupport::TestCase
   # skip the build.
   def export(name, processor: @processor, source: nil)
     asset = @env.find(name)
-    input = { source: source || asset.source.dup, source_file: asset.source_file, filename: asset.filename.dup, content_types: asset.content_types, map: nil }
+    input = { source: source || asset.source.dup, source_file: asset.source_file, filename: asset.filename.dup, content_types: asset.content_types, sourcemap: nil }
     processor.call(@env, input)[:source]
   end
 

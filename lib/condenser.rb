@@ -40,6 +40,7 @@ class Condenser
   autoload :ZlibWriter,       'condenser/writers/zlib_writer'
   autoload :BrotliWriter,     'condenser/writers/brotli_writer'
   autoload :BuildCache,       'condenser/build_cache'
+  autoload :Sourcemap,        'condenser/sourcemap'
   autoload :NodeWorker,       'condenser/node_worker'
   autoload :ParseHelpers,     'condenser/helpers/parse_helpers'
   
@@ -48,6 +49,9 @@ class Condenser
   end
   
   attr_accessor :logger, :digestor, :base
+  attr_reader :sourcemap
+
+  SOURCEMAPS = [false, true, :linked, :headers].freeze
   
   # base: If base is passed assets cache_keys will be realitve to this.
   #       This allows deploy systems like Capistrano to take advantage of the
@@ -55,9 +59,13 @@ class Condenser
   # listen: Whether to start a file listener (Listen) on the load paths and
   #         watched paths so a running process notices changes. Defaults to
   #         true; pass false for one-off builds like precompiling.
-  def initialize(*path, logger: nil, digestor: nil, cache: nil, pipeline: nil, npm_path: nil, base: nil, listen: true, &block)
+  # sourcemap: Whether to export source maps, and how to link them: false
+  #            (the default), true, :linked (comment only) or :headers
+  #            (SourceMap header only). See #sourcemap=.
+  def initialize(*path, logger: nil, digestor: nil, cache: nil, pipeline: nil, npm_path: nil, base: nil, listen: true, sourcemap: false, &block)
     @logger = logger || Logger.new($stdout, level: :info)
     @listen = listen
+    self.sourcemap = sourcemap
     @path = []
     append_path(path)
     self.npm_path = npm_path
@@ -87,6 +95,17 @@ class Condenser
   
   def configure(&block)
     instance_eval(&block)
+  end
+
+  # Exporters that support it (RolldownProcessor) export a source map when
+  # this is truthy. true and :linked end the export with a sourceMappingURL
+  # comment; true and :headers have Condenser::Server send a SourceMap header.
+  # It's part of the export cache key and etag, so set it before building.
+  def sourcemap=(value)
+    unless SOURCEMAPS.include?(value)
+      raise ArgumentError, "sourcemap must be false, true, :linked or :headers, got #{value.inspect}"
+    end
+    @sourcemap = value
   end
 end
 

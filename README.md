@@ -267,6 +267,11 @@ processor class, raises an `ArgumentError`. An instance can be registered in
 several environments and called from several threads at once, so keep
 per-call state out of instance variables.
 
+An exporter can set `input[:sourcemap]` to a source map's JSON (see
+[Source maps](#source-maps)). A minifier that changes `input[:source]` updates
+`input[:sourcemap]` to match, as `TerserMinifier` does, or sets it to `nil`;
+Condenser exports whatever map the minifier leaves.
+
 ### Depending on files that aren't assets
 
 A processor whose output depends on files that aren't assets, like the
@@ -557,6 +562,51 @@ process restarts or a new processor is created.
 
 An import that can't be resolved, as an asset or an npm package, fails the
 build with an error naming the importing file and the import.
+
+#### Source maps
+
+Source maps are an environment setting, off by default:
+
+```ruby
+condenser = Condenser.new('app/assets', sourcemap: true)
+condenser.sourcemap = :linked
+```
+
+| `sourcemap` | Map exported | `//# sourceMappingURL` comment | `SourceMap` header (`Condenser::Server`) |
+|---|---|---|---|
+| `false` (default) | no | no | no |
+| `true` | yes | yes | yes |
+| `:linked` | yes | yes | no |
+| `:headers` | yes | no | yes |
+
+Anything else raises an `ArgumentError`. `RolldownProcessor` exports a map
+whenever the setting is on. The setting is part of the export cache key and
+etag, so switching between values rebuilds the bundle. Set it before
+building, like the pipeline.
+
+The map is at the bundle's path plus `.map` (`application-<etag>.js.map`), and
+the etag doesn't depend on the bundle's output, so the comment doesn't change
+it. Precompiling writes the map next to the bundle with the writers registered
+for `application/json` (with the default writers, also `.map.gz` and
+`.map.br`), and lists it as the bundle's `sourcemap` in the manifest (`null` for an
+asset without one).
+`Condenser::Server` serves it for every value but `false`.
+
+Precompiled bundles are usually served by nginx or a CDN, not
+`Condenser::Server`, so nothing sends the `SourceMap` header for them. With
+`:headers`, a precompiled bundle then has its map on disk but no link to it,
+unless the web server adds the header. That's the setup for an error tracker:
+upload the `.map` files from the manifest and don't serve them. There's no
+separate "hidden" value; `:headers` is it.
+
+The map's `sources` are relative to the environment's `base`, then the load
+paths, then the npm path (e.g. `node_modules/<package>/index.js`), so it's the
+same on every checkout, and `sourcesContent` has the sources. The sources are
+what Rolldown is given, after Condenser's preprocessing (e.g. a template's
+generated JavaScript). Rolldown's `minify: true` is covered by the map, and so
+is a registered `TerserMinifier`, which maps its output back through Rolldown's
+map. Another JavaScript minifier has to update or clear the map itself (see
+[Writing a processor](#writing-a-processor)).
 
 ### Importing JSON
 

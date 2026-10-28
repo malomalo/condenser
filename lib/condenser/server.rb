@@ -59,6 +59,11 @@ class Condenser
         path = path.sub("-#{fingerprint}", '')
       end
 
+      # A JavaScript export's source map is at its URL plus ".map".
+      if sourcemap = path.end_with?('.js.map')
+        path = path.delete_suffix('.map')
+      end
+
       # URLs containing a `".."` are rejected for security reasons.
       if forbidden_request?(path)
         return forbidden_response(env)
@@ -76,6 +81,7 @@ class Condenser
 
       # Look up the asset.
       asset = @condenser.find_export(path, npm: true)
+      asset = asset&.sourcemap_export if sourcemap
       if asset.nil?
         status = :not_found
       elsif fingerprint && asset.etag != fingerprint
@@ -136,7 +142,7 @@ class Condenser
       # Returns a 200 OK response tuple
       def ok_response(asset, env)
         if head_request?(env)
-          [ 200, headers(env, asset, 0), [] ]
+          [ 200, headers(env, asset, asset.length), [] ]
         else
           [ 200, headers(env, asset, asset.length), [asset.to_s] ]
         end
@@ -150,7 +156,7 @@ class Condenser
       # Returns a 400 Forbidden response tuple
       def bad_request_response(env)
         if head_request?(env)
-          [ 400, { "content-type" => "text/plain", "content-length" => "0" }, [] ]
+          [ 400, { "content-type" => "text/plain", "content-length" => "11" }, [] ]
         else
           [ 400, { "content-type" => "text/plain", "content-length" => "11" }, [ "Bad Request" ] ]
         end
@@ -159,7 +165,7 @@ class Condenser
       # Returns a 403 Forbidden response tuple
       def forbidden_response(env)
         if head_request?(env)
-          [ 403, { "content-type" => "text/plain", "content-length" => "0" }, [] ]
+          [ 403, { "content-type" => "text/plain", "content-length" => "9" }, [] ]
         else
           [ 403, { "content-type" => "text/plain", "content-length" => "9" }, [ "Forbidden" ] ]
         end
@@ -168,7 +174,7 @@ class Condenser
       # Returns a 404 Not Found response tuple
       def not_found_response(env)
         if head_request?(env)
-          [ 404, { "content-type" => "text/plain", "content-length" => "0", "x-cascade" => "pass" }, [] ]
+          [ 404, { "content-type" => "text/plain", "content-length" => "9", "x-cascade" => "pass" }, [] ]
         else
           [ 404, { "content-type" => "text/plain", "content-length" => "9", "x-cascade" => "pass" }, [ "Not found" ] ]
         end
@@ -180,7 +186,7 @@ class Condenser
 
       def precondition_failed_response(env)
         if head_request?(env)
-          [ 412, { "content-type" => "text/plain", "content-length" => "0", "x-cascade" => "pass" }, [] ]
+          [ 412, { "content-type" => "text/plain", "content-length" => "19", "x-cascade" => "pass" }, [] ]
         else
           [ 412, { "content-type" => "text/plain", "content-length" => "19", "x-cascade" => "pass" }, [ "Precondition Failed" ] ]
         end
@@ -283,7 +289,8 @@ class Condenser
         # Set content length header
         headers["content-length"] = length.to_s
 
-        if asset&.sourcemap
+        # For true and :headers; :linked has the comment instead.
+        if asset.sourcemap && [true, :headers].include?(@condenser.sourcemap)
           headers['sourcemap'] = env['SCRIPT_NAME'] + env['PATH_INFO'] + '.map'
         end
         
@@ -305,7 +312,7 @@ class Condenser
       #     # => "0aa2105d29558f3eb790d411d7d8fb66"
       #
       def path_fingerprint(path)
-        path[/-([0-9a-f]{7,128})\.[^.]+\z/, 1]
+        path[/-([0-9a-f]{7,128})\.[^.]+(?:\.map)?\z/, 1]
       end
       
       def absolute_path?(path)

@@ -431,7 +431,7 @@ class Condenser
             filename: @filename.dup,
             content_type: mime_types,
 
-            map: nil,
+            sourcemap: nil,
             linked_assets: Set.new,
             process_dependencies: Set.new,
             export_dependencies: Set.new,
@@ -500,7 +500,7 @@ class Condenser
           # Do this here and at the end so cache_key can be calculated if we
           # run this block
           @source = data[:source]
-          @sourcemap = data[:map]
+          @sourcemap = data[:sourcemap]
           @filename = data[:filename]
           @content_types = data[:content_type]
           @digest = data[:digest]
@@ -529,7 +529,7 @@ class Condenser
       end
       
       @source = result[:source]
-      @sourcemap = result[:map]
+      @sourcemap = result[:sourcemap]
       @filename = result[:filename]
       @content_types = result[:content_type]
       @digest = result[:digest]
@@ -659,6 +659,13 @@ class Condenser
           if minifier = @environment.minifier_for(content_type)
             @environment.logger.info { "Minifing #{self.filename} with #{minifier.name}" }
             minifier.call(@environment, data)
+          end
+
+          # The map is named after the export's path, whose etag doesn't
+          # depend on the output, so the comment doesn't change the name.
+          if data[:sourcemap] && [true, :linked].include?(@environment.sourcemap)
+            map_name = File.basename(data[:filename]).sub(/\.(\w+)$/) { |ext| "-#{data[:etag]}#{ext}" }
+            data[:source] = data[:source] + "#{"\n" unless data[:source].end_with?("\n")}//# sourceMappingURL=#{map_name}.map\n"
           end
         
           data[:digest] = @environment.digestor.digest(data[:source])

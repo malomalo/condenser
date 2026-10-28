@@ -372,7 +372,7 @@ class Condenser::RollupProcessor < Condenser::Processor
             when 'load'
               importee = message['args'].first
               if importee == @entry
-                { code: @input[:source], map: @input[:map] }
+                { code: @input[:source], map: @input[:sourcemap] }
               elsif importee.end_with?('*')
                 importees = @environment.resolve(importee, importer ? File.dirname(@entry == importer ? @input[:source_file] : importer) : nil, accept: @input[:content_types].last, npm: true)
                 code = String.new

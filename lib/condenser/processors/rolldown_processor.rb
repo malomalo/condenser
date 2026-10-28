@@ -130,8 +130,19 @@ class Condenser::RolldownProcessor < Condenser::Processor
         minify: @minify,
         moduleTypes: @module_types.to_h { |ext, type| [".#{ext}", type] }
       }
+      if environment.sourcemap
+        config[:sourcemap] = true
+        config[:sourceRoots] = [config[:cwd], *environment.path, npm_path].compact.uniq
+      end
 
-      input[:source] = exec_runtime(config)
+      result = exec_runtime(config)
+      if environment.sourcemap
+        # Asset#export adds the sourceMappingURL comment.
+        input[:source] = result['code']
+        input[:sourcemap] = result['map']
+      else
+        input[:source] = result
+      end
       input[:type] = 'module'
       input
     end
