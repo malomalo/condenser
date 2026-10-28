@@ -2,8 +2,9 @@
 
 class Condenser::JstTransformer < Condenser::NodeProcessor
   
-  def self.setup(environment)
-    ::Condenser::NodeProcessor.new(environment.npm_path).npm_install('@babel/core', '@babel/preset-env')
+  # Babel is installed into the npm_path, or the environment's if it's nil.
+  def setup(environment)
+    ::Condenser::NodeProcessor.new(npm_path || environment.npm_path).npm_install('@babel/core', '@babel/preset-env')
   end
 
   def call(environment, input)
@@ -20,7 +21,7 @@ class Condenser::JstTransformer < Condenser::NodeProcessor
     }
 
     result = exec_worker(<<-JS, input[:source], opts)
-      const babel = require("#{npm_module_path('@babel/core')}");
+      const babel = require("#{File.join(npm_path || environment.npm_path, 'node_modules', '@babel/core')}");
 
       const handle = (source, options) => {
         let scope = [['document', 'window']];
@@ -125,9 +126,7 @@ class Condenser::JstTransformer < Condenser::NodeProcessor
     end
     
     environment.preprocessors['application/javascript']&.each do |processor|
-      processor_klass = (processor.is_a?(Class) ? processor : processor.class)
-      input[:processors] << processor_klass.name
-      environment.load_processors(processor_klass)
+      environment.load_processors(processor)
       processor.call(environment, input)
     end
   end

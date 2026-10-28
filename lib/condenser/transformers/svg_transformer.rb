@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class Condenser::SVGTransformer
+class Condenser::SVGTransformer < Condenser::Processor
   
   autoload :Base, File.expand_path('../svg_transformer/base', __FILE__)
   autoload :Tag, File.expand_path('../svg_transformer/tag', __FILE__)
@@ -9,10 +9,7 @@ class Condenser::SVGTransformer
   autoload :Value, File.expand_path('../svg_transformer/value', __FILE__)
   autoload :VarGenerator, File.expand_path('../svg_transformer/var_generator', __FILE__)
   
-  def self.setup(env)
-  end
-
-  def self.call(environment, input)
+  def call(environment, input)
     # SVGs aren't charset-detected, so the source is still binary. The
     # attribute values go through JSON.generate, which needs UTF-8 for
     # non-ASCII text.

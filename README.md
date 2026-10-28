@@ -228,6 +228,50 @@ change after it has found an asset; create a new environment to see them.
 `Rake::CondenserTask`'s default environment doesn't listen. When you set your
 own `environment` on the task, pass `listen: false` to it.
 
+### Writing a processor
+
+Templates, preprocessors, transformers, postprocessors, exporters and minifiers
+are instances of a `Condenser::Processor` subclass. `call(environment, input)`
+changes `input[:source]` (and the other keys of `input`) in place:
+
+```ruby
+class BannerProcessor < Condenser::Processor
+  def initialize(banner)
+    @banner = banner
+  end
+
+  # Gems and npm packages the processor needs are loaded here, so they're
+  # only needed if an asset uses it.
+  def setup(environment)
+    require 'banner'
+  end
+
+  # What changes the output besides the source; it's part of the cache keys.
+  def options
+    { banner: @banner }
+  end
+
+  def call(environment, input)
+    input[:source] = "/* #{@banner} */\n#{input[:source]}"
+  end
+end
+
+env.register_postprocessor 'text/css', BannerProcessor.new('(c) Example')
+```
+
+`setup(environment)` is called once per environment, before the processor is
+first used and before the cached dependencies of an asset it processes are
+read, so it can add to the load path. By default it does nothing and `options`
+is `{}`. Registering anything other than a `Condenser::Processor`, like a
+processor class, raises an `ArgumentError`. An instance can be registered in
+several environments and called from several threads at once, so keep
+per-call state out of instance variables.
+
+An exporter can set `input[:sourcemap]` to a source map's JSON (see
+[Source maps](#source-maps)). A minifier that changes `input[:source]` updates
+`input[:sourcemap]` to match, as `TerserMinifier` does, or sets it to `nil`;
+Condenser exports whatever map the minifier leaves.
+
 ### Depending on files that aren't assets
 
 A processor whose output depends on files that aren't assets, like the
@@ -364,33 +408,59 @@ v4, which needs [Node.js](https://nodejs.org/). Other stylesheets are left as
 they are. Register it as a `text/css` preprocessor:
 
 ```ruby
-env.register_preprocessor 'text/css', Condenser::TailwindProcessor.new(env.npm_path, base: Rails.root)
+env.register_preprocessor 'text/css', Condenser::TailwindProcessor.new(env.npm_path)
 ```
 
 ```css
 /* app/assets/stylesheets/application.css */
 @import "tailwindcss";
-@source "../../../vendor/components";
 ```
 
 When the processor is created, `tailwindcss`, `@tailwindcss/node` and
 `@tailwindcss/oxide` are installed with `npm` into the npm path if they aren't
 there, and their versions are read for the cache keys. Tailwind runs in a node
 process that's kept running between builds, and each build scans and compiles
-from scratch, so the output is the same as the `tailwindcss` CLI's, with
-`base:` as its `--cwd`, and a class removed from the templates is removed from
-the CSS.
+from scratch, so the output is the same as the `tailwindcss` CLI's, and a class
+removed from the templates is removed from the CSS.
 
-`base:` is the directory Tailwind's automatic source detection scans, like the
-CLI's `--cwd`. Without it a stylesheet has to say what to scan with
-`@import "tailwindcss" source("../views")` or `source(none)` and `@source`.
-`@source` paths are relative to the stylesheet, as in Tailwind.
+Without `sources:`, Tailwind's automatic source detection scans the
+environment's `base`, like the Tailwind CLI run from the app's root. That
+directory isn't watched, since it has `tmp/`, `public/assets` and the like in
+it, so an app that scans it watches what it needs itself (see below). Without
+an environment `base`, a stylesheet has to say what to scan with `@import
+"tailwindcss" source("../views")` or `source(none)` and `@source`.
+
+`sources:` scans exactly the directories given instead, as if the stylesheet
+had `@import "tailwindcss" source(none);` and an `@source` for each, so the
+stylesheet stays just `@import "tailwindcss"`. Each is relative to the
+environment's `base` or absolute, and has to be an existing directory, or the
+build raises. For a Rails app, scan `app/`, plus any templates in `lib/` and
+in gems or engines, by absolute path:
+
+```ruby
+env.register_preprocessor 'text/css', Condenser::TailwindProcessor.new(env.npm_path, sources: [
+  'app',
+  'lib/components',
+  File.join(Gem.loaded_specs['some_engine'].full_gem_path, 'app/views')
+])
+```
+
+What the stylesheet says still applies, as Tailwind defines it. `source(...)`
+on the import replaces the environment's `base` as the directory automatic
+detection scans, and the `sources:` are still scanned with it. `source(none)`
+turns off scanning the `base`, which `sources:` already does, and the
+`sources:` are still scanned. `@source` and `@source not` lines are added on
+top, relative to the stylesheet. So `sources:` only replaces the default, the
+environment's `base`, and is always scanned.
+
+`sources:` is part of the processor's options, so changing it rebuilds the
+CSS; paths under the environment's `base` are relative to it in the cache
+keys, so the cache survives a new deploy directory.
 
 A stylesheet that's built separately, and only needs `@apply`, `theme()` or
 custom variants, can `@reference` the main one instead of importing Tailwind
 again. It gets the main stylesheet's theme, utilities and variants but none of
-its CSS, and since it has no utilities to generate nothing is scanned and it
-doesn't need `base:`:
+its CSS, and since it has no utilities to generate nothing is scanned:
 
 ```css
 /* app/assets/stylesheets/admin.css */
@@ -406,17 +476,22 @@ Every file Tailwind scans is recorded as a file dependency, and every
 directory it scans as a directory dependency (see [Depending on files that
 aren't assets](#depending-on-files-that-arent-assets)), so editing a template's
 classes, or adding a template, rebuilds the CSS. A running process only
-notices that if the files are on the load path or a watched path, so watch the
-directories Tailwind scans that aren't, usually the app's root:
+notices that if the files are on the load path or a watched path. The
+processor watches (see `env.watch`) the `sources:`, from its `setup`, which
+runs before a stylesheet is built or its cached dependencies are read, so
+they're watched in a process that gets the CSS from a persistent cache too.
+That covers a Rails app's views and components, and the gems' templates,
+which aren't on the load path.
+
+Without `sources:`, or for `source(...)` and `@source` paths, watch the
+directories Tailwind scans yourself:
 
 ```ruby
-env.watch(Rails.root, ignore: ['public/assets', 'storage'])
+env.watch(Rails.root, ignore: ['public/assets', 'storage', 'tmp', 'log'])
 ```
 
-The processor doesn't call `env.watch` itself: what to ignore under the root
-is up to the app, and a process that gets the CSS from a persistent cache
-doesn't run the processor at all. It logs a warning for each directory it
-scans that isn't watched.
+With a listener, the processor logs a warning for each directory it scans that
+isn't watched.
 
 `minify: true` minifies the CSS like `tailwindcss --minify`, with Tailwind's
 own Lightning CSS pass. Condenser's default CSS minifier,
@@ -427,7 +502,7 @@ Tailwind's output differently and makes minified output bigger.
 
 ```ruby
 env.unregister_minifier 'text/css'
-env.register_preprocessor 'text/css', Condenser::TailwindProcessor.new(env.npm_path, base: Rails.root, minify: true)
+env.register_preprocessor 'text/css', Condenser::TailwindProcessor.new(env.npm_path, minify: true)
 ```
 
 ## Javascript, ES#, & ES Modules
@@ -488,6 +563,51 @@ process restarts or a new processor is created.
 An import that can't be resolved, as an asset or an npm package, fails the
 build with an error naming the importing file and the import.
 
+#### Source maps
+
+Source maps are an environment setting, off by default:
+
+```ruby
+condenser = Condenser.new('app/assets', sourcemap: true)
+condenser.sourcemap = :linked
+```
+
+| `sourcemap` | Map exported | `//# sourceMappingURL` comment | `SourceMap` header (`Condenser::Server`) |
+|---|---|---|---|
+| `false` (default) | no | no | no |
+| `true` | yes | yes | yes |
+| `:linked` | yes | yes | no |
+| `:headers` | yes | no | yes |
+
+Anything else raises an `ArgumentError`. `RolldownProcessor` exports a map
+whenever the setting is on. The setting is part of the export cache key and
+etag, so switching between values rebuilds the bundle. Set it before
+building, like the pipeline.
+
+The map is at the bundle's path plus `.map` (`application-<etag>.js.map`), and
+the etag doesn't depend on the bundle's output, so the comment doesn't change
+it. Precompiling writes the map next to the bundle with the writers registered
+for `application/json` (with the default writers, also `.map.gz` and
+`.map.br`), and lists it as the bundle's `sourcemap` in the manifest (`null` for an
+asset without one).
+`Condenser::Server` serves it for every value but `false`.
+
+Precompiled bundles are usually served by nginx or a CDN, not
+`Condenser::Server`, so nothing sends the `SourceMap` header for them. With
+`:headers`, a precompiled bundle then has its map on disk but no link to it,
+unless the web server adds the header. That's the setup for an error tracker:
+upload the `.map` files from the manifest and don't serve them. There's no
+separate "hidden" value; `:headers` is it.
+
+The map's `sources` are relative to the environment's `base`, then the load
+paths, then the npm path (e.g. `node_modules/<package>/index.js`), so it's the
+same on every checkout, and `sourcesContent` has the sources. The sources are
+what Rolldown is given, after Condenser's preprocessing (e.g. a template's
+generated JavaScript). Rolldown's `minify: true` is covered by the map, and so
+is a registered `TerserMinifier`, which maps its output back through Rolldown's
+map. Another JavaScript minifier has to update or clear the map itself (see
+[Writing a processor](#writing-a-processor)).
+
 ### Importing JSON
 
 With Rolldown, a `.json` file can be imported like any other asset, from the
@@ -542,7 +662,7 @@ doesn't support `module_types:`.
 
 ```ruby
 condenser.unregister_exporter('application/javascript')
-condenser.register_exporter('application/javascript', Condenser::RollupProcessor)
+condenser.register_exporter('application/javascript', Condenser::RollupProcessor.new(condenser.npm_path))
 ```
 
 
@@ -581,7 +701,7 @@ config.assets.css_minifier = :lightning_css
 If you're not using Rails, configure this directly on the "environment".
 
 ``` ruby
-environment.register_minifier 'text/css', Condenser::LightningCSSMinifier
+environment.register_minifier 'text/css', Condenser::LightningCSSMinifier.new
 ```
 
 `Condenser.new`'s default pipeline minifies JavaScript with Rolldown (see
@@ -611,7 +731,7 @@ environment.register_minifier 'text/css', Condenser::LightningCSSMinifier.new(ta
 already use the `sass-embedded` gem and don't want another native gem:
 
 ``` ruby
-environment.register_minifier 'text/css', Condenser::SassMinifier
+environment.register_minifier 'text/css', Condenser::SassMinifier.new
 ```
 
 If you are using Condenser directly with a Rack app, don't forget to add

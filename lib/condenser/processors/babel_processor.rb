@@ -140,7 +140,7 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
       end
     else
       input[:source] = result['code']
-      input[:map] = result['map']
+      input[:sourcemap] = result['map']
       input[:export_dependencies] = result['imports'].map do |i|
         i.end_with?('.js') ? i : "#{i}.js"
       end

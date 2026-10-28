@@ -1,27 +1,15 @@
 # frozen_string_literal: true
 
 require 'json'
+require 'fileutils'
 require 'tempfile'
 require 'open3'
 require 'securerandom'
 
 class Condenser
-  class NodeProcessor
+  class NodeProcessor < Processor
     
     attr_accessor :npm_path
-    
-    def self.setup(environment)
-    end
-  
-    def name
-      self.class.name
-    end
-
-    def self.call(environment, input)
-      @instances ||= {}
-      @instances[environment] ||= new(environment.npm_path)
-      @instances[environment].call(environment, input)
-    end
     
     def initialize(npm_dir = nil)
       self.npm_path = npm_dir
@@ -192,18 +180,23 @@ class Condenser
     def npm_install(*packages)
       return if packages.empty?
       packages.flatten!
-      packages.select! do |package|
-        !Dir.exist?(File.join(npm_module_path, package))
-      end
-      
-      Dir.chdir(npm_path) do
-        if !packages.empty?
-          if File.exist?(File.join(npm_path, 'package.json'))
-            system("npm", "install", "--silent", *packages)
-          else
-            system("npm", "install", "--silent", *packages)
-          end
-        end
+
+      # Processes sharing the npm path (e.g. parallel tests) install one at a
+      # time, or they overwrite each other's node_modules and package.json.
+      # What's missing is checked once the lock is held, so a process that
+      # waited doesn't reinstall what another just installed. Each call opens
+      # the file, so threads lock each other out too.
+      FileUtils.mkdir_p(npm_path)
+      File.open(File.join(npm_path, '.condenser-npm.lock'), File::RDWR | File::CREAT) do |lock|
+        lock.flock(File::LOCK_EX)
+        packages.reject! { |package| Dir.exist?(npm_module_path(package)) }
+        return if packages.empty?
+
+        # Without a package.json npm installs into the nearest parent
+        # directory that has one.
+        package_json = File.join(npm_path, 'package.json')
+        File.write(package_json, "{}\n") if !File.exist?(package_json)
+        system("npm", "install", "--silent", *packages, chdir: npm_path)
       end
     end
     

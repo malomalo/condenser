@@ -178,6 +178,11 @@ class ServerTest < ActiveSupport::TestCase
     assert_equal 412, last_response.status
 
     refute last_response.headers['ETag']
+
+    head "/assets/foo.js", {}, 'HTTP_IF_MATCH' => '"000"'
+    assert_equal 412, last_response.status
+    assert_equal "19", last_response.headers['Content-Length']
+    assert_equal "", last_response.body
   end
 
   test "not found with if-match" do
@@ -215,7 +220,7 @@ class ServerTest < ActiveSupport::TestCase
 
     head "/assets/foo-0000000000000000000000000000000000000000.js"
     assert_equal 404, last_response.status
-    assert_equal "0", last_response.headers['Content-Length']
+    assert_equal "9", last_response.headers['Content-Length']
     assert_equal "", last_response.body
   end
 
@@ -282,7 +287,7 @@ class ServerTest < ActiveSupport::TestCase
 
     head "/assets/.-0000000./etc/passwd"
     assert_equal 403, last_response.status
-    assert_equal "0", last_response.headers['Content-Length']
+    assert_equal "9", last_response.headers['Content-Length']
     assert_equal "", last_response.body
   end
 
@@ -325,7 +330,7 @@ class ServerTest < ActiveSupport::TestCase
     head "/assets/foo.js"
     assert_equal 200, last_response.status
     assert_equal "application/javascript", last_response.headers['Content-Type']
-    assert_equal "0", last_response.headers['Content-Length']
+    assert_equal "15", last_response.headers['Content-Length']
     assert_equal "", last_response.body
 
     post "/assets/foo.js"
@@ -341,6 +346,11 @@ class ServerTest < ActiveSupport::TestCase
   test "invalid URLs" do
     get "/assets/%E2%EF%BF%BD%A6.js"
     assert_equal 400, last_response.status
+
+    head "/assets/%E2%EF%BF%BD%A6.js"
+    assert_equal 400, last_response.status
+    assert_equal "11", last_response.headers['Content-Length']
+    assert_equal "", last_response.body
   end
 
 end

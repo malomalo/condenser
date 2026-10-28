@@ -109,7 +109,7 @@ class Condenser
     # Cleanup old assets in the compile directory. By default it will keep the
     # latest version and remove any other files over 4 weeks old.
     def clean(age = 2419200)
-      clean_dir(@dir, @data.values.map{ |v| v[:path] }, Time.now - age)
+      clean_dir(@dir, @data.values.flat_map { |v| [v[:path], v[:sourcemap]].compact }, Time.now - age)
     end
 
     def clean_dir(dir, assets, age)
