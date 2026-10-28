@@ -80,8 +80,9 @@ class Condenser
       files
     end
 
+    # The source map as an asset, or nil if there's none.
     def sourcemap_export
-      Condenser::Sourcemap.new(path: sourcemap_path, filename: "#{filename}.map", source: @sourcemap, content_types: ['application/json'])
+      Condenser::Sourcemap.new(path: sourcemap_path, filename: "#{filename}.map", source: @sourcemap, etag: etag) if @sourcemap
     end
     
     def ext

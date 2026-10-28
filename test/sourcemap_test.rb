@@ -347,6 +347,8 @@ class SourcemapTest < ActiveSupport::TestCase
     assert_equal 200, last_response.status
     assert_equal 'application/json', last_response.headers['Content-Type']
     assert_includes last_response.headers['Cache-Control'], 'immutable'
+    assert_equal %("#{export.etag}"), last_response.headers['ETag']
+    assert_nil last_response.headers['SourceMap']
     assert_equal export.sourcemap, last_response.body
 
     get "/assets/main.js.map"
@@ -355,7 +357,10 @@ class SourcemapTest < ActiveSupport::TestCase
 
     head "/assets/#{export.path}.map"
     assert_equal 200, last_response.status
-    assert_equal export.sourcemap.bytesize.to_s, last_response.headers['Content-Length']
+    assert_empty last_response.body
+
+    get "/assets/main.js.map", {}, 'HTTP_IF_NONE_MATCH' => %("#{export.etag}")
+    assert_equal 304, last_response.status
 
     get "/assets/main-#{'0' * 64}.js.map"
     assert_equal 404, last_response.status

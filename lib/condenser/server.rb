@@ -81,7 +81,8 @@ class Condenser
 
       # Look up the asset.
       asset = @condenser.find_export(path, npm: true)
-      if asset.nil? || (sourcemap && !asset.sourcemap)
+      asset = asset&.sourcemap_export if sourcemap
+      if asset.nil?
         status = :not_found
       elsif fingerprint && asset.etag != fingerprint
         status = :not_found
@@ -96,7 +97,7 @@ class Condenser
       case status
       when :ok
         logger.info "#{msg} 200 OK (#{time_elapsed.call}ms)"
-        sourcemap ? sourcemap_response(asset, env) : ok_response(asset, env)
+        ok_response(asset, env)
       when :not_modified
         logger.info "#{msg} 304 Not Modified (#{time_elapsed.call}ms)"
         not_modified_response(env, if_none_match)
@@ -145,14 +146,6 @@ class Condenser
         else
           [ 200, headers(env, asset, asset.length), [asset.to_s] ]
         end
-      end
-
-      # Returns a 200 OK response tuple with the export's source map, which
-      # changes when the export does, so it has the same etag.
-      def sourcemap_response(asset, env)
-        headers = { "content-type" => "application/json", "content-length" => asset.sourcemap.bytesize.to_s }
-        headers.merge!(cache_headers(env, asset.etag))
-        [ 200, headers, head_request?(env) ? [] : [asset.sourcemap] ]
       end
 
       # Returns a 304 Not Modified response tuple
