@@ -3,7 +3,7 @@ require 'rack/builder'
 require 'rack/test'
 require 'rack/lint'
 
-class RolldownSourcemapTest < ActiveSupport::TestCase
+class SourcemapTest < ActiveSupport::TestCase
   include Rack::Test::Methods
 
   BASE64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
@@ -100,28 +100,58 @@ class RolldownSourcemapTest < ActiveSupport::TestCase
     [map['sources'][segment[1]], segment[2], segment[3]]
   end
 
-  test 'sourcemap must be false, :linked or :hidden' do
-    error = assert_raises(ArgumentError) { Condenser::RolldownProcessor.new(@env.npm_path, sourcemap: true) }
-    assert_equal 'sourcemap must be false, :linked or :hidden, got true', error.message
+  test 'sourcemap is false by default' do
+    assert_equal false, @env.sourcemap
+    assert_equal false, Condenser.new(@path, listen: false, pipeline: false).sourcemap
   end
 
-  test 'sourcemap is in the options when enabled' do
-    assert_nil Condenser::RolldownProcessor.new(@env.npm_path).options[:sourcemap]
-    assert_equal :linked, Condenser::RolldownProcessor.new(@env.npm_path, sourcemap: :linked).options[:sourcemap]
+  test 'sourcemap must be false, true, :linked or :headers' do
+    error = assert_raises(ArgumentError) { Condenser.new(@path, listen: false, sourcemap: :hidden) }
+    assert_equal 'sourcemap must be false, true, :linked or :headers, got :hidden', error.message
 
+    error = assert_raises(ArgumentError) { @env.sourcemap = nil }
+    assert_equal 'sourcemap must be false, true, :linked or :headers, got nil', error.message
+    assert_equal false, @env.sourcemap
+
+    [true, :linked, :headers, false].each do |value|
+      @env.sourcemap = value
+      assert_equal value, @env.sourcemap
+    end
+  end
+
+  test 'RolldownProcessor has no sourcemap option' do
+    error = assert_raises(ArgumentError) { Condenser::RolldownProcessor.new(@env.npm_path, sourcemap: :linked) }
+    assert_equal 'unknown keyword: :sourcemap', error.message
+  end
+
+  test 'sourcemap is in the export pipeline digest unless false' do
     rolldown
-    digest = @env.export_pipeline_digest('application/javascript')
-    rolldown(sourcemap: false)
-    assert_equal digest, @env.export_pipeline_digest('application/javascript')
-    rolldown(sourcemap: :linked)
-    linked = @env.export_pipeline_digest('application/javascript')
-    assert_not_equal digest, linked
-    rolldown(sourcemap: :hidden)
-    assert_not_equal linked, @env.export_pipeline_digest('application/javascript')
+    # The digest without the setting, as before it existed.
+    without = @env.versioned_digest(JSON.generate(@env.pipline_to_json([@env.exporters['application/javascript'], @env.minifier_for('application/javascript')])))
+    assert_equal without, @env.export_pipeline_digest('application/javascript')
+
+    digests = [true, :linked, :headers].map do |value|
+      @env.sourcemap = value
+      @env.export_pipeline_digest('application/javascript')
+    end
+    assert_equal 4, (digests + [without]).uniq.size
+  end
+
+  test 'the etag and output change between values' do
+    exports = [false, true, :linked, :headers].to_h do |value|
+      env = Condenser.new(@path, logger: @env.logger, npm_path: @npm_dir, base: @path, listen: false, sourcemap: value)
+      [value, env.find('main.js').export]
+    end
+
+    assert_equal @env.find('main.js').export.etag, exports[false].etag
+    assert_equal 4, exports.values.map(&:etag).uniq.size
+    assert_includes exports[:linked].source, 'sourceMappingURL'
+    assert_not_includes exports[:headers].source, 'sourceMappingURL'
+    assert_equal exports[:headers].source, exports[false].source
   end
 
   test 'sourcemap: false exports no map and no comment' do
-    rolldown(sourcemap: false)
+    rolldown
     export = assert_exported_file 'main.js', 'application/javascript', <<~JS
       // lib/math.js
       function cube(number) {
@@ -132,12 +162,12 @@ class RolldownSourcemapTest < ActiveSupport::TestCase
     JS
     assert_nil export.sourcemap
     assert_nil export.sourcemap_path
-    assert_not export.sourcemap_linked?
     assert_nil export.to_json.fetch(:sourcemap)
   end
 
-  test 'sourcemap: :linked exports a map and links it from the bundle' do
-    rolldown(sourcemap: :linked)
+  test 'sourcemap: true exports a map and links it from the bundle' do
+    rolldown
+    @env.sourcemap = true
     export = @env.find('main.js').export
     map = JSON.parse(export.sourcemap)
 
@@ -147,23 +177,41 @@ class RolldownSourcemapTest < ActiveSupport::TestCase
     assert_equal File.read(File.join(@path, 'main.js')), map['sourcesContent'][1]
 
     assert_equal "#{export.path}.map", export.sourcemap_path
-    assert export.sourcemap_linked?
     assert export.source.end_with?("console.log(cube(5));\n//# sourceMappingURL=#{File.basename(export.path)}.map\n")
     assert_equal @env.digestor.digest(export.source), export.digest
   end
 
-  test 'sourcemap: :hidden exports a map without linking it' do
-    rolldown(sourcemap: :hidden)
+  test 'sourcemap: :linked exports a map with the comment' do
+    rolldown
+    @env.sourcemap = :linked
     export = @env.find('main.js').export
 
-    assert_equal 3, JSON.parse(export.sourcemap)['version']
+    assert_equal ['lib/math.js', 'main.js'], JSON.parse(export.sourcemap)['sources']
+    assert export.source.end_with?("console.log(cube(5));\n//# sourceMappingURL=#{File.basename(export.path)}.map\n")
+  end
+
+  test 'sourcemap: :headers exports a map without the comment' do
+    rolldown
+    @env.sourcemap = :headers
+    export = @env.find('main.js').export
+
+    assert_equal ['lib/math.js', 'main.js'], JSON.parse(export.sourcemap)['sources']
     assert_equal "#{export.path}.map", export.sourcemap_path
-    assert_not export.sourcemap_linked?
     assert_not_includes export.source, 'sourceMappingURL'
   end
 
+  test 'Condenser.new(sourcemap:) sets it' do
+    env = Condenser.new(@path, logger: @env.logger, npm_path: @npm_dir, base: @path, listen: false, sourcemap: :linked)
+    export = env.find('main.js').export
+
+    assert_equal :linked, env.sourcemap
+    assert_equal ['lib/math.js', 'main.js'], JSON.parse(export.sourcemap)['sources']
+    assert export.source.end_with?("\n//# sourceMappingURL=#{File.basename(export.path)}.map\n")
+  end
+
   test 'the mappings point back to the sources' do
-    rolldown(sourcemap: :linked)
+    rolldown
+    @env.sourcemap = true
     export = @env.find('main.js').export
     map = JSON.parse(export.sourcemap)
 
@@ -173,7 +221,8 @@ class RolldownSourcemapTest < ActiveSupport::TestCase
   end
 
   test 'the mappings point back to the sources with minify: true' do
-    rolldown(sourcemap: :linked, minify: true)
+    rolldown(minify: true)
+    @env.sourcemap = true
     export = @env.find('main.js').export
     map = JSON.parse(export.sourcemap)
 
@@ -194,13 +243,15 @@ class RolldownSourcemapTest < ActiveSupport::TestCase
       console.log( hello() );
     JS
 
-    rolldown(sourcemap: :hidden)
+    rolldown
+    @env.sourcemap = :headers
     map = JSON.parse(@env.find('npm.js').export.sourcemap)
     assert_equal ['node_modules/condenser-rolldown-sourcemap-test/index.js', 'npm.js'], map['sources']
   end
 
   test 'a minifier that clears the map exports none' do
-    rolldown(sourcemap: :linked)
+    rolldown
+    @env.sourcemap = true
     @env.register_minifier('application/javascript', RewritingMinifier.new)
     export = @env.find('main.js').export
 
@@ -210,7 +261,8 @@ class RolldownSourcemapTest < ActiveSupport::TestCase
   end
 
   test 'a minifier that leaves the map keeps it' do
-    rolldown(sourcemap: :linked)
+    rolldown
+    @env.sourcemap = true
     @env.register_minifier('application/javascript', NoopMinifier.new)
     export = @env.find('main.js').export
 
@@ -219,7 +271,8 @@ class RolldownSourcemapTest < ActiveSupport::TestCase
   end
 
   test 'TerserMinifier maps the minified bundle back to the sources' do
-    rolldown(sourcemap: :linked)
+    rolldown
+    @env.sourcemap = true
     @env.register_minifier('application/javascript', Condenser::TerserMinifier.new(@npm_dir))
     export = @env.find('main.js').export
     map = JSON.parse(export.sourcemap)
@@ -233,8 +286,9 @@ class RolldownSourcemapTest < ActiveSupport::TestCase
     assert_equal ['main.js', 3, 0], original_position(export.source, map, 'console.log')
   end
 
-  test 'TerserMinifier with sourcemap: :hidden exports the map without linking it' do
-    rolldown(sourcemap: :hidden)
+  test 'TerserMinifier with sourcemap: :headers exports the map without the comment' do
+    rolldown
+    @env.sourcemap = :headers
     @env.register_minifier('application/javascript', Condenser::TerserMinifier.new(@npm_dir))
     export = @env.find('main.js').export
     map = JSON.parse(export.sourcemap)
@@ -242,7 +296,6 @@ class RolldownSourcemapTest < ActiveSupport::TestCase
     assert_equal 'function cube(c){return c*c*c}console.log(cube(5));', export.source
     assert_equal ['lib/math.js', 'main.js'], map['sources']
     assert_equal ['lib/math.js', 5, 2], original_position(export.source, map, 'return')
-    assert_not export.sourcemap_linked?
   end
 
   test 'TerserMinifier without sourcemap exports no map' do
@@ -255,13 +308,15 @@ class RolldownSourcemapTest < ActiveSupport::TestCase
   end
 
   test 'precompiling writes the map next to the bundle and lists it in the manifest' do
-    rolldown(sourcemap: :linked)
+    rolldown
+    @env.sourcemap = :headers
     @env.register_writer(Condenser::ZlibWriter.new)
     manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
     manifest.compile('main.js')
     export = @env.find('main.js').export
 
     assert_equal export.sourcemap, File.read(File.join(@dir, "#{export.path}.map"))
+    assert_not_includes File.read(File.join(@dir, export.path)), 'sourceMappingURL'
     assert File.exist?(File.join(@dir, "#{export.path}.gz"))
     assert_equal export.sourcemap, Zlib::GzipReader.open(File.join(@dir, "#{export.path}.map.gz"), &:read)
 
@@ -284,7 +339,8 @@ class RolldownSourcemapTest < ActiveSupport::TestCase
   end
 
   test 'the server serves the map and links it with a SourceMap header' do
-    rolldown(sourcemap: :linked)
+    rolldown
+    @env.sourcemap = true
     export = @env.find('main.js').export
 
     get "/assets/#{export.path}"
@@ -309,13 +365,26 @@ class RolldownSourcemapTest < ActiveSupport::TestCase
     assert_equal 404, last_response.status
   end
 
-  test 'the server serves a hidden map without a SourceMap header' do
-    rolldown(sourcemap: :hidden)
+  test 'the server sends the SourceMap header for :headers' do
+    rolldown
+    @env.sourcemap = :headers
+    export = @env.find('main.js').export
+
+    get "/assets/#{export.path}"
+    assert_equal 200, last_response.status
+    assert_equal "/assets/#{export.path}.map", last_response.headers['SourceMap']
+    assert_not_includes last_response.body, 'sourceMappingURL'
+  end
+
+  test 'the server sends no SourceMap header for :linked' do
+    rolldown
+    @env.sourcemap = :linked
     export = @env.find('main.js').export
 
     get "/assets/#{export.path}"
     assert_equal 200, last_response.status
     assert_nil last_response.headers['SourceMap']
+    assert_includes last_response.body, 'sourceMappingURL'
 
     get "/assets/#{export.path}.map"
     assert_equal 200, last_response.status

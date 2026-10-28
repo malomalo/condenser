@@ -296,8 +296,8 @@ class Condenser
         # Set content length header
         headers["content-length"] = length.to_s
 
-        # Not for :hidden maps, which browsers shouldn't find on their own.
-        if asset.sourcemap_linked?
+        # For true and :headers; :linked has the comment instead.
+        if asset.sourcemap && [true, :headers].include?(@condenser.sourcemap)
           headers['sourcemap'] = env['SCRIPT_NAME'] + env['PATH_INFO'] + '.map'
         end
         

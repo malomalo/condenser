@@ -663,7 +663,7 @@ class Condenser
 
           # The map is named after the export's path, whose etag doesn't
           # depend on the output, so the comment doesn't change the name.
-          if data[:sourcemap] && data[:sourcemap_linked]
+          if data[:sourcemap] && [true, :linked].include?(@environment.sourcemap)
             map_name = File.basename(data[:filename]).sub(/\.(\w+)$/) { |ext| "-#{data[:etag]}#{ext}" }
             data[:source] = data[:source] + "#{"\n" unless data[:source].end_with?("\n")}//# sourceMappingURL=#{map_name}.map\n"
           end

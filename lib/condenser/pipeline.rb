@@ -61,14 +61,17 @@ class Condenser
       }))
     end
 
-    # A digest of what exporting +mime_type+ uses, its exporters and minifier,
-    # or nil if it has neither.
+    # A digest of what exporting +mime_type+ uses, its exporters, minifier and
+    # the sourcemap setting, or nil if it has neither exporters nor minifier.
     def export_pipeline_digest(mime_type)
       exporters = @exporters[mime_type] || []
       minifier = @minifiers[mime_type]
       return if exporters.empty? && minifier.nil?
 
-      versioned_digest(JSON.generate(pipline_to_json([exporters, minifier])))
+      pipeline = [exporters, minifier]
+      # Only when set, so the digest without source maps is unchanged.
+      pipeline << { sourcemap: sourcemap } if sourcemap
+      versioned_digest(JSON.generate(pipline_to_json(pipeline)))
     end
 
     # Condenser's version is part of every pipeline digest, since its own

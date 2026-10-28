@@ -9,7 +9,6 @@ class Condenser::RolldownProcessor < Condenser::Processor
   # Rolldown's module types, less the ones that emit a file (asset, copy,
   # css), since only the JavaScript bundle is kept.
   MODULE_TYPES = %w[base64 binary dataurl empty js json jsx text ts tsx].freeze
-  SOURCEMAPS = [false, :linked, :hidden].freeze
 
   @@setup = []
 
@@ -30,19 +29,15 @@ class Condenser::RolldownProcessor < Condenser::Processor
     options = {prefix: @prefix, dynamic_imports: @dynamic_imports, aliases: @aliases, minify: @minify, rolldown: @rolldown_version}
     options[:platform] = @platform if @platform != 'neutral'
     options[:module_types] = @module_types if !@module_types.empty?
-    options[:sourcemap] = @sourcemap if @sourcemap
     options
   end
 
-  def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, aliases: {}, platform: 'neutral', minify: false, module_types: {}, sourcemap: false, max_memory: Condenser::NodeWorker::MAX_MEMORY)
+  def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, aliases: {}, platform: 'neutral', minify: false, module_types: {}, max_memory: Condenser::NodeWorker::MAX_MEMORY)
     unless DYNAMIC_IMPORTS.include?(dynamic_imports)
       raise ArgumentError, "dynamic_imports must be :inline or :keep, got #{dynamic_imports.inspect}"
     end
     unless minify == true || minify == false
       raise ArgumentError, "minify must be true or false, got #{minify.inspect}"
-    end
-    unless SOURCEMAPS.include?(sourcemap)
-      raise ArgumentError, "sourcemap must be false, :linked or :hidden, got #{sourcemap.inspect}"
     end
     unless max_memory.is_a?(Integer) && max_memory.positive?
       raise ArgumentError, "max_memory must be a positive Integer, got #{max_memory.inspect}"
@@ -56,14 +51,13 @@ class Condenser::RolldownProcessor < Condenser::Processor
     @platform = platform
     @minify = minify
     @module_types = normalize_module_types(module_types)
-    @sourcemap = sourcemap
     @max_memory = max_memory
     @lock = Mutex.new
     @rolldown_version = self.class.read_version(rolldown_path) if bundler_path || dir
   end
 
   def call(environment, input)
-    Runner.new(@npm_dir, worker: worker, prefix: @prefix, dynamic_imports: @dynamic_imports, aliases: @aliases, platform: @platform, minify: @minify, module_types: @module_types, sourcemap: @sourcemap).call(environment, input)
+    Runner.new(@npm_dir, worker: worker, prefix: @prefix, dynamic_imports: @dynamic_imports, aliases: @aliases, platform: @platform, minify: @minify, module_types: @module_types).call(environment, input)
   end
 
   # { png: :dataurl } as { "png" => "dataurl" }, sorted by extension.
@@ -105,7 +99,7 @@ class Condenser::RolldownProcessor < Condenser::Processor
   class Runner < Condenser::NodeProcessor
     JSON_TYPE = 'application/json'
 
-    def initialize(dir = nil, worker:, prefix: nil, dynamic_imports: :inline, aliases: {}, platform: 'neutral', minify: false, module_types: {}, sourcemap: false)
+    def initialize(dir = nil, worker:, prefix: nil, dynamic_imports: :inline, aliases: {}, platform: 'neutral', minify: false, module_types: {})
       super(dir)
       @worker = worker
       @prefix = prefix
@@ -114,7 +108,6 @@ class Condenser::RolldownProcessor < Condenser::Processor
       @platform = platform
       @minify = minify
       @module_types = module_types
-      @sourcemap = sourcemap
     end
 
     def call(environment, input)
@@ -137,17 +130,16 @@ class Condenser::RolldownProcessor < Condenser::Processor
         minify: @minify,
         moduleTypes: @module_types.to_h { |ext, type| [".#{ext}", type] }
       }
-      if @sourcemap
+      if environment.sourcemap
         config[:sourcemap] = true
         config[:sourceRoots] = [config[:cwd], *environment.path, npm_path].compact.uniq
       end
 
       result = exec_runtime(config)
-      if @sourcemap
-        # Asset#export adds the sourceMappingURL comment for :linked.
+      if environment.sourcemap
+        # Asset#export adds the sourceMappingURL comment.
         input[:source] = result['code']
         input[:sourcemap] = result['map']
-        input[:sourcemap_linked] = @sourcemap == :linked
       else
         input[:source] = result
       end

@@ -10,7 +10,6 @@ class Condenser
       
       @source = input[:source]
       @sourcemap = input[:sourcemap]
-      @sourcemap_linked = !!input[:sourcemap_linked]
       @filename = input[:filename]
       @content_types = input[:content_types]
       @digest = input[:digest]
@@ -30,12 +29,6 @@ class Condenser
     # The source map is written and served at the export's path plus ".map".
     def sourcemap_path
       "#{path}.map" if @sourcemap
-    end
-
-    # Whether the export links to its source map, with a sourceMappingURL
-    # comment and a SourceMap header.
-    def sourcemap_linked?
-      !!@sourcemap && @sourcemap_linked
     end
     
     def to_s
