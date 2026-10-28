@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 2.0.0.rc2
+
+Changes since 2.0.0.rc1.
 
 ### Breaking changes / upgrade notes
 
@@ -16,7 +18,6 @@
 
 - `Condenser::Processor`, the base class for processors (see "Writing a processor" in the README).
 - `TailwindProcessor`'s `sources:` option: the directories to scan, for templates in `app/`, `lib/` or a gem's `app/views`. They're relative to the environment's `base` or absolute, have to be existing directories, are recorded as dependencies and are part of the options, relative to the environment's `base` in the cache keys. They're watched, so a change there rebuilds the CSS in a running process, including one that got the CSS from a persistent cache.
-
 - `RolldownProcessor`'s `module_types:` option maps file extensions to Rolldown module types, e.g. `module_types: { png: :dataurl, ttf: :base64 }`, to import images, fonts and other files into a bundle. The files are found through the load paths, relative to the importer, by absolute path or through `aliases:`, and loaded by Rolldown. A module type is used instead of a transformer for its extension (e.g. `svg: :text`). The option is part of the export cache key and etag.
 - Source maps are an environment setting: `Condenser.new(sourcemap: true | :linked | :headers)` or `env.sourcemap =` (default `false`, no map; anything else raises an `ArgumentError`). `RolldownProcessor` then exports a JavaScript source map with the bundle. Its `sources` are relative to `base`, the load paths or the npm path, with `sourcesContent`. `Export#sourcemap` returns the map's JSON, and `Asset#export` now carries it (it was set under a key `Export` never read). `true` and `:linked` end the bundle with a `//# sourceMappingURL=` comment; `true` and `:headers` have `Condenser::Server` send a `SourceMap` header. The setting is part of the export cache key and etag, so JavaScript and CSS etags change once. Precompiling writes `<name>-<etag>.js.map` next to the bundle through the writers registered for `application/json` (so also `.map.gz`/`.map.br` with the default writers) and lists it as `sourcemap` in the manifest (`null` for assets without one), and `Condenser::Server` serves it. A minifier that changes the source updates `input[:sourcemap]` to match or clears it; `TerserMinifier` maps its output back through the exporter's map, and Condenser no longer drops the map after a minifier.
 
