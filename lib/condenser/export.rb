@@ -9,7 +9,7 @@ class Condenser
       @environment = env
       
       @source = input[:source]
-      @sourcemap = input[:map]
+      @sourcemap = input[:sourcemap]
       @filename = input[:filename]
       @content_types = input[:content_types]
       @digest = input[:digest]
@@ -24,6 +24,11 @@ class Condenser
     
     def content_type
       @content_types.last
+    end
+
+    # The source map is written and served at the export's path plus ".map".
+    def sourcemap_path
+      "#{path}.map" if @sourcemap
     end
     
     def to_s
@@ -64,24 +69,38 @@ class Condenser
         type: type,
         size: size,
         digest: hexdigest,
-        integrity: integrity
+        integrity: integrity,
+        sourcemap: @sourcemap ? sourcemap_path : nil
       }
     end
     
     def write(output_directory)
-      files = @environment.writers_for_mime_type(content_type).map do |writer|
-        if writer.exist?(self)
-          @environment.logger.debug "Skipping #{ self.path }, already exists"
-        else
-          @environment.logger.info "Writing #{ self.path }"
-          writer.call(output_directory, self)
-        end
-      end
-      files.flatten.compact
+      files = write_asset(output_directory, self)
+      files += write_asset(output_directory, sourcemap_export) if @sourcemap
+      files
+    end
+
+    # The source map as an asset, or nil if there's none.
+    def sourcemap_export
+      Condenser::Sourcemap.new(path: sourcemap_path, filename: "#{filename}.map", source: @sourcemap, etag: etag) if @sourcemap
     end
     
     def ext
       File.extname(filename)
+    end
+
+    private
+
+    def write_asset(output_directory, asset)
+      files = @environment.writers_for_mime_type(asset.content_types.last).map do |writer|
+        if writer.exist?(asset)
+          @environment.logger.debug "Skipping #{ asset.path }, already exists"
+        else
+          @environment.logger.info "Writing #{ asset.path }"
+          writer.call(output_directory, asset)
+        end
+      end
+      files.flatten.compact
     end
     
   end

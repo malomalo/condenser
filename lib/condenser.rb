@@ -16,6 +16,7 @@ class Condenser
   
   prepend Environment, Pipeline, Resolve
   
+  autoload :Processor,        'condenser/processor'
   autoload :BabelProcessor,   'condenser/processors/babel_processor'
   autoload :RollupProcessor,  'condenser/processors/rollup_processor'
   autoload :RolldownProcessor,'condenser/processors/rolldown_processor'
@@ -39,6 +40,7 @@ class Condenser
   autoload :ZlibWriter,       'condenser/writers/zlib_writer'
   autoload :BrotliWriter,     'condenser/writers/brotli_writer'
   autoload :BuildCache,       'condenser/build_cache'
+  autoload :Sourcemap,        'condenser/sourcemap'
   autoload :NodeWorker,       'condenser/node_worker'
   autoload :ParseHelpers,     'condenser/helpers/parse_helpers'
   
@@ -47,6 +49,9 @@ class Condenser
   end
   
   attr_accessor :logger, :digestor, :base
+  attr_reader :sourcemap
+
+  SOURCEMAPS = [false, true, :linked, :headers].freeze
   
   # base: If base is passed assets cache_keys will be realitve to this.
   #       This allows deploy systems like Capistrano to take advantage of the
@@ -54,9 +59,13 @@ class Condenser
   # listen: Whether to start a file listener (Listen) on the load paths and
   #         watched paths so a running process notices changes. Defaults to
   #         true; pass false for one-off builds like precompiling.
-  def initialize(*path, logger: nil, digestor: nil, cache: nil, pipeline: nil, npm_path: nil, base: nil, listen: true, &block)
+  # sourcemap: Whether to export source maps, and how to link them: false
+  #            (the default), true, :linked (comment only) or :headers
+  #            (SourceMap header only). See #sourcemap=.
+  def initialize(*path, logger: nil, digestor: nil, cache: nil, pipeline: nil, npm_path: nil, base: nil, listen: true, sourcemap: false, &block)
     @logger = logger || Logger.new($stdout, level: :info)
     @listen = listen
+    self.sourcemap = sourcemap
     @path = []
     append_path(path)
     self.npm_path = npm_path
@@ -69,11 +78,11 @@ class Condenser
       configure(&block)
     elsif pipeline != false
       self.configure do
-        register_preprocessor 'application/javascript', Condenser::JSAnalyzer
+        register_preprocessor 'application/javascript', Condenser::JSAnalyzer.new
         # register_preprocessor 'application/javascript', Condenser::BabelProcessor
         register_exporter     'application/javascript', Condenser::RolldownProcessor.new(npm_path, minify: true)
         
-        register_minifier  'text/css', Condenser::LightningCSSMinifier
+        register_minifier  'text/css', Condenser::LightningCSSMinifier.new
       
         register_writer Condenser::FileWriter.new
         register_writer Condenser::ZlibWriter.new
@@ -86,6 +95,17 @@ class Condenser
   
   def configure(&block)
     instance_eval(&block)
+  end
+
+  # Exporters that support it (RolldownProcessor) export a source map when
+  # this is truthy. true and :linked end the export with a sourceMappingURL
+  # comment; true and :headers have Condenser::Server send a SourceMap header.
+  # It's part of the export cache key and etag, so set it before building.
+  def sourcemap=(value)
+    unless SOURCEMAPS.include?(value)
+      raise ArgumentError, "sourcemap must be false, true, :linked or :headers, got #{value.inspect}"
+    end
+    @sourcemap = value
   end
 end
 
@@ -139,7 +159,7 @@ Condenser.configure do
 
   # ERB
   register_mime_type 'application/erb', extension: '.erb'
-  register_template  'application/erb', Condenser::Erubi
+  register_template  'application/erb', Condenser::Erubi.new
   
   # CSS
   register_mime_type 'text/css', extension: '.css', charset: :css
@@ -153,21 +173,21 @@ Condenser.configure do
   
   # SCSS
   register_mime_type    'text/scss', extensions: %w(.scss .css.scss)
-  register_transformer  'text/scss', 'text/css', Condenser::ScssTransformer
+  register_transformer  'text/scss', 'text/css', Condenser::ScssTransformer.new
   
   # Javascript
   register_mime_type    'application/javascript', extension: '.js', charset: :unicode
   
   # EJS
   register_mime_type 'application/ejs', extensions: '.ejs', charset: :unicode
-  register_template  'application/ejs', Condenser::EjsTemplate
+  register_template  'application/ejs', Condenser::EjsTemplate.new
   
   # JST
   register_mime_type    'application/jst', extensions: '.jst', charset: :unicode
-  register_transformer  'application/jst', 'application/javascript', Condenser::JstTransformer
+  register_transformer  'application/jst', 'application/javascript', Condenser::JstTransformer.new
   
   # SVG
-  register_transformer  'image/svg+xml', 'application/javascript', Condenser::SVGTransformer
+  register_transformer  'image/svg+xml', 'application/javascript', Condenser::SVGTransformer.new
   
   # Writers
   register_mime_type 'application/gzip',    extensions: %w(.gz .gzip)

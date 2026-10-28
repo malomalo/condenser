@@ -62,4 +62,31 @@ class CacheFileStoreTest < ActiveSupport::TestCase
     assert_equal false, store.delete('key')
   end
 
+  test 'overwriting a key with a larger or smaller value updates the size' do
+    store = @env.cache
+    path = File.join(@cachepath, 'key.cache')
+    assert_equal 0, store.size
+
+    store.set('other', 'value')
+    other_size = File.size(File.join(@cachepath, 'other.cache'))
+
+    store.set('key', 'small')
+    assert_equal other_size + File.size(path), store.size
+
+    store.set('key', 'larger' * 100)
+    assert_equal other_size + File.size(path), store.size
+
+    store.set('key', 's')
+    assert_equal other_size + File.size(path), store.size
+
+    assert_equal store.size, Condenser::Cache::FileStore.new(@cachepath).size
+  end
+
+  test 'gc! runs when overwriting a key takes the store over its size' do
+    store = Condenser::Cache::FileStore.new(@cachepath, size: 2_000)
+    store.set('key', 'x' * 10)
+    store.expects(:gc!).once
+    store.set('key', 'x' * 3_000)
+  end
+
 end

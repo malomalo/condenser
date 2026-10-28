@@ -4,7 +4,7 @@
 # `lightningcss` gem's native (Rust) bindings. It's the default `text/css`
 # minifier:
 #
-#     register_minifier 'text/css', Condenser::LightningCSSMinifier
+#     register_minifier 'text/css', Condenser::LightningCSSMinifier.new
 #
 # or, with browser targets to lower modern syntax for:
 #
@@ -21,19 +21,5 @@ class Condenser::LightningCSSMinifier < Condenser::LightningCSSExporter
 
   DEFAULT_OPTIONS = {}.freeze
   FORCED_OPTIONS = { minify: true }.freeze
-
-  # The default minifier is registered as the class, so the gem is only
-  # needed once CSS is minified.
-  def self.instance
-    @instance ||= new
-  end
-
-  def self.call(environment, input)
-    instance.call(environment, input)
-  end
-
-  def self.options
-    instance.options
-  end
 
 end

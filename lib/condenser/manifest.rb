@@ -114,7 +114,7 @@ class Condenser
 
       # Manifest paths are relative to the output directory; keep each one
       # and its compressed versions.
-      keep = @data.values.flat_map { |v| [v[:path], v[:map]].compact }
+      keep = @data.values.flat_map { |v| [v[:path], v[:sourcemap]].compact }
       keep = keep.flat_map { |path| [path, "#{path}.gz", "#{path}.br"] }.to_set
       clean_dir(dir, keep, Time.now - age)
     end

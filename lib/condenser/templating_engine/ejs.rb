@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-class Condenser::EjsTemplate
+class Condenser::EjsTemplate < Condenser::Processor
 
-  def self.setup(environment)
+  def setup(environment)
     require 'ejs' unless defined?(::EJS)
 
     if !environment.path.include?(EJS::ASSET_DIR)
@@ -10,10 +10,6 @@ class Condenser::EjsTemplate
     end
   end
   
-  def self.call(environment, input)
-    new.call(environment, input)
-  end
-
   def call(environment, input)
     input[:source] = ::EJS.transform(input[:source], {strict: true})
   end

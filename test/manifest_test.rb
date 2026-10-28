@@ -590,7 +590,7 @@ class ManifestTest < ActiveSupport::TestCase
   test "clean keeps the current assets and their compressed versions" do
     manifest = write_manifest({
       'application.js' => { path: 'application-abc.js' },
-      'application.css' => { path: 'application-def.css', map: 'application-def.css.map' }
+      'application.css' => { path: 'application-def.css', sourcemap: 'application-def.css.map' }
     })
     %w(application-abc.js application-abc.js.gz application-abc.js.br
        application-def.css application-def.css.gz application-def.css.map).each do |f|
@@ -607,7 +607,7 @@ class ManifestTest < ActiveSupport::TestCase
   test "clean keeps current assets in nested directories" do
     manifest = write_manifest({
       'admin/application.js' => { path: 'admin/application-abc.js' },
-      'admin/pages/show.js' => { path: 'admin/pages/show-def.js', map: 'admin/pages/show-def.js.map' }
+      'admin/pages/show.js' => { path: 'admin/pages/show-def.js', sourcemap: 'admin/pages/show-def.js.map' }
     })
     %w(admin/application-abc.js admin/application-abc.js.gz
        admin/pages/show-def.js admin/pages/show-def.js.br admin/pages/show-def.js.map).each do |f|
