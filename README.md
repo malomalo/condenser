@@ -770,6 +770,16 @@ $ RAILS_ENV=production rails assets:precompile
 
 In development Rails will serve assets from `Condenser::Server`.
 
+Each `Condenser::Manifest#compile` (`assets:precompile`) also records the build
+in a history directory next to the manifest, e.g. `public/assets/.manifest-builds/`
+for `public/assets/manifest.json`. A build that's the same as the latest one
+isn't recorded again. `Condenser::Manifest#clean(keep: 2)` (`assets:clean`)
+removes every file in the output directory that isn't in the current manifest
+or one of the last `keep` recorded builds (each asset, its source map and their
+`.gz`/`.br` versions), and the records of older builds, so you can roll back to
+the previous deploy. Until `keep` builds have been recorded it removes nothing.
+`clobber` (`assets:clobber`) removes the history directory too.
+
 ### Version History
 
 Please see the [CHANGELOG](https://github.com/malomalo/condenser/blob/master/CHANGELOG.md)

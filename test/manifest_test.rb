@@ -574,34 +574,123 @@ class ManifestTest < ActiveSupport::TestCase
     File.utime(Time.now - age, Time.now - age, path)
   end
 
-  def write_manifest(data, filename = File.join(@dir, 'manifest.json'), age: 0)
+  def write_manifest(data, filename = File.join(@dir, 'manifest.json'))
     FileUtils.mkdir_p(File.dirname(filename))
     File.write(filename, JSON.generate(data))
-    File.utime(Time.now - age, Time.now - age, filename)
     Condenser::Manifest.new(@dir, filename)
+  end
+
+  def history_dir(filename = File.join(@dir, 'manifest.json'))
+    File.join(File.dirname(filename), ".#{File.basename(filename, '.*')}-builds")
+  end
+
+  # Records builds as #compile would, oldest first.
+  def write_builds(*builds, filename: File.join(@dir, 'manifest.json'))
+    FileUtils.mkdir_p(history_dir(filename))
+    builds.each_with_index do |data, i|
+      File.write(File.join(history_dir(filename), "2026010100000000000000#{i}.json"), JSON.generate(data))
+    end
+  end
+
+  def recorded_builds(filename = File.join(@dir, 'manifest.json'))
+    Dir.exist?(history_dir(filename)) ? Dir.children(history_dir(filename)).sort : []
   end
 
   def output_files
     Dir.glob('**/*', File::FNM_DOTMATCH, base: @dir).reject { |f| File.basename(f) == '.' }.sort
   end
 
-  WEEK = 7 * 24 * 60 * 60
+  def output_assets
+    output_files.reject { |f| f == 'manifest.json' || f.start_with?('.manifest-builds') }
+  end
+
+  # The default writers also write .gz and .br versions.
+  def with_compressed(*paths)
+    paths.flat_map { |path| [path, "#{path}.br", "#{path}.gz"] }.sort
+  end
+
+  def compile_version(manifest, source)
+    file 'application.js', source
+    manifest.compile('application.js')
+    @env['application.js'].path
+  end
+
+  test "compile records a build, unless it's the same as the latest one" do
+    file 'application.js', "console.log(1);"
+    manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
+
+    manifest.compile('application.js')
+    assert_equal 1, recorded_builds.size
+    build = File.join(history_dir, recorded_builds.first)
+    assert_equal JSON.parse(File.read(manifest.filename)), JSON.parse(File.read(build))
+
+    manifest.compile('application.js')
+    Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json')).compile('application.js')
+    assert_equal 1, recorded_builds.size
+
+    manifest.add('application.js')
+    manifest.export('application.js')
+    assert_equal 1, recorded_builds.size
+  end
+
+  test "compiles at the same time are recorded in order" do
+    file 'a.js', "console.log(1);"
+    file 'b.js', "console.log(2);"
+    manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
+
+    now = Time.now
+    Time.stubs(:now).returns(now)
+    manifest.compile('a.js')
+    manifest.compile('b.js')
+    manifest.compile('a.js')
+    Time.unstub(:now)
+
+    builds = recorded_builds.map { |f| JSON.parse(File.read(File.join(history_dir, f))).keys }
+    assert_equal [['a.js'], ['b.js'], ['a.js']], builds
+  end
+
+  test "clean keeps the files of the last builds" do
+    manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
+    v1 = compile_version(manifest, "console.log(1);")
+    v2 = compile_version(manifest, "console.log(2);")
+    v3 = compile_version(manifest, "console.log(3);")
+    assert_equal 3, [v1, v2, v3].uniq.size
+    assert_equal 3, recorded_builds.size
+    first_build = recorded_builds.first
+
+    Condenser::Manifest.new(@dir).clean(keep: 2)
+
+    assert_equal with_compressed(v2, v3), output_assets
+    assert_includes output_files, 'manifest.json'
+    assert_equal 2, recorded_builds.size
+    assert_not_includes recorded_builds, first_build
+  end
+
+  test "clean keeps all the builds it's told to" do
+    manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
+    versions = (1..3).map { |i| compile_version(manifest, "console.log(#{i});") }
+
+    Condenser::Manifest.new(@dir).clean(keep: 3)
+
+    assert_equal with_compressed(*versions), output_assets
+    assert_equal 3, recorded_builds.size
+  end
 
   test "clean keeps the current assets and their compressed versions" do
     manifest = write_manifest({
       'application.js' => { path: 'application-abc.js' },
       'application.css' => { path: 'application-def.css', sourcemap: 'application-def.css.map' }
     })
+    write_builds({}, {})
     %w(application-abc.js application-abc.js.gz application-abc.js.br
        application-def.css application-def.css.gz application-def.css.map).each do |f|
-      write_output(f, age: 5 * WEEK)
+      write_output(f)
     end
 
     manifest.clean
 
     assert_equal %w(application-abc.js application-abc.js.br application-abc.js.gz
-                    application-def.css application-def.css.gz application-def.css.map
-                    manifest.json), output_files
+                    application-def.css application-def.css.gz application-def.css.map), output_assets
   end
 
   test "clean keeps current assets in nested directories" do
@@ -609,82 +698,132 @@ class ManifestTest < ActiveSupport::TestCase
       'admin/application.js' => { path: 'admin/application-abc.js' },
       'admin/pages/show.js' => { path: 'admin/pages/show-def.js', sourcemap: 'admin/pages/show-def.js.map' }
     })
+    write_builds({}, {})
     %w(admin/application-abc.js admin/application-abc.js.gz
        admin/pages/show-def.js admin/pages/show-def.js.br admin/pages/show-def.js.map).each do |f|
-      write_output(f, age: 5 * WEEK)
+      write_output(f)
     end
 
     manifest.clean
 
     assert_equal %w(admin admin/application-abc.js admin/application-abc.js.gz
                     admin/pages admin/pages/show-def.js admin/pages/show-def.js.br
-                    admin/pages/show-def.js.map manifest.json), output_files
+                    admin/pages/show-def.js.map), output_assets
   end
 
-  test "clean removes old files that aren't in the manifest and keeps newer ones" do
+  test "clean keeps the current manifest's files added after the last compile" do
+    file 'other.js', "console.log('other');"
+    manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
+    compile_version(manifest, "console.log(1);")
+    v2 = compile_version(manifest, "console.log(2);")
+    manifest.add('other.js')
+    other = @env['other.js'].path
+
+    manifest.clean(keep: 1)
+    assert_equal with_compressed(v2, other), output_assets
+
+    manifest.export('other.js')
+    Condenser::Manifest.new(@dir).clean(keep: 1)
+    assert_equal with_compressed(v2, other), output_assets
+  end
+
+  test "clean removes files that aren't in the manifest or a kept build, even new ones" do
     manifest = write_manifest({ 'application.js' => { path: 'application-abc.js' } })
+    write_builds({ 'application.js' => { path: 'application-old.js' } },
+                 { 'application.js' => { path: 'application-prev.js' } },
+                 { 'application.js' => { path: 'application-abc.js' } })
     write_output('application-abc.js')
-    write_output('application-old.js', age: 5 * WEEK)
-    write_output('application-old.js.gz', age: 5 * WEEK)
-    write_output('application-new.js', age: 1 * WEEK)
-    write_output('application-new.js.gz', age: 1 * WEEK)
+    write_output('application-old.js', age: 5 * 7 * 24 * 60 * 60)
+    write_output('application-prev.js')
+    write_output('application-prev.js.br')
+    write_output('removed-new.js')
+    write_output('removed-new.js.gz')
 
     manifest.clean
-    assert_equal %w(application-abc.js application-new.js application-new.js.gz manifest.json), output_files
 
-    manifest.clean(0)
-    assert_equal %w(application-abc.js manifest.json), output_files
+    assert_equal %w(application-abc.js application-prev.js application-prev.js.br), output_assets
+    assert_equal 2, recorded_builds.size
+  end
+
+  test "clean doesn't remove anything until enough builds are recorded" do
+    manifest = write_manifest({ 'application.js' => { path: 'application-abc.js' } })
+    write_output('application-abc.js')
+    write_output('application-old.js')
+
+    manifest.clean
+    assert_equal %w(application-abc.js application-old.js), output_assets
+
+    write_builds({ 'application.js' => { path: 'application-abc.js' } })
+    manifest.clean
+    assert_equal %w(application-abc.js application-old.js), output_assets
+    manifest.clean(keep: 1)
+    assert_equal %w(application-abc.js), output_assets
+  end
+
+  test "clean raises for an invalid keep" do
+    manifest = write_manifest({})
+    [0, -1, nil, '2', 1.5].each do |keep|
+      assert_raises(ArgumentError) { manifest.clean(keep: keep) }
+    end
   end
 
   test "clean removes old files in nested directories and directories left empty" do
     manifest = write_manifest({ 'admin/application.js' => { path: 'admin/application-abc.js' } })
-    write_output('admin/application-abc.js', age: 5 * WEEK)
-    write_output('admin/application-old.js', age: 5 * WEEK)
-    write_output('admin/old/a/b/c-old.js', age: 5 * WEEK)
-    write_output('admin/new/a-new.js', age: 1 * WEEK)
-    write_output('stale/a/b/c-old.js', age: 5 * WEEK)
+    write_builds({}, { 'admin/new.js' => { path: 'admin/new/a-new.js' } })
+    write_output('admin/application-abc.js')
+    write_output('admin/application-old.js')
+    write_output('admin/old/a/b/c-old.js')
+    write_output('admin/new/a-new.js')
+    write_output('stale/a/b/c-old.js')
     FileUtils.mkdir_p(File.join(@dir, 'empty/a'))
 
     manifest.clean
 
-    assert_equal %w(admin admin/application-abc.js admin/new admin/new/a-new.js manifest.json), output_files
+    assert_equal %w(admin admin/application-abc.js admin/new admin/new/a-new.js), output_assets
   end
 
-  test "clean doesn't remove the manifest" do
-    manifest = write_manifest({ 'application.js' => { path: 'application-abc.js' } },
-      File.join(@dir, '.manifests', 'manifest-123.json'), age: 5 * WEEK)
-    write_output('application-abc.js', age: 5 * WEEK)
+  test "clean doesn't remove the manifest or its history" do
+    filename = File.join(@dir, '.manifests', 'manifest-123.json')
+    manifest = write_manifest({ 'application.js' => { path: 'application-abc.js' } }, filename)
+    write_builds({}, {}, filename: filename)
+    write_output('application-abc.js')
 
-    manifest.clean(0)
+    manifest.clean
 
-    assert_equal %w(.manifests .manifests/manifest-123.json application-abc.js), output_files
+    assert_equal %w(.manifests .manifests/.manifest-123-builds
+                    .manifests/.manifest-123-builds/20260101000000000000000.json
+                    .manifests/.manifest-123-builds/20260101000000000000001.json
+                    .manifests/manifest-123.json application-abc.js), output_files
   end
 
   test "clean doesn't remove files outside the output directory" do
     outside = Dir.mktmpdir
-    write_output('application-old.js', age: 5 * WEEK)
+    write_output('application-old.js')
     File.write(File.join(outside, 'other.js'), 'x')
-    File.utime(Time.now - 5 * WEEK, Time.now - 5 * WEEK, File.join(outside, 'other.js'))
     File.symlink(outside, File.join(@dir, 'linked'))
-    manifest = write_manifest({}, File.join(outside, 'manifest.json'), age: 5 * WEEK)
+    filename = File.join(outside, 'manifest.json')
+    manifest = write_manifest({}, filename)
+    write_builds({}, {}, {}, filename: filename)
 
-    manifest.clean(0)
+    manifest.clean
 
     assert_equal %w(linked), output_files
     assert File.exist?(File.join(outside, 'other.js'))
-    assert File.exist?(File.join(outside, 'manifest.json'))
+    assert File.exist?(filename)
+    assert_equal 2, recorded_builds(filename).size
   ensure
     FileUtils.remove_entry(outside, true)
   end
 
   test "clean reads each directory once" do
     manifest = write_manifest({ 'a/b/c/current.js' => { path: 'a/b/c/current-abc.js' } })
+    write_builds({}, {})
     %w(a b c d).each_with_index do |_, i|
       dir = %w(a b c d).first(i + 1).join('/')
-      write_output("#{dir}/old.js", age: 5 * WEEK)
-      write_output("#{dir}/sibling/old.js", age: 5 * WEEK)
+      write_output("#{dir}/old.js")
+      write_output("#{dir}/sibling/old.js")
     end
-    write_output('a/b/c/current-abc.js', age: 5 * WEEK)
+    write_output('a/b/c/current-abc.js')
 
     Thread.current[:dir_reads] = Hash.new(0)
     manifest.clean
@@ -692,42 +831,35 @@ class ManifestTest < ActiveSupport::TestCase
 
     assert_equal [1], reads.values.uniq, reads.inspect
     assert_equal File.expand_path(@dir), reads.keys.min_by(&:size)
-    assert_equal %w(a a/b a/b/c a/b/c/current-abc.js manifest.json), output_files
+    assert_equal %w(a a/b a/b/c a/b/c/current-abc.js), output_assets
   ensure
     Thread.current[:dir_reads] = nil
   end
 
-  test "clean after recompiling removes the previous version" do
-    file 'application.js', "console.log(1);"
-    manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
-    manifest.compile('application.js')
-    old_path = @env['application.js'].path
-
-    File.write(File.join(@path, 'application.js'), "console.log(2);")
-    sleep 0.25 if @env.build_cache.listening
-    new_path = @env['application.js'].path
-    assert_not_equal old_path, new_path
-    manifest.compile('application.js')
-
-    Dir.glob('**/*', base: @dir).each do |f|
-      File.utime(Time.now - 5 * WEEK, Time.now - 5 * WEEK, File.join(@dir, f))
-    end
-    Condenser::Manifest.new(@dir).clean
-
-    assert_includes output_files, new_path
-    assert_includes output_files, 'manifest.json'
-    assert_empty output_files.select { |f| f.start_with?(old_path) }
-    assert_empty output_files.reject { |f| f == 'manifest.json' || f.start_with?(new_path) }
-  end
-
   test "clobber removes the manifest and everything in the output directory" do
     manifest = write_manifest({ 'admin/application.js' => { path: 'admin/application-abc.js' } })
+    write_builds({}, {})
     write_output('admin/application-abc.js')
-    write_output('application-old.js', age: 5 * WEEK)
+    write_output('application-old.js')
 
     manifest.clobber
 
     assert File.directory?(@dir)
     assert_equal [], output_files
+  end
+
+  test "clobber removes the history of a manifest outside the output directory" do
+    outside = Dir.mktmpdir
+    filename = File.join(outside, 'manifest.json')
+    manifest = write_manifest({}, filename)
+    write_builds({}, {}, filename: filename)
+    write_output('application-abc.js')
+
+    manifest.clobber
+
+    assert_equal [], output_files
+    assert_equal [], Dir.children(outside)
+  ensure
+    FileUtils.remove_entry(outside, true)
   end
 end

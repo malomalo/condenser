@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require 'json'
-require 'set'
 require 'fileutils'
 
 class Condenser
@@ -92,6 +91,7 @@ class Condenser
       reset
       outputs = add(*args.flatten)
       save
+      record_build
       outputs
     end
     
@@ -107,43 +107,33 @@ class Condenser
       save
     end
     
-    # Cleanup old assets in the compile directory. By default it will keep the
-    # latest version and remove any other files over 4 weeks old.
-    def clean(age = 2419200)
+    # Remove files in the output directory that aren't in the current manifest
+    # or one of the last +keep+ builds recorded by #compile, and the records of
+    # older builds. Does nothing until +keep+ builds have been recorded.
+    def clean(keep: 2)
+      if !keep.is_a?(Integer) || keep < 1
+        raise ArgumentError, "keep must be an Integer >= 1, got #{keep.inspect}"
+      end
       return if !Dir.exist?(dir)
+
+      builds = recorded_builds
+      if builds.size < keep
+        logger.info "Not cleaning #{dir}: #{builds.size} of #{keep} builds recorded"
+        return
+      end
 
       # Manifest paths are relative to the output directory; keep each one
       # and its compressed versions.
-      keep = @data.values.flat_map { |v| [v[:path], v[:sourcemap]].compact }
-      keep = keep.flat_map { |path| [path, "#{path}.gz", "#{path}.br"] }.to_set
-      clean_dir(dir, keep, Time.now - age)
-    end
+      entries = @data.values + builds.last(keep).flat_map { |b| read_build(b).values }
+      paths = entries.flat_map { |v| [v[:path], v[:sourcemap]].compact }
+      paths = paths.flat_map { |path| [path, "#{path}.gz", "#{path}.br"] }.to_set
+      clean_dir(dir, paths)
 
-    # Remove files in +dir+ that aren't in +keep+ and were last modified
-    # before +before+, then any directories left empty. Returns true if +dir+
-    # is now empty.
-    def clean_dir(dir, keep, before, prefix = nil)
-      empty = true
-      Dir.each_child(dir) do |child|
-        relative_path = prefix ? File.join(prefix, child) : child
-        child = File.join(dir, child)
-        stat = File.lstat(child)
-
-        # Don't follow symlinks out of the output directory
-        if stat.directory?
-          if clean_dir(child, keep, before, relative_path)
-            Dir.rmdir(child)
-            logger.info "Removed #{child}"
-            next
-          end
-        elsif stat.file? && child != filename && !keep.include?(relative_path) && stat.mtime < before
-          File.delete(child)
-          logger.info "Removed #{child}"
-          next
-        end
-        empty = false
+      builds[0...-keep].each do |build|
+        File.delete(build)
+        logger.info "Removed #{build}"
       end
-      empty
+      nil
     end
 
     # Wipe directive
@@ -152,6 +142,11 @@ class Condenser
       
       FileUtils.rm(filename)
       logger.info "Removed #{filename}"
+
+      if Dir.exist?(history_dir)
+        FileUtils.rm_r(history_dir)
+        logger.info "Removed #{history_dir}"
+      end
       
       Dir.each_child(dir) do |child|
         FileUtils.rm_r(File.join(dir, child))
@@ -159,6 +154,71 @@ class Condenser
       
       logger.info "Removed contents of #{dir}"
       nil
+    end
+
+    private
+
+    # Where #compile records each build, next to the manifest file.
+    def history_dir
+      File.join(File.dirname(filename), ".#{File.basename(filename, '.*')}-builds")
+    end
+
+    # Recorded builds, oldest first.
+    def recorded_builds
+      return [] if !Dir.exist?(history_dir)
+      Dir.children(history_dir).select { |f| f.end_with?('.json') }.sort.map { |f| File.join(history_dir, f) }
+    end
+
+    def read_build(build)
+      JSON.parse(File.read(build), symbolize_names: true)
+    end
+
+    # Write a copy of the manifest data to the history directory, unless it's
+    # the same as the latest build's. Names are UTC timestamps with
+    # nanoseconds, so they sort chronologically.
+    def record_build
+      data = JSON.parse(JSON.generate(@data), symbolize_names: true)
+      latest = recorded_builds.last
+      return if latest && read_build(latest) == data
+
+      time = Time.now.utc
+      loop do
+        name = "#{time.strftime('%Y%m%d%H%M%S%9N')}.json"
+        if latest.nil? || name > File.basename(latest)
+          FileUtils.mkdir_p(history_dir)
+          Utils.atomic_write(File.join(history_dir, name)) { |f| f.write(JSON.generate(@data)) }
+          return
+        end
+        # Same or earlier time than the latest build's name
+        time += Rational(1, 1_000_000_000)
+      end
+    end
+
+    # Remove files in +dir+ that aren't in +keep+, then any directories left
+    # empty. Never removes the manifest or the history directory. Returns true
+    # if +dir+ is now empty.
+    def clean_dir(dir, keep, prefix = nil)
+      empty = true
+      Dir.each_child(dir) do |child|
+        relative_path = prefix ? File.join(prefix, child) : child
+        child = File.join(dir, child)
+        stat = File.lstat(child)
+
+        # Don't follow symlinks out of the output directory
+        if stat.directory? && child != history_dir
+          if clean_dir(child, keep, relative_path)
+            Dir.rmdir(child)
+            logger.info "Removed #{child}"
+            next
+          end
+        elsif stat.file? && child != filename && !keep.include?(relative_path)
+          File.delete(child)
+          logger.info "Removed #{child}"
+          next
+        end
+        empty = false
+      end
+      empty
     end
 
   end
