@@ -156,7 +156,7 @@ class Condenser
       # Returns a 400 Forbidden response tuple
       def bad_request_response(env)
         if head_request?(env)
-          [ 400, { "content-type" => "text/plain", "content-length" => "0" }, [] ]
+          [ 400, { "content-type" => "text/plain", "content-length" => "11" }, [] ]
         else
           [ 400, { "content-type" => "text/plain", "content-length" => "11" }, [ "Bad Request" ] ]
         end
@@ -165,7 +165,7 @@ class Condenser
       # Returns a 403 Forbidden response tuple
       def forbidden_response(env)
         if head_request?(env)
-          [ 403, { "content-type" => "text/plain", "content-length" => "0" }, [] ]
+          [ 403, { "content-type" => "text/plain", "content-length" => "9" }, [] ]
         else
           [ 403, { "content-type" => "text/plain", "content-length" => "9" }, [ "Forbidden" ] ]
         end
@@ -174,7 +174,7 @@ class Condenser
       # Returns a 404 Not Found response tuple
       def not_found_response(env)
         if head_request?(env)
-          [ 404, { "content-type" => "text/plain", "content-length" => "0", "x-cascade" => "pass" }, [] ]
+          [ 404, { "content-type" => "text/plain", "content-length" => "9", "x-cascade" => "pass" }, [] ]
         else
           [ 404, { "content-type" => "text/plain", "content-length" => "9", "x-cascade" => "pass" }, [ "Not found" ] ]
         end
@@ -186,7 +186,7 @@ class Condenser
 
       def precondition_failed_response(env)
         if head_request?(env)
-          [ 412, { "content-type" => "text/plain", "content-length" => "0", "x-cascade" => "pass" }, [] ]
+          [ 412, { "content-type" => "text/plain", "content-length" => "19", "x-cascade" => "pass" }, [] ]
         else
           [ 412, { "content-type" => "text/plain", "content-length" => "19", "x-cascade" => "pass" }, [ "Precondition Failed" ] ]
         end
