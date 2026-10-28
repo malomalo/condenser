@@ -3,9 +3,6 @@
 class Condenser
   class Export
 
-    # The source map, as an asset for the writers.
-    Sourcemap = Struct.new(:path, :filename, :source, :content_types, keyword_init: true)
-
     attr_reader :filename, :source, :sourcemap, :content_types, :digest, :digest_name, :etag, :type
 
     def initialize(env, input={})
@@ -91,7 +88,7 @@ class Condenser
     end
 
     def sourcemap_export
-      Sourcemap.new(path: sourcemap_path, filename: "#{filename}.map", source: @sourcemap, content_types: ['application/json'])
+      Condenser::Sourcemap.new(path: sourcemap_path, filename: "#{filename}.map", source: @sourcemap, content_types: ['application/json'])
     end
     
     def ext
