@@ -68,10 +68,7 @@ class Condenser
       minifier = @minifiers[mime_type]
       return if exporters.empty? && minifier.nil?
 
-      pipeline = [exporters, minifier]
-      # Only when set, so the digest without source maps is unchanged.
-      pipeline << { sourcemap: sourcemap } if sourcemap
-      versioned_digest(JSON.generate(pipline_to_json(pipeline)))
+      versioned_digest(JSON.generate(pipline_to_json([exporters, minifier, { sourcemap: sourcemap }])))
     end
 
     # Condenser's version is part of every pipeline digest, since its own

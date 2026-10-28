@@ -124,17 +124,13 @@ class SourcemapTest < ActiveSupport::TestCase
     assert_equal 'unknown keyword: :sourcemap', error.message
   end
 
-  test 'sourcemap is in the export pipeline digest unless false' do
+  test 'sourcemap is in the export pipeline digest' do
     rolldown
-    # The digest without the setting, as before it existed.
-    without = @env.versioned_digest(JSON.generate(@env.pipline_to_json([@env.exporters['application/javascript'], @env.minifier_for('application/javascript')])))
-    assert_equal without, @env.export_pipeline_digest('application/javascript')
-
-    digests = [true, :linked, :headers].map do |value|
+    digests = [false, true, :linked, :headers].map do |value|
       @env.sourcemap = value
       @env.export_pipeline_digest('application/javascript')
     end
-    assert_equal 4, (digests + [without]).uniq.size
+    assert_equal 4, digests.uniq.size
   end
 
   test 'the etag and output change between values' do

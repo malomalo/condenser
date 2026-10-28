@@ -549,9 +549,8 @@ condenser.sourcemap = :linked
 | `:headers` | yes | no | yes |
 
 Anything else raises an `ArgumentError`. `RolldownProcessor` exports a map
-whenever the setting is on. With `false` the bundle, cache keys and etags are
-the same as without the setting; any other value is part of the export cache
-key and etag, so switching between them rebuilds the bundle. Set it before
+whenever the setting is on. The setting is part of the export cache key and
+etag, so switching between values rebuilds the bundle. Set it before
 building, like the pipeline.
 
 The map is at the bundle's path plus `.map` (`application-<etag>.js.map`), and
