@@ -267,9 +267,9 @@ processor class, raises an `ArgumentError`. An instance can be registered in
 several environments and called from several threads at once, so keep
 per-call state out of instance variables.
 
-An exporter can set `input[:map]` to a source map's JSON (see
+An exporter can set `input[:sourcemap]` to a source map's JSON (see
 [Source maps](#source-maps)). A minifier that changes `input[:source]` updates
-`input[:map]` to match, as `TerserMinifier` does, or sets it to `nil`;
+`input[:sourcemap]` to match, as `TerserMinifier` does, or sets it to `nil`;
 Condenser exports whatever map the minifier leaves.
 
 ### Depending on files that aren't assets

@@ -12,7 +12,7 @@ class Condenser
       @environment = env
       
       @source = input[:source]
-      @sourcemap = input[:map]
+      @sourcemap = input[:sourcemap]
       @sourcemap_linked = !!input[:map_linked]
       @filename = input[:filename]
       @content_types = input[:content_types]

@@ -12,7 +12,7 @@ class RolldownSourcemapTest < ActiveSupport::TestCase
   class RewritingMinifier < Condenser::Processor
     def call(environment, input)
       input[:source] = "/* minified */\n" + input[:source]
-      input[:map] = nil
+      input[:sourcemap] = nil
     end
   end
 

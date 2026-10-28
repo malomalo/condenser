@@ -643,7 +643,7 @@ class Condenser
             filename: @filename.dup,
             content_types: @content_types,
 
-            map: nil,
+            sourcemap: nil,
             linked_assets: [],
             process_dependencies: [],
             export_dependencies: []
@@ -663,7 +663,7 @@ class Condenser
 
           # The map is named after the export's path, whose etag doesn't
           # depend on the output, so the comment doesn't change the name.
-          if data[:map] && data[:map_linked]
+          if data[:sourcemap] && data[:map_linked]
             map_name = File.basename(data[:filename]).sub(/\.(\w+)$/) { |ext| "-#{data[:etag]}#{ext}" }
             data[:source] = data[:source] + "#{"\n" unless data[:source].end_with?("\n")}//# sourceMappingURL=#{map_name}.map\n"
           end

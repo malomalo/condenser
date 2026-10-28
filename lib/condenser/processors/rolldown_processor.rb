@@ -146,7 +146,7 @@ class Condenser::RolldownProcessor < Condenser::Processor
       if @sourcemap
         # Asset#export adds the sourceMappingURL comment for :linked.
         input[:source] = result['code']
-        input[:map] = result['map']
+        input[:sourcemap] = result['map']
         input[:map_linked] = @sourcemap == :linked
       else
         input[:source] = result
