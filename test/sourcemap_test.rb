@@ -357,6 +357,7 @@ class SourcemapTest < ActiveSupport::TestCase
 
     head "/assets/#{export.path}.map"
     assert_equal 200, last_response.status
+    assert_equal export.sourcemap.bytesize.to_s, last_response.headers['Content-Length']
     assert_empty last_response.body
 
     get "/assets/main.js.map", {}, 'HTTP_IF_NONE_MATCH' => %("#{export.etag}")

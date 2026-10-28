@@ -325,7 +325,7 @@ class ServerTest < ActiveSupport::TestCase
     head "/assets/foo.js"
     assert_equal 200, last_response.status
     assert_equal "application/javascript", last_response.headers['Content-Type']
-    assert_equal "0", last_response.headers['Content-Length']
+    assert_equal "15", last_response.headers['Content-Length']
     assert_equal "", last_response.body
 
     post "/assets/foo.js"

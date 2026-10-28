@@ -142,7 +142,7 @@ class Condenser
       # Returns a 200 OK response tuple
       def ok_response(asset, env)
         if head_request?(env)
-          [ 200, headers(env, asset, 0), [] ]
+          [ 200, headers(env, asset, asset.length), [] ]
         else
           [ 200, headers(env, asset, asset.length), [asset.to_s] ]
         end
