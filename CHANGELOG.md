@@ -10,6 +10,7 @@
 - `RollupProcessor`, `PurgeCSSProcessor` and `TerserMinifier` are registered with their npm path, e.g. `RollupProcessor.new(npm_path)`; `PurgeCSSProcessor.new(npm_path, content: [...])` no longer defaults `content` to the HTML and JavaScript files under `base`.
 - The pipeline digests include each processor's `options` (`{}` by default), so cache keys and etags change and assets are rebuilt once.
 - `TailwindProcessor`'s `sources:` replaces `base:`, which is removed (passing it raises `ArgumentError`). Without `sources:`, automatic source detection scans the environment's `base`, the app's root, like the Tailwind CLI from its working directory, and it isn't watched; it raised "needs the TailwindProcessor's base:" before. With `sources:`, only those directories are scanned, as with `source(none)` and an `@source` for each. For a Rails app, `sources: ['app']` scans what `base: Rails.root.join('app')` did. A `source(...)` on the stylesheet's import replaces the environment's `base`, and the `sources:` are still scanned with it and with `source(none)`.
+- `Condenser::Manifest#clean` takes no `age` and removes every file in the output directory that isn't in the manifest, however recent, so assets from the previous build are removed too. `clean_dir` is private.
 
 ### Added
 
@@ -32,6 +33,7 @@
 - `NodeProcessor#npm_install` holds an exclusive lock on `.condenser-npm.lock` in the npm path while it checks what's missing and runs `npm install`, so processes installing into the same npm path at once (e.g. parallel tests) no longer overwrite each other's `node_modules` and `package.json`. It creates the npm path and a `package.json` there if they're missing, so npm doesn't install into a parent directory's `package.json`.
 - `Cache::FileStore` accounts for the replaced file when a key is overwritten, so its tracked size no longer drifts from what's on disk and garbage collection runs when it should.
 - `Cache::MemoryStore` keeps its entries in least recently used order, so pruning evicts from the front instead of sorting every key by access time each time the store goes over its size.
+- `Condenser::Manifest#clean` (`assets:clean`) compared absolute file paths with the manifest's relative ones, so it removed current assets and the manifest itself, and it recursed into the output directory again for each subdirectory until the stack overflowed. It now keeps each manifest entry's file and source map and their `.gz`/`.br` versions, never removes the manifest or follows symlinks out of the output directory, removes directories left empty, and reads each directory once (#94).
 
 ### Removed
 

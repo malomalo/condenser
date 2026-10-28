@@ -556,4 +556,165 @@ class ManifestTest < ActiveSupport::TestCase
     assert data['application.js']
     assert_equal "module",    data['application.js']['type']
   end
+
+  # Counts Dir.each_child calls per directory while Thread.current[:dir_reads]
+  # is set.
+  module CountDirReads
+    def each_child(dir, *args, **kwargs, &block)
+      Thread.current[:dir_reads][File.expand_path(dir)] += 1 if Thread.current[:dir_reads]
+      super
+    end
+  end
+  Dir.singleton_class.prepend(CountDirReads)
+
+  def write_output(path)
+    path = File.join(@dir, path)
+    FileUtils.mkdir_p(File.dirname(path))
+    File.write(path, 'x')
+  end
+
+  def write_manifest(data, filename = File.join(@dir, 'manifest.json'))
+    FileUtils.mkdir_p(File.dirname(filename))
+    File.write(filename, JSON.generate(data))
+    Condenser::Manifest.new(@dir, filename)
+  end
+
+  def output_files
+    Dir.glob('**/*', File::FNM_DOTMATCH, base: @dir).reject { |f| File.basename(f) == '.' }.sort
+  end
+
+  test "clean keeps the current assets and their compressed versions" do
+    manifest = write_manifest({
+      'application.js' => { path: 'application-abc.js' },
+      'application.css' => { path: 'application-def.css', sourcemap: 'application-def.css.map' }
+    })
+    %w(application-abc.js application-abc.js.gz application-abc.js.br
+       application-def.css application-def.css.gz application-def.css.map).each do |f|
+      write_output(f)
+    end
+
+    manifest.clean
+
+    assert_equal %w(application-abc.js application-abc.js.br application-abc.js.gz
+                    application-def.css application-def.css.gz application-def.css.map
+                    manifest.json), output_files
+  end
+
+  test "clean keeps current assets in nested directories" do
+    manifest = write_manifest({
+      'admin/application.js' => { path: 'admin/application-abc.js' },
+      'admin/pages/show.js' => { path: 'admin/pages/show-def.js', sourcemap: 'admin/pages/show-def.js.map' }
+    })
+    %w(admin/application-abc.js admin/application-abc.js.gz
+       admin/pages/show-def.js admin/pages/show-def.js.br admin/pages/show-def.js.map).each do |f|
+      write_output(f)
+    end
+
+    manifest.clean
+
+    assert_equal %w(admin admin/application-abc.js admin/application-abc.js.gz
+                    admin/pages admin/pages/show-def.js admin/pages/show-def.js.br
+                    admin/pages/show-def.js.map manifest.json), output_files
+  end
+
+  test "clean removes files that aren't in the manifest" do
+    manifest = write_manifest({ 'application.js' => { path: 'application-abc.js' } })
+    write_output('application-abc.js')
+    write_output('application-old.js')
+    write_output('application-old.js.gz')
+
+    manifest.clean
+    assert_equal %w(application-abc.js manifest.json), output_files
+  end
+
+  test "clean removes old files in nested directories and directories left empty" do
+    manifest = write_manifest({ 'admin/application.js' => { path: 'admin/application-abc.js' } })
+    write_output('admin/application-abc.js')
+    write_output('admin/application-old.js')
+    write_output('admin/old/a/b/c-old.js')
+    write_output('admin/new/a-new.js')
+    write_output('stale/a/b/c-old.js')
+    FileUtils.mkdir_p(File.join(@dir, 'empty/a'))
+
+    manifest.clean
+
+    assert_equal %w(admin admin/application-abc.js manifest.json), output_files
+  end
+
+  test "clean doesn't remove the manifest" do
+    manifest = write_manifest({ 'application.js' => { path: 'application-abc.js' } },
+      File.join(@dir, '.manifests', 'manifest-123.json'))
+    write_output('application-abc.js')
+
+    manifest.clean
+
+    assert_equal %w(.manifests .manifests/manifest-123.json application-abc.js), output_files
+  end
+
+  test "clean doesn't remove files outside the output directory" do
+    outside = Dir.mktmpdir
+    write_output('application-old.js')
+    File.write(File.join(outside, 'other.js'), 'x')
+    File.symlink(outside, File.join(@dir, 'linked'))
+    manifest = write_manifest({}, File.join(outside, 'manifest.json'))
+
+    manifest.clean
+
+    assert_equal %w(linked), output_files
+    assert File.exist?(File.join(outside, 'other.js'))
+    assert File.exist?(File.join(outside, 'manifest.json'))
+  ensure
+    FileUtils.remove_entry(outside, true)
+  end
+
+  test "clean reads each directory once" do
+    manifest = write_manifest({ 'a/b/c/current.js' => { path: 'a/b/c/current-abc.js' } })
+    %w(a b c d).each_with_index do |_, i|
+      dir = %w(a b c d).first(i + 1).join('/')
+      write_output("#{dir}/old.js")
+      write_output("#{dir}/sibling/old.js")
+    end
+    write_output('a/b/c/current-abc.js')
+
+    Thread.current[:dir_reads] = Hash.new(0)
+    manifest.clean
+    reads = Thread.current[:dir_reads]
+
+    assert_equal [1], reads.values.uniq, reads.inspect
+    assert_equal File.expand_path(@dir), reads.keys.min_by(&:size)
+    assert_equal %w(a a/b a/b/c a/b/c/current-abc.js manifest.json), output_files
+  ensure
+    Thread.current[:dir_reads] = nil
+  end
+
+  test "clean after recompiling removes the previous version" do
+    file 'application.js', "console.log(1);"
+    manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
+    manifest.compile('application.js')
+    old_path = @env['application.js'].path
+
+    File.write(File.join(@path, 'application.js'), "console.log(2);")
+    sleep 0.25 if @env.build_cache.listening
+    new_path = @env['application.js'].path
+    assert_not_equal old_path, new_path
+    manifest.compile('application.js')
+
+    Condenser::Manifest.new(@dir).clean
+
+    assert_includes output_files, new_path
+    assert_includes output_files, 'manifest.json'
+    assert_empty output_files.select { |f| f.start_with?(old_path) }
+    assert_empty output_files.reject { |f| f == 'manifest.json' || f.start_with?(new_path) }
+  end
+
+  test "clobber removes the manifest and everything in the output directory" do
+    manifest = write_manifest({ 'admin/application.js' => { path: 'admin/application-abc.js' } })
+    write_output('admin/application-abc.js')
+    write_output('application-old.js')
+
+    manifest.clobber
+
+    assert File.directory?(@dir)
+    assert_equal [], output_files
+  end
 end

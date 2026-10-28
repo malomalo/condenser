@@ -770,6 +770,10 @@ $ RAILS_ENV=production rails assets:precompile
 
 In development Rails will serve assets from `Condenser::Server`.
 
+`Condenser::Manifest#clean` (`assets:clean`) removes every file in the output
+directory that isn't in the manifest (each asset, its source map and their
+`.gz`/`.br` versions), including the previous build's assets.
+
 ### Version History
 
 Please see the [CHANGELOG](https://github.com/malomalo/condenser/blob/master/CHANGELOG.md)

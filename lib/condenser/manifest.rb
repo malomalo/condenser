@@ -106,23 +106,17 @@ class Condenser
       save
     end
     
-    # Cleanup old assets in the compile directory. By default it will keep the
-    # latest version and remove any other files over 4 weeks old.
-    def clean(age = 2419200)
-      clean_dir(@dir, @data.values.flat_map { |v| [v[:path], v[:sourcemap]].compact }, Time.now - age)
-    end
+    # Remove files in the output directory that aren't in the manifest, then
+    # any directories left empty.
+    def clean
+      return if !Dir.exist?(dir)
 
-    def clean_dir(dir, assets, age)
-      Dir.each_child(dir) do |child|
-        child = File.join(dir, child)
-        next if assets.find { |x| child.start_with?(x) }
-
-        if File.directory?(child)
-          clean_dir(dir, assets, age)
-        elsif File.file?(child) && File.stat(child).mtime < age
-          File.delete(child)
-        end
-      end
+      # Manifest paths are relative to the output directory; keep each one
+      # and its compressed versions.
+      keep = @data.values.flat_map { |v| [v[:path], v[:sourcemap]].compact }
+      keep = keep.flat_map { |path| [path, "#{path}.gz", "#{path}.br"] }.to_set
+      clean_dir(dir, keep)
+      nil
     end
 
     # Wipe directive
@@ -138,6 +132,34 @@ class Condenser
       
       logger.info "Removed contents of #{dir}"
       nil
+    end
+
+    private
+
+    # Remove files in +dir+ that aren't in +keep+, then any directories left
+    # empty. Never removes the manifest. Returns true if +dir+ is now empty.
+    def clean_dir(dir, keep, prefix = nil)
+      empty = true
+      Dir.each_child(dir) do |child|
+        relative_path = prefix ? File.join(prefix, child) : child
+        child = File.join(dir, child)
+        stat = File.lstat(child)
+
+        # Don't follow symlinks out of the output directory
+        if stat.directory?
+          if clean_dir(child, keep, relative_path)
+            Dir.rmdir(child)
+            logger.info "Removed #{child}"
+            next
+          end
+        elsif stat.file? && child != filename && !keep.include?(relative_path)
+          File.delete(child)
+          logger.info "Removed #{child}"
+          next
+        end
+        empty = false
+      end
+      empty
     end
 
   end
