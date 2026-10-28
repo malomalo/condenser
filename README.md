@@ -551,7 +551,7 @@ The map is at the bundle's path plus `.map` (`application-<etag>.js.map`), and
 the etag doesn't depend on the bundle's output, so the comment doesn't change
 it. Precompiling writes the map next to the bundle with the writers registered
 for `application/json` (with the default writers, also `.map.gz` and
-`.map.br`), and lists it as the bundle's `map` in the manifest (`null` for an
+`.map.br`), and lists it as the bundle's `sourcemap` in the manifest (`null` for an
 asset without one).
 `Condenser::Server` serves it for both `:linked` and `:hidden`.
 

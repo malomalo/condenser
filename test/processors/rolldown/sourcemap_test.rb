@@ -133,7 +133,7 @@ class RolldownSourcemapTest < ActiveSupport::TestCase
     assert_nil export.sourcemap
     assert_nil export.sourcemap_path
     assert_not export.sourcemap_linked?
-    assert_nil export.to_json.fetch(:map)
+    assert_nil export.to_json.fetch(:sourcemap)
   end
 
   test 'sourcemap: :linked exports a map and links it from the bundle' do
@@ -267,7 +267,7 @@ class RolldownSourcemapTest < ActiveSupport::TestCase
 
     data = JSON.parse(File.read(manifest.filename))
     assert_equal export.path, data['main.js']['path']
-    assert_equal "#{export.path}.map", data['main.js']['map']
+    assert_equal "#{export.path}.map", data['main.js']['sourcemap']
 
     outputs = export.write(File.join(@dir, 'again'))
     assert_includes outputs, 'main.js.map'
@@ -279,7 +279,7 @@ class RolldownSourcemapTest < ActiveSupport::TestCase
     manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
     manifest.compile('main.js')
 
-    assert_nil JSON.parse(File.read(manifest.filename))['main.js'].fetch('map')
+    assert_nil JSON.parse(File.read(manifest.filename))['main.js'].fetch('sourcemap')
     assert_empty Dir.glob(File.join(@dir, '*.map'))
   end
 

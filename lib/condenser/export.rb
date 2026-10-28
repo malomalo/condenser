@@ -80,7 +80,7 @@ class Condenser
         size: size,
         digest: hexdigest,
         integrity: integrity,
-        map: @sourcemap ? sourcemap_path : nil
+        sourcemap: @sourcemap ? sourcemap_path : nil
       }
     end
     
