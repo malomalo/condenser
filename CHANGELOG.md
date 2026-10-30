@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Breaking changes / upgrade notes
+
+- `digestor`, `base` and `sourcemap` are set only through `Condenser.new(digestor:, base:, sourcemap:)` and are read-only afterwards: `digestor=`, `base=` and `sourcemap=` are removed (calling them raises `NoMethodError`). Changing them after creation didn't invalidate exports or etags already built.
+
 ## 2.0.0.rc2
 
 Changes since 2.0.0.rc1.

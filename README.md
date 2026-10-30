@@ -565,11 +565,11 @@ build with an error naming the importing file and the import.
 
 #### Source maps
 
-Source maps are an environment setting, off by default:
+Source maps are an environment setting, off by default, set when the
+environment is created:
 
 ```ruby
 condenser = Condenser.new('app/assets', sourcemap: true)
-condenser.sourcemap = :linked
 ```
 
 | `sourcemap` | Map exported | `//# sourceMappingURL` comment | `SourceMap` header (`Condenser::Server`) |
@@ -581,8 +581,7 @@ condenser.sourcemap = :linked
 
 Anything else raises an `ArgumentError`. `RolldownProcessor` exports a map
 whenever the setting is on. The setting is part of the export cache key and
-etag, so switching between values rebuilds the bundle. Set it before
-building, like the pipeline.
+etag, so switching between values rebuilds the bundle.
 
 The map is at the bundle's path plus `.map` (`application-<etag>.js.map`), and
 the etag doesn't depend on the bundle's output, so the comment doesn't change

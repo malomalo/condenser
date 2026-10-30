@@ -45,10 +45,14 @@ class EnvironmentTest < ActiveSupport::TestCase
     assert_empty @env.path
   end
 
-  test "digestor=" do
+  test "digestor" do
     assert_equal @env.digestor, Digest::SHA256
-    @env.digestor = Digest::MD5
-    assert_equal @env.digestor, Digest::MD5
+    assert_equal Digest::MD5, Condenser.new(@path, listen: false, pipeline: false, digestor: Digest::MD5).digestor
+  end
+
+  test "digestor, base and sourcemap are set only through Condenser.new" do
+    assert_equal @path, @env.base
+    [:digestor=, :base=, :sourcemap=].each { |writer| assert_not_respond_to @env, writer }
   end
   
 end
