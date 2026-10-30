@@ -4,6 +4,10 @@ class CondenserBabelTest < ActiveSupport::TestCase
   
   def setup
     super
+    register_babel
+  end
+
+  def register_babel
     @env.unregister_preprocessor('application/javascript', Condenser::JSAnalyzer)
     @env.register_preprocessor 'application/javascript', Condenser::BabelProcessor.new(@npm_dir,
       presets: [ ['@babel/preset-env', { modules: false, targets: { browsers: 'firefox > 41' } }] ]
@@ -137,7 +141,8 @@ class CondenserBabelTest < ActiveSupport::TestCase
 
   test 'depends_on a ! path, a file relative to base that is not an asset' do
     root = File.realpath(Dir.mktmpdir)
-    @env.base = root
+    @env = Condenser.new(@path, logger: @env.logger, npm_path: @npm_dir, base: root, listen: false)
+    register_babel
     file 'config/x.yml', "secret: one\n", base: root
     file 'name.js', <<~JS
       // depends_on !config/x.yml

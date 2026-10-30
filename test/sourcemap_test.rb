@@ -49,10 +49,19 @@ class SourcemapTest < ActiveSupport::TestCase
     super
   end
 
-  def rolldown(**options)
+  # sourcemap is set only through Condenser.new, so passing it replaces @env.
+  def rolldown(sourcemap: nil, **options)
+    @env = environment(sourcemap: sourcemap) unless sourcemap.nil?
     @env.unregister_minifier('application/javascript')
     @env.unregister_exporter('application/javascript')
     @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path, **options))
+  end
+
+  def environment(sourcemap:)
+    env = Condenser.new(@path, logger: @env.logger, npm_path: @npm_dir, base: @path, listen: false, sourcemap: sourcemap)
+    env.unregister_writer(Condenser::ZlibWriter)
+    env.unregister_writer(Condenser::BrotliWriter)
+    env
   end
 
   def app
@@ -109,13 +118,11 @@ class SourcemapTest < ActiveSupport::TestCase
     error = assert_raises(ArgumentError) { Condenser.new(@path, listen: false, sourcemap: :hidden) }
     assert_equal 'sourcemap must be false, true, :linked or :headers, got :hidden', error.message
 
-    error = assert_raises(ArgumentError) { @env.sourcemap = nil }
+    error = assert_raises(ArgumentError) { Condenser.new(@path, listen: false, sourcemap: nil) }
     assert_equal 'sourcemap must be false, true, :linked or :headers, got nil', error.message
-    assert_equal false, @env.sourcemap
 
     [true, :linked, :headers, false].each do |value|
-      @env.sourcemap = value
-      assert_equal value, @env.sourcemap
+      assert_equal value, Condenser.new(@path, listen: false, pipeline: false, sourcemap: value).sourcemap
     end
   end
 
@@ -125,9 +132,8 @@ class SourcemapTest < ActiveSupport::TestCase
   end
 
   test 'sourcemap is in the export pipeline digest' do
-    rolldown
     digests = [false, true, :linked, :headers].map do |value|
-      @env.sourcemap = value
+      rolldown(sourcemap: value)
       @env.export_pipeline_digest('application/javascript')
     end
     assert_equal 4, digests.uniq.size
@@ -162,8 +168,7 @@ class SourcemapTest < ActiveSupport::TestCase
   end
 
   test 'sourcemap: true exports a map and links it from the bundle' do
-    rolldown
-    @env.sourcemap = true
+    rolldown(sourcemap: true)
     export = @env.find('main.js').export
     map = JSON.parse(export.sourcemap)
 
@@ -178,8 +183,7 @@ class SourcemapTest < ActiveSupport::TestCase
   end
 
   test 'sourcemap: :linked exports a map with the comment' do
-    rolldown
-    @env.sourcemap = :linked
+    rolldown(sourcemap: :linked)
     export = @env.find('main.js').export
 
     assert_equal ['lib/math.js', 'main.js'], JSON.parse(export.sourcemap)['sources']
@@ -187,8 +191,7 @@ class SourcemapTest < ActiveSupport::TestCase
   end
 
   test 'sourcemap: :headers exports a map without the comment' do
-    rolldown
-    @env.sourcemap = :headers
+    rolldown(sourcemap: :headers)
     export = @env.find('main.js').export
 
     assert_equal ['lib/math.js', 'main.js'], JSON.parse(export.sourcemap)['sources']
@@ -206,8 +209,7 @@ class SourcemapTest < ActiveSupport::TestCase
   end
 
   test 'the mappings point back to the sources' do
-    rolldown
-    @env.sourcemap = true
+    rolldown(sourcemap: true)
     export = @env.find('main.js').export
     map = JSON.parse(export.sourcemap)
 
@@ -217,8 +219,7 @@ class SourcemapTest < ActiveSupport::TestCase
   end
 
   test 'the mappings point back to the sources with minify: true' do
-    rolldown(minify: true)
-    @env.sourcemap = true
+    rolldown(minify: true, sourcemap: true)
     export = @env.find('main.js').export
     map = JSON.parse(export.sourcemap)
 
@@ -239,15 +240,13 @@ class SourcemapTest < ActiveSupport::TestCase
       console.log( hello() );
     JS
 
-    rolldown
-    @env.sourcemap = :headers
+    rolldown(sourcemap: :headers)
     map = JSON.parse(@env.find('npm.js').export.sourcemap)
     assert_equal ['node_modules/condenser-rolldown-sourcemap-test/index.js', 'npm.js'], map['sources']
   end
 
   test 'a minifier that clears the map exports none' do
-    rolldown
-    @env.sourcemap = true
+    rolldown(sourcemap: true)
     @env.register_minifier('application/javascript', RewritingMinifier.new)
     export = @env.find('main.js').export
 
@@ -257,8 +256,7 @@ class SourcemapTest < ActiveSupport::TestCase
   end
 
   test 'a minifier that leaves the map keeps it' do
-    rolldown
-    @env.sourcemap = true
+    rolldown(sourcemap: true)
     @env.register_minifier('application/javascript', NoopMinifier.new)
     export = @env.find('main.js').export
 
@@ -267,8 +265,7 @@ class SourcemapTest < ActiveSupport::TestCase
   end
 
   test 'TerserMinifier maps the minified bundle back to the sources' do
-    rolldown
-    @env.sourcemap = true
+    rolldown(sourcemap: true)
     @env.register_minifier('application/javascript', Condenser::TerserMinifier.new(@npm_dir))
     export = @env.find('main.js').export
     map = JSON.parse(export.sourcemap)
@@ -283,8 +280,7 @@ class SourcemapTest < ActiveSupport::TestCase
   end
 
   test 'TerserMinifier with sourcemap: :headers exports the map without the comment' do
-    rolldown
-    @env.sourcemap = :headers
+    rolldown(sourcemap: :headers)
     @env.register_minifier('application/javascript', Condenser::TerserMinifier.new(@npm_dir))
     export = @env.find('main.js').export
     map = JSON.parse(export.sourcemap)
@@ -304,8 +300,7 @@ class SourcemapTest < ActiveSupport::TestCase
   end
 
   test 'precompiling writes the map next to the bundle and lists it in the manifest' do
-    rolldown
-    @env.sourcemap = :headers
+    rolldown(sourcemap: :headers)
     @env.register_writer(Condenser::ZlibWriter.new)
     manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
     manifest.compile('main.js')
@@ -335,8 +330,7 @@ class SourcemapTest < ActiveSupport::TestCase
   end
 
   test 'the server serves the map and links it with a SourceMap header' do
-    rolldown
-    @env.sourcemap = true
+    rolldown(sourcemap: true)
     export = @env.find('main.js').export
 
     get "/assets/#{export.path}"
@@ -368,8 +362,7 @@ class SourcemapTest < ActiveSupport::TestCase
   end
 
   test 'the server sends the SourceMap header for :headers' do
-    rolldown
-    @env.sourcemap = :headers
+    rolldown(sourcemap: :headers)
     export = @env.find('main.js').export
 
     get "/assets/#{export.path}"
@@ -379,8 +372,7 @@ class SourcemapTest < ActiveSupport::TestCase
   end
 
   test 'the server sends no SourceMap header for :linked' do
-    rolldown
-    @env.sourcemap = :linked
+    rolldown(sourcemap: :linked)
     export = @env.find('main.js').export
 
     get "/assets/#{export.path}"
