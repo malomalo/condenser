@@ -139,7 +139,7 @@ class RolldownWorkerTest < ActiveSupport::TestCase
     default = Condenser::RolldownProcessor.new(@env.npm_path)
     tuned = Condenser::RolldownProcessor.new(@env.npm_path, max_memory: 1024)
     assert_equal default.options, tuned.options
-    assert_equal %i[prefix dynamic_imports aliases minify rolldown], default.options.keys
+    assert_equal %i[prefix dynamic_imports aliases minify keep_names rolldown], default.options.keys
 
     digest = @env.export_pipeline_digest('application/javascript')
     register_rolldown(tuned)

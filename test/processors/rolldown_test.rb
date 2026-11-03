@@ -338,6 +338,73 @@ class RolldownTest < ActiveSupport::TestCase
     assert_equal 'minify must be true or false, got "yes"', error.message
   end
 
+  test 'keep_names: true keeps class and function names when minifying' do
+    @env.unregister_exporter('application/javascript')
+    @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path, minify: true, keep_names: true))
+    file 'main.js', <<~JS
+      import Trait from './trait.js';
+
+      console.log(Trait.name);
+    JS
+    file 'trait.js', <<~JS
+      export default class Trait {}
+    JS
+
+    source = @env.find('main.js').export.source
+    assert_match(/\bTrait\b/, source)
+  end
+
+  test 'keep_names: true keeps the names of classes renamed to avoid a collision' do
+    @env.unregister_exporter('application/javascript')
+    @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path, keep_names: true))
+    file 'main.js', <<~JS
+      import A from './a.js';
+      import B from './b.js';
+
+      console.log(A.name, B.name);
+    JS
+    file 'a.js', <<~JS
+      export default class Trait {}
+    JS
+    file 'b.js', <<~JS
+      export default class Trait {}
+    JS
+
+    source = @env.find('main.js').export.source
+    assert_includes source, 'Trait$1'
+    assert_includes source, '__name(this, "Trait")'
+  end
+
+  test 'the minifier renames classes by default' do
+    @env.unregister_exporter('application/javascript')
+    @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path, minify: true))
+    file 'main.js', <<~JS
+      import Trait from './trait.js';
+
+      console.log(Trait.name);
+    JS
+    file 'trait.js', <<~JS
+      export default class Trait {}
+    JS
+
+    assert_no_match(/Trait/, @env.find('main.js').export.source)
+  end
+
+  test 'keep_names is in the options' do
+    assert_equal false, Condenser::RolldownProcessor.new(@env.npm_path).options[:keep_names]
+    assert_equal true, Condenser::RolldownProcessor.new(@env.npm_path, keep_names: true).options[:keep_names]
+
+    digest = @env.export_pipeline_digest('application/javascript')
+    @env.unregister_exporter('application/javascript')
+    @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path, keep_names: true))
+    assert_not_equal digest, @env.export_pipeline_digest('application/javascript')
+  end
+
+  test 'keep_names must be true or false' do
+    error = assert_raises(ArgumentError) { Condenser::RolldownProcessor.new(@env.npm_path, keep_names: 'yes') }
+    assert_equal 'keep_names must be true or false, got "yes"', error.message
+  end
+
   test 'the installed Rolldown version is in the options' do
     version = JSON.parse(File.read(File.join(@npm_dir, 'node_modules', 'rolldown', 'package.json')))['version']
     assert_equal version, @env.exporters['application/javascript'].first.options[:rolldown]

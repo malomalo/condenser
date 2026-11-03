@@ -18,7 +18,7 @@ class Condenser
     # A successful run's stderr is logged at debug to +logger+. A failed
     # run's is in the error.
     def exec_runtime(script, logger:)
-      Tempfile.open(['script', 'js']) do |scriptfile|
+      Tempfile.open(['script', '.cjs']) do |scriptfile|
         scriptfile.write(script)
         scriptfile.flush
 
@@ -111,7 +111,7 @@ class Condenser
       # Started lazily, and again after a fork, so a forked process never
       # shares its parent's pipe.
       def start
-        @scriptfile = Tempfile.new(['worker', '.js'])
+        @scriptfile = Tempfile.new(['worker', '.cjs'])
         @scriptfile.write(@script, "\n", LOOP)
         @scriptfile.flush
         @pid = Process.pid

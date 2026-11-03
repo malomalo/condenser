@@ -17,7 +17,8 @@ require 'set'
 # process; the environment's base isn't.
 class Condenser::TailwindProcessor < Condenser::Processor
 
-  SCRIPT = File.expand_path('tailwind_processor.js', __dir__)
+  # .cjs, so it's CommonJS under a package.json with "type": "module".
+  SCRIPT = File.expand_path('tailwind_processor.cjs', __dir__)
   PACKAGES = %w[tailwindcss @tailwindcss/node @tailwindcss/oxide].freeze
   IMPORT = /@import\s+(?:url\(\s*)?["']tailwindcss["'\/]|@reference\b/
 
