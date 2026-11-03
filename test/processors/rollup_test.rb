@@ -8,6 +8,19 @@ class RollupTest < ActiveSupport::TestCase
     @env.register_exporter('application/javascript', Condenser::RollupProcessor.new(@npm_dir))
   end
   
+  test 'works when another package hoists an incompatible magic-string' do
+    npm_dir = Dir.mktmpdir
+    # magic-string 1.x is ESM-only; Tailwind's packages depend on it
+    Condenser::NodeProcessor.new(npm_dir).npm_install('magic-string@1')
+    @env.unregister_exporter('application/javascript')
+    @env.register_exporter('application/javascript', Condenser::RollupProcessor.new(npm_dir))
+    file 'main.js', "console.log( 5 );\n"
+
+    assert_exported_file 'main.js', 'application/javascript', "console.log( 5 );\n"
+  ensure
+    FileUtils.remove_entry(npm_dir, true) if npm_dir
+  end
+
   test 'file is exported as module' do
     file 'main.js', <<~JS
       console.log( cube( 5 ) ); // 125

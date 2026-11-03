@@ -6,6 +6,10 @@
 
 - `RolldownProcessor`'s `keep_names:` option (Rolldown's `keepNames`, default `false`), which keeps the `name` of functions and classes when minifying or renaming one to avoid a collision, for code that reads `.name` at runtime. It's in the options, so assets are rebuilt once.
 
+### Fixed / improved
+
+- `RollupProcessor` loads `magic-string` and `estree-walker` from `@rollup/plugin-commonjs`, which depends on them, instead of the top of `node_modules`. Another package in the same npm path (e.g. Tailwind's, which use the ESM-only `magic-string` 1) could hoist an incompatible version there and break Rollup with `Cannot find module …/magic-string`.
+
 ## 2.0.0.rc2
 
 Changes since 2.0.0.rc1.
