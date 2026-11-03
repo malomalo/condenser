@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed / improved
+
+- `Condenser::Manifest#clean` keeps any file named after a current asset or source map plus extra extensions (e.g. `.xz`, `.zst`, `.map.gz`), so files from custom writers aren't removed. It kept only `.gz` and `.br` before.
+
 ## 2.0.0.rc2
 
 Changes since 2.0.0.rc1.
