@@ -32,7 +32,7 @@ class Condenser::RolldownProcessor < Condenser::Processor
     options
   end
 
-  def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, aliases: {}, platform: 'neutral', minify: false, keep_names: true, module_types: {}, max_memory: Condenser::NodeWorker::MAX_MEMORY)
+  def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, aliases: {}, platform: 'neutral', minify: false, keep_names: false, module_types: {}, max_memory: Condenser::NodeWorker::MAX_MEMORY)
     unless DYNAMIC_IMPORTS.include?(dynamic_imports)
       raise ArgumentError, "dynamic_imports must be :inline or :keep, got #{dynamic_imports.inspect}"
     end
@@ -103,7 +103,7 @@ class Condenser::RolldownProcessor < Condenser::Processor
   class Runner < Condenser::NodeProcessor
     JSON_TYPE = 'application/json'
 
-    def initialize(dir = nil, worker:, prefix: nil, dynamic_imports: :inline, aliases: {}, platform: 'neutral', minify: false, keep_names: true, module_types: {})
+    def initialize(dir = nil, worker:, prefix: nil, dynamic_imports: :inline, aliases: {}, platform: 'neutral', minify: false, keep_names: false, module_types: {})
       super(dir)
       @worker = worker
       @prefix = prefix

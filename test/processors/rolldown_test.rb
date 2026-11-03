@@ -319,7 +319,7 @@ class RolldownTest < ActiveSupport::TestCase
     JS
 
     assert_exported_file 'main.js', 'application/javascript', <<~JS
-      function cube(e){return e*e*e}console.log(cube(5));
+      function e(e){return e*e*e}console.log(e(5));
     JS
   end
 
@@ -338,9 +338,9 @@ class RolldownTest < ActiveSupport::TestCase
     assert_equal 'minify must be true or false, got "yes"', error.message
   end
 
-  test 'keep_names keeps class and function names when minifying' do
+  test 'keep_names: true keeps class and function names when minifying' do
     @env.unregister_exporter('application/javascript')
-    @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path, minify: true))
+    @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path, minify: true, keep_names: true))
     file 'main.js', <<~JS
       import Trait from './trait.js';
 
@@ -354,7 +354,9 @@ class RolldownTest < ActiveSupport::TestCase
     assert_match(/\bTrait\b/, source)
   end
 
-  test 'keep_names keeps the names of classes renamed to avoid a collision' do
+  test 'keep_names: true keeps the names of classes renamed to avoid a collision' do
+    @env.unregister_exporter('application/javascript')
+    @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path, keep_names: true))
     file 'main.js', <<~JS
       import A from './a.js';
       import B from './b.js';
@@ -373,9 +375,9 @@ class RolldownTest < ActiveSupport::TestCase
     assert_includes source, '__name(this, "Trait")'
   end
 
-  test 'keep_names: false lets the minifier rename classes' do
+  test 'the minifier renames classes by default' do
     @env.unregister_exporter('application/javascript')
-    @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path, minify: true, keep_names: false))
+    @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path, minify: true))
     file 'main.js', <<~JS
       import Trait from './trait.js';
 
@@ -389,12 +391,12 @@ class RolldownTest < ActiveSupport::TestCase
   end
 
   test 'keep_names is in the options' do
-    assert_equal true, Condenser::RolldownProcessor.new(@env.npm_path).options[:keep_names]
-    assert_equal false, Condenser::RolldownProcessor.new(@env.npm_path, keep_names: false).options[:keep_names]
+    assert_equal false, Condenser::RolldownProcessor.new(@env.npm_path).options[:keep_names]
+    assert_equal true, Condenser::RolldownProcessor.new(@env.npm_path, keep_names: true).options[:keep_names]
 
     digest = @env.export_pipeline_digest('application/javascript')
     @env.unregister_exporter('application/javascript')
-    @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path, keep_names: false))
+    @env.register_exporter('application/javascript', Condenser::RolldownProcessor.new(@env.npm_path, keep_names: true))
     assert_not_equal digest, @env.export_pipeline_digest('application/javascript')
   end
 

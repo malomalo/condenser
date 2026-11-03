@@ -548,10 +548,10 @@ registers no `application/javascript` minifier; if you register one, e.g.
 `TerserMinifier`, use a `RolldownProcessor` without `minify: true`, or the
 bundle is minified twice.
 
-`keep_names: true`, the default, keeps the `name` of functions and classes
-when Rolldown renames them, to avoid a collision between modules or when
-minifying, for code that reads it at runtime (`TerserMinifier` keeps them
-too). Pass `keep_names: false` to let them be renamed.
+`keep_names: true` keeps the `name` of functions and classes when Rolldown
+renames them, to avoid a collision between modules or when minifying, for
+code that reads it at runtime (`TerserMinifier` keeps them by default). It
+defaults to `false`, like Rolldown's `keepNames`.
 
 `RolldownProcessor` is registered as an instance, and uses the npm path it's
 created with. Pass `npm_path:` to `Condenser.new` so the default one gets it,

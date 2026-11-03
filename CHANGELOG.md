@@ -2,9 +2,9 @@
 
 ## Unreleased
 
-### Breaking changes / upgrade notes
+### Added
 
-- `RolldownProcessor` keeps the `name` of functions and classes by default (Rolldown's `keepNames`), so minifying or renaming one to avoid a collision no longer changes what `.name` returns. Pass `keep_names: false` for the previous output. `keep_names` is in the options, so assets are rebuilt once.
+- `RolldownProcessor`'s `keep_names:` option (Rolldown's `keepNames`, default `false`), which keeps the `name` of functions and classes when minifying or renaming one to avoid a collision, for code that reads `.name` at runtime. It's in the options, so assets are rebuilt once.
 
 ## 2.0.0.rc2
 
