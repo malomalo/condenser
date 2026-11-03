@@ -165,7 +165,7 @@ class Condenser
     # File.extname only looks at the basename, so this never strips into a
     # directory name, and a dotfile like ".gz" has no extension.
     def kept?(path, keep)
-      until keep.include?(path)
+      while !keep.include?(path)
         ext = File.extname(path)
         return false if ext.empty?
         path = path.delete_suffix(ext)
