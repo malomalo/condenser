@@ -16,7 +16,7 @@ class Condenser
     end
     
     def exec_runtime(script)
-      Tempfile.open(['script', 'js']) do |scriptfile|
+      Tempfile.open(['script', '.cjs']) do |scriptfile|
         scriptfile.write(script)
         scriptfile.flush
 
@@ -107,7 +107,7 @@ class Condenser
       # Started lazily, and again after a fork, so a forked process never
       # shares its parent's pipe.
       def start
-        @scriptfile = Tempfile.new(['worker', '.js'])
+        @scriptfile = Tempfile.new(['worker', '.cjs'])
         @scriptfile.write(@script, "\n", LOOP)
         @scriptfile.flush
         @pid = Process.pid
