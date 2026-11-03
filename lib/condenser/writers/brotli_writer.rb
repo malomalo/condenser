@@ -30,8 +30,8 @@ class Condenser::BrotliWriter
     "#{asset.path}.br"
   end
   
-  def exist?(asset)
-    ::File.exist?(path(asset))
+  def exist?(output_directory, asset)
+    ::File.exist?(File.join(output_directory, path(asset)))
   end
   
   def mode_for_mime_type(mime_type)

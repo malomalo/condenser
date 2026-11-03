@@ -37,4 +37,18 @@ class PipelineTest < ActiveSupport::TestCase
     end
   end
   
+  test 'unregister_writer removes a writer class or instance for every mime type' do
+    file_writer = Condenser::FileWriter.new
+    zlib_writer = Condenser::ZlibWriter.new
+    @env.register_writer file_writer
+    @env.register_writer zlib_writer
+    @env.register_writer Condenser::BrotliWriter.new
+
+    @env.unregister_writer(Condenser::BrotliWriter)
+    assert_equal [file_writer, zlib_writer], @env.writers_for_mime_type('application/javascript')
+
+    @env.unregister_writer(zlib_writer)
+    assert_equal [file_writer], @env.writers_for_mime_type('application/javascript')
+  end
+
 end

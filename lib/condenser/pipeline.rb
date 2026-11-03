@@ -160,20 +160,11 @@ class Condenser
       end
     end
         
-    def unregister_writer(engine, for_mime_types: [])
-      mime_types = @writers.keys if mime_types.nil?
+    # Removes +engine+, a writer or a writer class, for +for_mime_types+, or
+    # every mime type if none are given.
+    def unregister_writer(engine, for_mime_types: nil)
       Array(for_mime_types || @writers.keys).each do |mime_type|
-        @writers[mime_type].select! do |writer|
-          if engine.nil? || engine == writer[0] || writer[0].is_a?(engine)
-            if added_mime_types.nil? || added_mime_types == writer[1]
-              false
-            else
-              true
-            end
-          else
-            true
-          end
-        end
+        @writers[mime_type]&.reject! { |w| w == engine || (engine.is_a?(Module) && w.is_a?(engine)) }
       end
     end
     

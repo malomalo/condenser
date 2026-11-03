@@ -47,6 +47,7 @@ class ManifestTest < ActiveSupport::TestCase
     file 'application.js', <<-JS
       console.log(1);
     JS
+    @env.register_writer Condenser::ZlibWriter.new
     manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
 
     asset = @env['application.js']
@@ -64,6 +65,14 @@ class ManifestTest < ActiveSupport::TestCase
     assert data['application.js']
     assert_equal asset.path,  data['application.js']['path']
     assert_equal 15,          data['application.js']['size']
+  end
+
+  test "compile returns the files written" do
+    file 'application.js', 'console.log(1);'
+    @env.register_writer Condenser::ZlibWriter.new
+    manifest = Condenser::Manifest.new(@env, @dir)
+
+    assert_equal %w(application.js application.js.gz), manifest.compile('application.js')
   end
 
   test "compile asset dependencies includes the dependencies" do
@@ -414,6 +423,7 @@ class ManifestTest < ActiveSupport::TestCase
     file 'logo.svg', 'x'
     file 'favicon.ico', 'x'
 
+    @env.register_writer Condenser::ZlibWriter.new
     manifest = Condenser::Manifest.new(@env, @dir)
     %W{ gallery.css application.js logo.svg favicon.ico }.each do |file_name|
       original_path = @env[file_name].path

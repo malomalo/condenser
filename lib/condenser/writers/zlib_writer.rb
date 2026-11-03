@@ -29,8 +29,8 @@ class Condenser::ZlibWriter
     "#{asset.path}.gz"
   end
   
-  def exist?(asset)
-    ::File.exist?(path(asset))
+  def exist?(output_directory, asset)
+    ::File.exist?(File.join(output_directory, path(asset)))
   end
 
   def call(output_directory, asset)
