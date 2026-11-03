@@ -627,6 +627,27 @@ class ManifestTest < ActiveSupport::TestCase
                     admin/pages/show-def.js.map manifest.json), output_files
   end
 
+  test "clean keeps files named after a current asset with extra extensions" do
+    manifest = write_manifest({ 'application.js' => { path: 'application-abc.js' } })
+    %w(application-abc.js application-abc.js.xz application-abc.js.zst
+       application-abc.js.map application-abc.js.map.gz).each { |f| write_output(f) }
+
+    manifest.clean
+
+    assert_equal %w(application-abc.js application-abc.js.map application-abc.js.map.gz
+                    application-abc.js.xz application-abc.js.zst manifest.json), output_files
+  end
+
+  test "clean removes files that only share a current asset's stem" do
+    manifest = write_manifest({ 'admin/application.js' => { path: 'admin/application-abc.js' } })
+    %w(admin/application-abc.js admin/application-old.js.xz admin/application-abc.jsx
+       admin/application-abc admin/application-abc.js.d/a.js admin/.gz).each { |f| write_output(f) }
+
+    manifest.clean
+
+    assert_equal %w(admin admin/application-abc.js manifest.json), output_files
+  end
+
   test "clean removes files that aren't in the manifest" do
     manifest = write_manifest({ 'application.js' => { path: 'application-abc.js' } })
     write_output('application-abc.js')

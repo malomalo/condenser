@@ -6,8 +6,14 @@
 
 - A writer's `exist?` takes the output directory, `exist?(output_directory, asset)`, and checks for the file there. It was given only the asset and checked its path relative to the working directory, so `Export#write` almost never skipped a file already written, or skipped one because the working directory had a file at that path. A custom writer has to take the new argument; subclassing `Condenser::FileWriter` gives it `exist?`, `path` and `call`, with an `EXTENSION` constant and a private `write(file, asset)`, which `ZlibWriter` and `BrotliWriter` now do.
 
+### Added
+
+- `RolldownProcessor`'s `keep_names:` option (Rolldown's `keepNames`, default `false`), which keeps the `name` of functions and classes when minifying or renaming one to avoid a collision, for code that reads `.name` at runtime. It's in the options, so assets are rebuilt once.
+
 ### Fixed / improved
 
+- The Tailwind and Rolldown worker scripts are `.cjs`, as are the scripts `NodeProcessor` writes to a temp file, so Node runs them as CommonJS when the gem is installed under a `package.json` with `"type": "module"` (e.g. `vendor/bundle` in an app). They failed with `require is not defined in ES module scope`.
+- `Condenser::Manifest#clean` keeps any file named after a current asset or source map plus extra extensions (e.g. `.xz`, `.zst`, `.map.gz`), so files from custom writers aren't removed. It kept only `.gz` and `.br` before.
 - `unregister_writer` removed nothing: with no `for_mime_types:` it now removes the writer from every mime type, and it matches a writer instance, or a class's own instances (so `unregister_writer(Condenser::FileWriter)` leaves `ZlibWriter` and `BrotliWriter`, which subclass it). Tests now run without the gzip and brotli writers, and register them where they check compressed files.
 - `Manifest#add` and `#compile` return the files written instead of the names passed in. A file that's skipped because it's already in the output directory isn't included.
 
