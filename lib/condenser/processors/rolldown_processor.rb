@@ -26,18 +26,21 @@ class Condenser::RolldownProcessor < Condenser::Processor
   end
 
   def options
-    options = {prefix: @prefix, dynamic_imports: @dynamic_imports, aliases: @aliases, minify: @minify, rolldown: @rolldown_version}
+    options = {prefix: @prefix, dynamic_imports: @dynamic_imports, aliases: @aliases, minify: @minify, keep_names: @keep_names, rolldown: @rolldown_version}
     options[:platform] = @platform if @platform != 'neutral'
     options[:module_types] = @module_types if !@module_types.empty?
     options
   end
 
-  def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, aliases: {}, platform: 'neutral', minify: false, module_types: {}, max_memory: Condenser::NodeWorker::MAX_MEMORY)
+  def initialize(dir = nil, prefix: nil, dynamic_imports: :inline, bundler_path: nil, aliases: {}, platform: 'neutral', minify: false, keep_names: false, module_types: {}, max_memory: Condenser::NodeWorker::MAX_MEMORY)
     unless DYNAMIC_IMPORTS.include?(dynamic_imports)
       raise ArgumentError, "dynamic_imports must be :inline or :keep, got #{dynamic_imports.inspect}"
     end
     unless minify == true || minify == false
       raise ArgumentError, "minify must be true or false, got #{minify.inspect}"
+    end
+    unless keep_names == true || keep_names == false
+      raise ArgumentError, "keep_names must be true or false, got #{keep_names.inspect}"
     end
     unless max_memory.is_a?(Integer) && max_memory.positive?
       raise ArgumentError, "max_memory must be a positive Integer, got #{max_memory.inspect}"
@@ -50,6 +53,7 @@ class Condenser::RolldownProcessor < Condenser::Processor
     @aliases = aliases
     @platform = platform
     @minify = minify
+    @keep_names = keep_names
     @module_types = normalize_module_types(module_types)
     @max_memory = max_memory
     @lock = Mutex.new
@@ -57,7 +61,7 @@ class Condenser::RolldownProcessor < Condenser::Processor
   end
 
   def call(environment, input)
-    Runner.new(@npm_dir, worker: worker, prefix: @prefix, dynamic_imports: @dynamic_imports, aliases: @aliases, platform: @platform, minify: @minify, module_types: @module_types).call(environment, input)
+    Runner.new(@npm_dir, worker: worker, prefix: @prefix, dynamic_imports: @dynamic_imports, aliases: @aliases, platform: @platform, minify: @minify, keep_names: @keep_names, module_types: @module_types).call(environment, input)
   end
 
   # { png: :dataurl } as { "png" => "dataurl" }, sorted by extension.
@@ -99,7 +103,7 @@ class Condenser::RolldownProcessor < Condenser::Processor
   class Runner < Condenser::NodeProcessor
     JSON_TYPE = 'application/json'
 
-    def initialize(dir = nil, worker:, prefix: nil, dynamic_imports: :inline, aliases: {}, platform: 'neutral', minify: false, module_types: {})
+    def initialize(dir = nil, worker:, prefix: nil, dynamic_imports: :inline, aliases: {}, platform: 'neutral', minify: false, keep_names: false, module_types: {})
       super(dir)
       @worker = worker
       @prefix = prefix
@@ -107,6 +111,7 @@ class Condenser::RolldownProcessor < Condenser::Processor
       @aliases = aliases
       @platform = platform
       @minify = minify
+      @keep_names = keep_names
       @module_types = module_types
     end
 
@@ -128,6 +133,7 @@ class Condenser::RolldownProcessor < Condenser::Processor
         aliases: @aliases,
         platform: @platform,
         minify: @minify,
+        keepNames: @keep_names,
         moduleTypes: @module_types.to_h { |ext, type| [".#{ext}", type] }
       }
       if environment.sourcemap
