@@ -3,14 +3,14 @@
 class Condenser::JstTransformer < Condenser::NodeProcessor
   
   # Babel is installed into the npm_path, or the environment's if it's nil.
+  # Only @babel/core is used; the transform is the plugins below.
   def setup(environment)
-    ::Condenser::NodeProcessor.new(npm_path || environment.npm_path).npm_install('@babel/core', '@babel/preset-env')
+    ::Condenser::NodeProcessor.new(npm_path || environment.npm_path).npm_install("@babel/core@^#{Condenser::BabelProcessor::BABEL_MAJOR}")
   end
 
   def call(environment, input)
     opts = {
       filename:         input[:filename],
-      moduleId:         input[:filename].sub(/(\..+)+/, ''),
       cwd:              '/assets/',
       filenameRelative: input[:filename],
       sourceFileName:   input[:filename],

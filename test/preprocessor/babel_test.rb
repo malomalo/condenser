@@ -76,12 +76,12 @@ class CondenserBabelTest < ActiveSupport::TestCase
   test 'not duplicating polyfills' do
     file 'a.js', <<-JS
       export default function () {
-        console.log(Object.assign({}, {a: 1}))
+        console.log(Object.hasOwn({a: 1}, "a"))
       };
     JS
     file 'b.js', <<-JS
       export default function () {
-        console.log(Object.assign({}, {b: 1}))
+        console.log(Object.hasOwn({b: 1}, "b"))
       };
     JS
     file 'c.js', <<~JS
@@ -94,16 +94,16 @@ class CondenserBabelTest < ActiveSupport::TestCase
 
     source = assert_exported_file('c.js', 'application/javascript').source
 
-    # core-js's Object.assign polyfill is bundled once and shared by a and b
+    # core-js's Object.hasOwn polyfill is bundled once and shared by a and b
     assert_equal 1, source.scan("(store.versions || (store.versions = [])).push").size
-    assert_equal 1, source.scan(/^var import_assign = /).size
+    assert_equal 1, source.scan(/^var import_has_own = /).size
     assert source.rstrip.end_with?(<<~JS.rstrip)
       function a_default() {
-      \tconsole.log((0, import_assign.default)({}, { a: 1 }));
+      \tconsole.log((0, import_has_own.default)({ a: 1 }, "a"));
       }
       // b.js
       function b_default() {
-      \tconsole.log((0, import_assign.default)({}, { b: 1 }));
+      \tconsole.log((0, import_has_own.default)({ b: 1 }, "b"));
       }
       // c.js
       a_default();
@@ -157,4 +157,26 @@ class CondenserBabelTest < ActiveSupport::TestCase
   ensure
     FileUtils.remove_entry(root, true)
   end
+
+  test 'the default plugins with the packages it installs into an empty npm path' do
+    npm = File.realpath(Dir.mktmpdir)
+    @env.unregister_preprocessor('application/javascript', Condenser::BabelProcessor)
+    @env.register_preprocessor 'application/javascript', Condenser::BabelProcessor.new(npm,
+      presets: [ ['@babel/preset-env', { modules: false, targets: { browsers: 'firefox > 41' } }] ]
+    )
+    file 'name.js', <<~JS
+      export default async function (x) { return [...x].findLast((y) => y?.z); }
+    JS
+
+    source = @env.find('name.js').source
+    assert_match %r{^import _asyncToGenerator from "@babel/runtime-corejs3/helpers/asyncToGenerator";$}, source
+    assert_match %r{^import _findLastInstanceProperty from "core-js-pure/stable/instance/find-last.js";$}, source
+    assert Dir.exist?(File.join(npm, 'node_modules/@babel/runtime-corejs3/helpers'))
+    assert Dir.exist?(File.join(npm, 'node_modules/core-js-pure/stable/instance'))
+    assert_equal '8', JSON.parse(File.read(File.join(npm, 'node_modules/@babel/core/package.json')))['version'].split('.')[0]
+  ensure
+    FileUtils.remove_entry(npm, true) if npm
+  end
+
 end
+

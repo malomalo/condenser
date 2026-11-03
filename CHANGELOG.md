@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Breaking changes / upgrade notes
+
+- `BabelProcessor`'s default plugins are `@babel/plugin-transform-runtime` and `babel-plugin-polyfill-corejs3` (`method: 'usage-pure'`) instead of transform-runtime's `corejs: 3, useESModules: true`, which Babel 8 removed. Polyfills are imported from `core-js-pure` only for what preset-env's targets need, rather than for everything, and helpers from `@babel/runtime-corejs3`. Plugins and presets are resolved from the npm path by node instead of passed to Babel as paths.
+
+### Fixed / improved
+
+- `JstTransformer` and `BabelProcessor` work with Babel 8, which npm now installs: they no longer pass `moduleId` (Babel 8 fails with "Unknown option: .moduleId"; it only named AMD/UMD/SystemJS modules, and the output is ES modules) and use `transformSync`. A missing `@babel/core` is installed at `^8`, the other `@babel/` packages at the major of the `@babel/core` installed, so an npm path with Babel 7 keeps working. `npm_install` takes a version range (e.g. `@babel/core@^8`), used only when the package is missing. `JstTransformer` no longer installs `@babel/preset-env`, which it didn't use.
+
 ## 2.0.0.rc2
 
 Changes since 2.0.0.rc1.

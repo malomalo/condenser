@@ -26,15 +26,15 @@ Minitest::Reporters.use! Minitest::Reporters::SpecReporter.new
 
 # The tests install the npm packages they use into tmp/ as needed, unpinned.
 # These are installed first, at these versions, so a new release doesn't
-# change the test output (Rolldown) or break the tests (Babel 8 isn't
-# supported yet). They're saved to tmp/package.json so later installs don't
-# replace them. To upgrade, bump the version here.
+# change the test output. Babel is at the major condenser installs, so a
+# tmp/ from before doesn't keep testing an older one. They're saved to
+# tmp/package.json so later installs don't replace them. To upgrade, bump the
+# version here.
 TEST_NPM_PACKAGES = {
   'rolldown'                        => '1.2.15',
-  '@babel/core'                     => '7',
-  '@babel/preset-env'               => '7',
-  '@babel/plugin-transform-runtime' => '7',
-  '@babel/runtime-corejs3'          => '7'
+  '@babel/core'                     => '8',
+  '@babel/preset-env'               => '8',
+  '@babel/plugin-transform-runtime' => '8'
 }
 
 TEST_NPM_DIR = File.expand_path('../../tmp', __FILE__)

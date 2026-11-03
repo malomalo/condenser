@@ -236,4 +236,21 @@ class JSTTransformerTest < ActiveSupport::TestCase
     JS
   end
 
+  test 'jst transformation with the Babel it installs into an empty npm path' do
+    npm = File.realpath(Dir.mktmpdir)
+    @env.npm_path = npm
+    file 'test.jst', <<~JS
+      export default function (locals) { return name; }
+    JS
+
+    assert_file 'test.js', 'application/javascript', <<~JS
+      export default function (locals) {
+        return locals.name;
+      }
+    JS
+    assert_equal '8', JSON.parse(File.read(File.join(npm, 'node_modules/@babel/core/package.json')))['version'].split('.')[0]
+  ensure
+    FileUtils.remove_entry(npm, true) if npm
+  end
+
 end
