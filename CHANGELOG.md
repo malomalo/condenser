@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- `RolldownProcessor`'s `keep_names:` option (Rolldown's `keepNames`, default `false`), which keeps the `name` of functions and classes when minifying or renaming one to avoid a collision, for code that reads `.name` at runtime. It's in the options, so assets are rebuilt once.
+
 ### Fixed / improved
 
 - The Tailwind and Rolldown worker scripts are `.cjs`, as are the scripts `NodeProcessor` writes to a temp file, so Node runs them as CommonJS when the gem is installed under a `package.json` with `"type": "module"` (e.g. `vendor/bundle` in an app). They failed with `require is not defined in ES module scope`.
