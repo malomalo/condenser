@@ -1,11 +1,12 @@
 # frozen_string_literal: true
 
-require 'fileutils'
 require 'brotli'
-require 'condenser/utils'
+require 'condenser/writers/file_writer'
 
 # Generates a `.br` file using the Brotli algorithm with the brotli gem
-class Condenser::BrotliWriter
+class Condenser::BrotliWriter < Condenser::FileWriter
+
+  EXTENSION = '.br'
 
   # What mime types should we compress? This list comes from:
   # https://www.fastly.com/blog/new-gzip-settings-and-deciding-what-compress
@@ -19,21 +20,13 @@ class Condenser::BrotliWriter
   
   ADDED_MIME_TYPES = ['application/brotli']
   
-  attr_reader :mime_types, :added_mime_types
-  
+  attr_reader :added_mime_types
+
   def initialize(mime_types: nil, added_mime_types: nil)
-    @mime_types = mime_types || (COMPRESSALBE_TEXT_TYPES + COMPRESSALBE_FONT_TYPES + COMPRESSALBE_GENERIC_TYPES)
+    super(mime_types: mime_types || (COMPRESSALBE_TEXT_TYPES + COMPRESSALBE_FONT_TYPES + COMPRESSALBE_GENERIC_TYPES))
     @added_mime_types = added_mime_types || ADDED_MIME_TYPES
   end
-  
-  def path(asset)
-    "#{asset.path}.br"
-  end
-  
-  def exist?(output_directory, asset)
-    ::File.exist?(File.join(output_directory, path(asset)))
-  end
-  
+
   def mode_for_mime_type(mime_type)
     if COMPRESSALBE_TEXT_TYPES.include?(mime_type)
       :text
@@ -44,19 +37,15 @@ class Condenser::BrotliWriter
     end
   end
 
-  def call(output_directory, asset)
-    filename = File.join(output_directory, "#{asset.path}.br")
-    FileUtils.mkdir_p(File.dirname(filename))
-    Condenser::Utils.atomic_write(filename) do |file|
-      file.write(Brotli.deflate(asset.source, {
-        mode: mode_for_mime_type(asset.content_types.last),
-        quality: 11
-        # lgwin: 10-24
-        # lgblock: 16-24 think bigger more compression but more mem
-      }))
-    end
-    
-    ["#{asset.filename}.br"]
+  private
+
+  def write(file, asset)
+    file.write(Brotli.deflate(asset.source, {
+      mode: mode_for_mime_type(asset.content_types.last),
+      quality: 11
+      # lgwin: 10-24
+      # lgblock: 16-24 think bigger more compression but more mem
+    }))
   end
 
 end

@@ -51,4 +51,13 @@ class PipelineTest < ActiveSupport::TestCase
     assert_equal [file_writer], @env.writers_for_mime_type('application/javascript')
   end
 
+  test 'unregister_writer with FileWriter leaves the writers that subclass it' do
+    zlib_writer = Condenser::ZlibWriter.new
+    @env.register_writer Condenser::FileWriter.new
+    @env.register_writer zlib_writer
+
+    @env.unregister_writer(Condenser::FileWriter)
+    assert_equal [zlib_writer], @env.writers_for_mime_type('application/javascript')
+  end
+
 end

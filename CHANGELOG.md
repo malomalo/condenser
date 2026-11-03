@@ -4,11 +4,11 @@
 
 ### Breaking changes / upgrade notes
 
-- A writer's `exist?` takes the output directory, `exist?(output_directory, asset)`, and checks for the file there. It was given only the asset and checked its path relative to the working directory, so `Export#write` almost never skipped a file already written, or skipped one because the working directory had a file at that path. A custom writer has to take the new argument.
+- A writer's `exist?` takes the output directory, `exist?(output_directory, asset)`, and checks for the file there. It was given only the asset and checked its path relative to the working directory, so `Export#write` almost never skipped a file already written, or skipped one because the working directory had a file at that path. A custom writer has to take the new argument; subclassing `Condenser::FileWriter` gives it `exist?`, `path` and `call`, with an `EXTENSION` constant and a private `write(file, asset)`, which `ZlibWriter` and `BrotliWriter` now do.
 
 ### Fixed / improved
 
-- `unregister_writer` removed nothing: with no `for_mime_types:` it now removes the writer from every mime type, and it matches a writer instance or class, like the other `unregister_*` methods. Tests now run without the gzip and brotli writers, and register them where they check compressed files.
+- `unregister_writer` removed nothing: with no `for_mime_types:` it now removes the writer from every mime type, and it matches a writer instance, or a class's own instances (so `unregister_writer(Condenser::FileWriter)` leaves `ZlibWriter` and `BrotliWriter`, which subclass it). Tests now run without the gzip and brotli writers, and register them where they check compressed files.
 - `Manifest#add` and `#compile` return the files written instead of the names passed in. A file that's skipped because it's already in the output directory isn't included.
 
 ## 2.0.0.rc2

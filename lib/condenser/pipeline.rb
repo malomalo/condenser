@@ -162,9 +162,11 @@ class Condenser
         
     # Removes +engine+, a writer or a writer class, for +for_mime_types+, or
     # every mime type if none are given.
+    # A class matches only its own instances, so unregistering FileWriter
+    # leaves the compressing writers that subclass it.
     def unregister_writer(engine, for_mime_types: nil)
       Array(for_mime_types || @writers.keys).each do |mime_type|
-        @writers[mime_type]&.reject! { |w| w == engine || (engine.is_a?(Module) && w.is_a?(engine)) }
+        @writers[mime_type]&.reject! { |w| w == engine || (engine.is_a?(Module) && w.instance_of?(engine)) }
       end
     end
     

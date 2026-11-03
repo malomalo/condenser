@@ -1,12 +1,13 @@
 # frozen_string_literal: true
 
-require 'fileutils'
 require 'zlib'
-require 'condenser/utils'
+require 'condenser/writers/file_writer'
 
 # Generates a `.gz` file using the zlib algorithm built into
 # Ruby's standard library.
-class Condenser::ZlibWriter
+class Condenser::ZlibWriter < Condenser::FileWriter
+
+  EXTENSION = '.gz'
 
   # What mime types should we compress? This list comes from:
   # https://www.fastly.com/blog/new-gzip-settings-and-deciding-what-compress
@@ -18,32 +19,19 @@ class Condenser::ZlibWriter
 
   ADDED_MIME_TYPES = ['application/gzip']
   
-  attr_reader :mime_types, :added_mime_types
-  
+  attr_reader :added_mime_types
+
   def initialize(mime_types: nil, added_mime_types: nil)
-    @mime_types = mime_types || COMPRESSALBE_TYPES
+    super(mime_types: mime_types || COMPRESSALBE_TYPES)
     @added_mime_types = added_mime_types || ADDED_MIME_TYPES
   end
-  
-  def path(asset)
-    "#{asset.path}.gz"
-  end
-  
-  def exist?(output_directory, asset)
-    ::File.exist?(File.join(output_directory, path(asset)))
-  end
 
-  def call(output_directory, asset)
-    filename = File.join(output_directory, "#{asset.path}.gz")
-    FileUtils.mkdir_p(File.dirname(filename))
-    Condenser::Utils.atomic_write(filename) do |file|
-      gz = Zlib::GzipWriter.new(file, Zlib::BEST_COMPRESSION)
-      gz.write(asset.source)
-      gz.close
-      # File.utime(mtime, mtime, file.path)
-    end
-    
-    ["#{asset.filename}.gz"]
+  private
+
+  def write(file, asset)
+    gz = Zlib::GzipWriter.new(file, Zlib::BEST_COMPRESSION)
+    gz.write(asset.source)
+    gz.close
   end
 
 end
