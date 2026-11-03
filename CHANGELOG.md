@@ -9,6 +9,7 @@
 ### Fixed / improved
 
 - The Tailwind and Rolldown worker scripts are `.cjs`, as are the scripts `NodeProcessor` writes to a temp file, so Node runs them as CommonJS when the gem is installed under a `package.json` with `"type": "module"` (e.g. `vendor/bundle` in an app). They failed with `require is not defined in ES module scope`.
+- `Condenser::Manifest#clean` keeps any file named after a current asset or source map plus extra extensions (e.g. `.xz`, `.zst`, `.map.gz`), so files from custom writers aren't removed. It kept only `.gz` and `.br` before.
 
 ## 2.0.0.rc2
 
