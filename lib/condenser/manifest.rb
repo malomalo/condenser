@@ -76,6 +76,10 @@ class Condenser
 
       @data[asset.filename] = export.to_json
       outputs = export.write(@dir)
+      if @summary
+        @summary[:assets] << asset.filename
+        @summary[:files] += outputs.size
+      end
       asset.linked_assets.each do |la|
         outputs += add_asset(la)
       end
@@ -89,7 +93,7 @@ class Condenser
     
     def compile(*args)
       reset
-      outputs = add(*args.flatten)
+      outputs = summarize { add(*args.flatten) }
       save
       outputs
     end
@@ -102,7 +106,7 @@ class Condenser
     end
     
     def export(*args)
-      add(*args)
+      summarize { add(*args) }
       save
     end
     
@@ -135,6 +139,21 @@ class Condenser
     end
 
     private
+
+    # Logs one line at info for the assets added in the block, e.g.
+    # "Compiled 120 assets (158 files) in 12.3s". Files are the ones written,
+    # not those that already existed.
+    def summarize
+      @summary = { assets: Set.new, files: 0 }
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      result = yield
+      elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+      assets, files = @summary[:assets].size, @summary[:files]
+      logger.info format("Compiled %d %s (%d %s) in %.1fs", assets, assets == 1 ? 'asset' : 'assets', files, files == 1 ? 'file' : 'files', elapsed)
+      result
+    ensure
+      @summary = nil
+    end
 
     # Remove files in +dir+ that aren't in +keep+, then any directories left
     # empty. Never removes the manifest. Returns true if +dir+ is now empty.

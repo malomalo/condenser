@@ -90,7 +90,7 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
       preset[0] = preset[0].gsub(/"@?babel[\/-][^"]+"/) { |m| "require(#{m})"}
     end
 
-    result = exec_runtime(<<-JS)
+    result = exec_runtime(<<-JS, logger: environment.logger)
       const babel = require("#{File.join(npm_module_path('@babel/core'))}");
       const source = #{JSON.generate(input[:source])};
       const options = #{JSON.generate(opts)};

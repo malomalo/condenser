@@ -9,6 +9,9 @@ class Condenser::NodeWorker
 
   MAX_MEMORY = 1536 * 1024 * 1024
 
+  # Lines of the node process's stderr kept for the error if it dies.
+  STDERR_LINES = 50
+
   class WorkerDied < RuntimeError; end
 
   @workers = ObjectSpace::WeakMap.new
@@ -46,6 +49,7 @@ class Condenser::NodeWorker
     return throwaway_build(config, logger: logger, &block) if @lock.owned?
 
     @lock.synchronize do
+      @logger = logger
       start if @pid.nil? || @owner != Process.pid
       id = (@next_build += 1)
       @failure = nil
@@ -102,8 +106,12 @@ class Condenser::NodeWorker
     { error: "#{e.class}: #{e.message}" }
   end
 
+  # With the end of the process's stderr, which is otherwise only logged at
+  # debug.
   def exited
-    "#{@name} exited with #{terminate || 'an unknown status'}"
+    stderr = @stderr
+    message = "#{@name} exited with #{terminate || 'an unknown status'}"
+    stderr&.any? ? "#{message}:\n#{stderr.join("\n")}" : message
   end
 
   def throwaway_build(config, logger:, &block)
@@ -117,24 +125,46 @@ class Condenser::NodeWorker
     terminate
     @stopping = false
     io, child_io = UNIXSocket.pair
+    err, child_err = IO.pipe
     begin
       flags = @max_old_space_size ? ["--max_old_space_size=#{@max_old_space_size}"] : []
-      @pid = Process.spawn(@binary, *flags, @script, @argument, in: File::NULL, 3 => child_io)
+      @pid = Process.spawn(@binary, *flags, @script, @argument, in: File::NULL, err: child_err, 3 => child_io)
     rescue Exception
       io.close
+      err.close
       raise
     ensure
       child_io.close
+      child_err.close
     end
     @io = io
     @owner = Process.pid
+    @stderr = []
+    @stderr_reader = Thread.new(err, @stderr) { |e, lines| read_stderr(e, lines) }
+  end
+
+  # Node's own warnings (e.g. deprecations) are noise in a build, so stderr
+  # is logged at debug.
+  def read_stderr(err, lines)
+    while (line = err.gets)
+      line = line.chomp
+      lines << line
+      lines.shift if lines.size > STDERR_LINES
+      @logger&.debug { "#{@name}: #{line}" }
+    end
+  rescue IOError
+    nil
+  ensure
+    err.close
   end
 
   def terminate
-    io, pid = @io, @pid
-    @io = @pid = nil
+    io, pid, stderr_reader = @io, @pid, @stderr_reader
+    @io = @pid = @stderr_reader = @stderr = nil
     io&.close
-    reap(pid) if pid && @owner == Process.pid
+    status = reap(pid) if pid && @owner == Process.pid
+    stderr_reader&.join(1)
+    status
   end
 
   def write(message)

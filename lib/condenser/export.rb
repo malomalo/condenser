@@ -95,8 +95,9 @@ class Condenser
       files = @environment.writers_for_mime_type(asset.content_types.last).map do |writer|
         if writer.exist?(asset)
           @environment.logger.debug "Skipping #{ asset.path }, already exists"
+          nil
         else
-          @environment.logger.info "Writing #{ asset.path }"
+          @environment.logger.debug "Writing #{ asset.path }"
           writer.call(output_directory, asset)
         end
       end

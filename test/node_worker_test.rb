@@ -14,6 +14,7 @@ class CondenserNodeWorkerTest < ActiveSupport::TestCase
   # Asks Ruby each of config.ask in turn and is done with what it answered.
   # config.stale sends a request, a warning and a result for the previous
   # build first, and config.partial dies halfway through writing a line.
+  # config.stderr is written to stderr, and config.crash too before exiting.
   SCRIPT = <<~JS
     const net = require('net');
     const readline = require('readline');
@@ -36,6 +37,11 @@ class CondenserNodeWorkerTest < ActiveSupport::TestCase
     }
 
     async function run(build, config) {
+      if (config.stderr) require('fs').writeSync(2, config.stderr + "\\n");
+      if (config.crash) {
+        require('fs').writeSync(2, config.crash + "\\n");
+        process.exit(2);
+      }
       if (config.partial) {
         require('fs').writeSync(3, '{"method":"do');
         process.exit(1);
@@ -131,6 +137,24 @@ class CondenserNodeWorkerTest < ActiveSupport::TestCase
   test 'warnings for the build are logged' do
     result({ warn: 'a warning' })
     assert_includes @log.string, 'a warning'
+  end
+
+  test "node's stderr is logged at debug" do
+    @logger.level = :debug
+    result({ stderr: '(node:1) [DEP0205] DeprecationWarning: a deprecation' })
+    @worker.stop
+    assert_match(/^D, .* DEBUG -- : test: \(node:1\) \[DEP0205\] DeprecationWarning: a deprecation$/, @log.string)
+
+    @log.truncate(0)
+    @logger.level = :info
+    result({ stderr: 'more noise' })
+    @worker.stop
+    assert_empty @log.string
+  end
+
+  test 'a worker that exits during a build raises WorkerDied with its stderr' do
+    error = assert_raises(Condenser::NodeWorker::WorkerDied) { build({ stderr: 'first', crash: 'Error: out of memory' }) }
+    assert_match(/\Atest exited with pid \d+ exit 2:\nfirst\nError: out of memory\z/, error.message)
   end
 
   test 'a worker killed during a build raises WorkerDied and the next build starts another' do

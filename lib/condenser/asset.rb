@@ -468,16 +468,16 @@ class Condenser
 
             case role
             when :preprocessor
-              @environment.logger.info { "Pre Processing #{self.filename} with #{processor.name}" }
+              @environment.logger.debug { "Pre Processing #{self.filename} with #{processor.name}" }
               processor.call(@environment, data)
             when :transformer
               data[:content_type].pop if !transformed
               transformed = true
-              @environment.logger.info { "Transforming #{self.filename} from #{from_mime_type} to #{to_mime_type} with #{processor.name}" }
+              @environment.logger.debug { "Transforming #{self.filename} from #{from_mime_type} to #{to_mime_type} with #{processor.name}" }
               processor.call(@environment, data)
               data[:content_type] << to_mime_type
             when :postprocessor
-              @environment.logger.info { "Post Processing #{self.filename} with #{processor.name}" }
+              @environment.logger.debug { "Post Processing #{self.filename} with #{processor.name}" }
               processor.call(@environment, data)
             end
           end
@@ -651,13 +651,13 @@ class Condenser
         
           if @environment.exporters.has_key?(content_type)
             @environment.exporters[content_type].each do |exporter|
-              @environment.logger.info { "Exporting #{self.filename} with #{exporter.name}" }
+              @environment.logger.debug { "Exporting #{self.filename} with #{exporter.name}" }
               exporter.call(@environment, data)
             end
           end
 
           if minifier = @environment.minifier_for(content_type)
-            @environment.logger.info { "Minifing #{self.filename} with #{minifier.name}" }
+            @environment.logger.debug { "Minifying #{self.filename} with #{minifier.name}" }
             minifier.call(@environment, data)
           end
 

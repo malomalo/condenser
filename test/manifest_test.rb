@@ -166,6 +166,27 @@ class ManifestTest < ActiveSupport::TestCase
   #   assert_equal digest_path, data['assets']['gallery.js']
   # end
 
+  test "compile logs one summary line at info and the per-file lines at debug" do
+    file 'application.js', "console.log(1);\n"
+    file 'gallery.css', "body { color: red; }\n"
+    log = StringIO.new
+    @env.logger = Logger.new(log, level: :debug)
+    manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
+
+    manifest.compile('application.js', 'gallery.css')
+    files = Dir.children(@dir).size - 1
+    info = log.string.lines.grep_v(/\AD, /)
+    assert_equal 1, info.size, log.string
+    assert_match(/\AI, .* INFO -- : Compiled 2 assets \(#{files} files\) in \d+\.\ds$/, info[0])
+    assert_match(/^D, .* DEBUG -- : Writing application-\w+\.js$/, log.string)
+    assert_match(/^D, .* DEBUG -- : Minifying gallery\.css with /, log.string)
+
+    log.truncate(0)
+    log.rewind
+    manifest.export('application.js')
+    assert_match(/\AI, .* INFO -- : Compiled 1 asset \(\d+ files?\) in \d+\.\ds$/, log.string.lines.grep_v(/\AD, /).join)
+  end
+
   test "compile multiple assets" do
     file 'application.js', <<-JS
       console.log(1);
