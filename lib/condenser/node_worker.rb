@@ -140,6 +140,7 @@ class Condenser::NodeWorker
     @io = io
     @owner = Process.pid
     @stderr = []
+    @stderr_io = err
     @stderr_reader = Thread.new(err, @stderr) { |e, lines| read_stderr(e, lines) }
   end
 
@@ -159,11 +160,13 @@ class Condenser::NodeWorker
   end
 
   def terminate
-    io, pid, stderr_reader = @io, @pid, @stderr_reader
-    @io = @pid = @stderr_reader = @stderr = nil
+    io, pid, stderr_reader, stderr_io = @io, @pid, @stderr_reader, @stderr_io
+    @io = @pid = @stderr_reader = @stderr = @stderr_io = nil
     io&.close
     status = reap(pid) if pid && @owner == Process.pid
-    stderr_reader&.join(1)
+    # A child process Node started can keep stderr open after Node exits;
+    # closing it ends the reader instead of leaving it waiting.
+    stderr_io&.close unless stderr_reader&.join(1)
     status
   end
 

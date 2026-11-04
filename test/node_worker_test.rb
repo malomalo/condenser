@@ -15,6 +15,7 @@ class CondenserNodeWorkerTest < ActiveSupport::TestCase
   # config.stale sends a request, a warning and a result for the previous
   # build first, and config.partial dies halfway through writing a line.
   # config.stderr is written to stderr, and config.crash too before exiting.
+  # config.grandchild starts a process that keeps stderr open for 10s.
   SCRIPT = <<~JS
     const net = require('net');
     const readline = require('readline');
@@ -38,6 +39,8 @@ class CondenserNodeWorkerTest < ActiveSupport::TestCase
 
     async function run(build, config) {
       if (config.stderr) require('fs').writeSync(2, config.stderr + "\\n");
+      let grandchild;
+      if (config.grandchild) grandchild = require('child_process').spawn('sleep', ['10'], { stdio: ['ignore', 'ignore', 'inherit'], detached: true }).pid;
       if (config.crash) {
         require('fs').writeSync(2, config.crash + "\\n");
         process.exit(2);
@@ -54,7 +57,7 @@ class CondenserNodeWorkerTest < ActiveSupport::TestCase
       if (config.warn) send({ method: 'warn', build, args: [config.warn] });
       const answers = [];
       for (const [method, ...args] of config.ask || []) answers.push(await request(build, method, args));
-      return { pid: process.pid, argument: process.argv[2], execArgv: process.execArgv, answers };
+      return { pid: process.pid, argument: process.argv[2], execArgv: process.execArgv, answers, grandchild };
     }
 
     let queue = Promise.resolve();
@@ -150,6 +153,18 @@ class CondenserNodeWorkerTest < ActiveSupport::TestCase
     result({ stderr: 'more noise' })
     @worker.stop
     assert_empty @log.string
+  end
+
+  test "stop doesn't leave the stderr reader waiting on a process that keeps stderr open" do
+    grandchild = result({ grandchild: true })['grandchild']
+    reader = @worker.instance_variable_get(:@stderr_reader)
+
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    @worker.stop
+    assert_operator Process.clock_gettime(Process::CLOCK_MONOTONIC) - started, :<, 5
+    assert reader.join(1), 'the stderr reader is still running'
+  ensure
+    Process.kill('KILL', grandchild) if grandchild && alive?(grandchild)
   end
 
   test 'a worker that exits during a build raises WorkerDied with its stderr' do
