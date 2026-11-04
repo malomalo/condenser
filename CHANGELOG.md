@@ -14,6 +14,7 @@
 
 ### Fixed / improved
 
+- `Rake::CondenserTask`'s `clean_assets` task no longer raises `ArgumentError`: it passed `keep` to `Manifest#clean`, which takes no arguments since `clean` removes every file not in the manifest. `keep` is removed from the task.
 - The Tailwind and Rolldown worker scripts are `.cjs`, as are the scripts `NodeProcessor` writes to a temp file, so Node runs them as CommonJS when the gem is installed under a `package.json` with `"type": "module"` (e.g. `vendor/bundle` in an app). They failed with `require is not defined in ES module scope`.
 - `Condenser::Manifest#clean` keeps any file named after a current asset or source map plus extra extensions (e.g. `.xz`, `.zst`, `.map.gz`), so files from custom writers aren't removed. It kept only `.gz` and `.br` before.
 - `RollupProcessor` loads `magic-string` and `estree-walker` from `@rollup/plugin-commonjs`, which depends on them, instead of the top of `node_modules`. Another package in the same npm path (e.g. Tailwind's, which use the ESM-only `magic-string` 1) could hoist an incompatible version there and break Rollup with `Cannot find module …/magic-string`.
