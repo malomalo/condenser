@@ -11,13 +11,13 @@ class Condenser::ZlibWriter < Condenser::FileWriter
 
   # What mime types should we compress? This list comes from:
   # https://www.fastly.com/blog/new-gzip-settings-and-deciding-what-compress
-  COMPRESSALBE_TYPES = %w( text/html application/x-javascript text/css
+  COMPRESSIBLE_TYPES = %w( text/html application/x-javascript text/css
     application/javascript text/javascript text/plain text/xml
     application/json application/vnd.ms-fontobject application/x-font-opentype
     application/x-font-truetype application/x-font-ttf application/xml font/eot
     font/opentype font/otf image/svg+xml image/vnd.microsoft.icon image/x-icon )
 
-  accepts COMPRESSALBE_TYPES
+  accepts COMPRESSIBLE_TYPES
 
   private
 

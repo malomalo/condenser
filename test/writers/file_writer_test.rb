@@ -49,6 +49,7 @@ class FileWriterTest < ActiveSupport::TestCase
     assert_includes Condenser::ZlibWriter.new.accepts, 'text/css'
     js_gzip = Class.new(Condenser::ZlibWriter) { accepts 'application/javascript' }
     assert_equal ['application/javascript'], js_gzip.new.accepts
+    assert_equal [], Class.new(Condenser::FileWriter) { accepts nil }.accepts
     assert_equal '.gz', js_gzip.extension
     assert_equal 'application/gzip', js_gzip.content_type
   end

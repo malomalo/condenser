@@ -25,13 +25,13 @@ class Condenser::FileWriter
       @extension = extension
       @content_type = content_type
     else
-      @extension || (superclass.extension if superclass.respond_to?(:extension))
+      @extension || (superclass.respond_to?(:extension) ? superclass.extension : nil)
     end
   end
 
   # The content type set with #extension, or the superclass's, or nil.
   def self.content_type
-    @content_type || (superclass.content_type if superclass.respond_to?(:content_type))
+    @content_type || (superclass.respond_to?(:content_type) ? superclass.content_type : nil)
   end
 
   # Sets the asset mime types the writer writes with arguments, e.g.
@@ -41,7 +41,7 @@ class Condenser::FileWriter
     if mime_types.empty?
       @accepts || (superclass.respond_to?(:accepts) ? superclass.accepts : ['*/*'])
     else
-      @accepts = mime_types.flatten
+      @accepts = mime_types.flatten.compact
     end
   end
 

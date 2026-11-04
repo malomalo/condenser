@@ -10,20 +10,20 @@ class Condenser::BrotliWriter < Condenser::FileWriter
 
   # What mime types should we compress? This list comes from:
   # https://www.fastly.com/blog/new-gzip-settings-and-deciding-what-compress
-  COMPRESSALBE_TEXT_TYPES = %w( text/html application/x-javascript text/css
+  COMPRESSIBLE_TEXT_TYPES = %w( text/html application/x-javascript text/css
     application/javascript text/javascript text/plain text/xml
     application/json application/xml image/svg+xml)
-  COMPRESSALBE_FONT_TYPES = %w( application/vnd.ms-fontobject
+  COMPRESSIBLE_FONT_TYPES = %w( application/vnd.ms-fontobject
     application/x-font-opentype application/x-font-truetype
     application/x-font-ttf font/eot font/opentype font/otf)
-  COMPRESSALBE_GENERIC_TYPES = %w( image/vnd.microsoft.icon image/x-icon )
+  COMPRESSIBLE_GENERIC_TYPES = %w( image/vnd.microsoft.icon image/x-icon )
 
-  accepts COMPRESSALBE_TEXT_TYPES, COMPRESSALBE_FONT_TYPES, COMPRESSALBE_GENERIC_TYPES
+  accepts COMPRESSIBLE_TEXT_TYPES, COMPRESSIBLE_FONT_TYPES, COMPRESSIBLE_GENERIC_TYPES
 
   def mode_for_mime_type(mime_type)
-    if COMPRESSALBE_TEXT_TYPES.include?(mime_type)
+    if COMPRESSIBLE_TEXT_TYPES.include?(mime_type)
       :text
-    elsif COMPRESSALBE_FONT_TYPES.include?(mime_type)
+    elsif COMPRESSIBLE_FONT_TYPES.include?(mime_type)
       :font
     else
       :generic
