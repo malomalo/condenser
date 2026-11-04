@@ -123,7 +123,7 @@ class CondenserErubiTest < ActiveSupport::TestCase
     assert_nil @env.new_context_class.link_asset('img.png')
 
     dir = Dir.mktmpdir
-    Condenser::Manifest.new(@env, File.join(dir, 'manifest.json')).compile('test.js')
+    Condenser::Manifest.new(@env, dir: dir).compile('test.js')
     manifest = JSON.parse(File.read(File.join(dir, 'manifest.json')))
     assert_equal ['img.png', 'test.js'], manifest.keys.sort
     assert File.exist?(File.join(dir, @env.find('img.png').path))
