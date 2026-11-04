@@ -32,13 +32,17 @@ class Condenser::BrotliWriter < Condenser::FileWriter
 
   private
 
+  # Streams to the file, like ZlibWriter. finish leaves the file open for
+  # atomic_write to close.
   def write(asset, file)
-    file.write(Brotli.deflate(asset.source, {
+    brotli = Brotli::Writer.new(file,
       mode: mode_for_mime_type(asset.content_types.last),
       quality: 11
       # lgwin: 10-24
       # lgblock: 16-24 think bigger more compression but more mem
-    }))
+    )
+    brotli.write(asset.source)
+    brotli.finish
   end
 
 end
