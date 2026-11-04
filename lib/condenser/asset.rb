@@ -746,13 +746,6 @@ class Condenser
       }
     end
     
-    def write(output_directory)
-      files = @environment.writers_for_mime_type(content_type).map do |writer|
-        writer.call(self, output_directory)
-      end
-      files.flatten.compact
-    end
-    
     def ext
       File.extname(filename)
     end
