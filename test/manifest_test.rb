@@ -256,7 +256,7 @@ class ManifestTest < ActiveSupport::TestCase
     log.truncate(0)
     log.rewind
     manifest.export('application.js')
-    assert_match(/\AI, .* INFO -- : Processed 1 asset \(0 built, 1 cached; 0 files written\) in \d+\.\ds$/, log.string.lines.grep_v(/\AD, /).join)
+    assert_empty log.string.lines.grep_v(/\AD, /)
   end
 
   def summary_env(cache)

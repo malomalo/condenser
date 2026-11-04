@@ -5,9 +5,8 @@ class Condenser
 
     attr_reader :filename, :source, :sourcemap, :content_types, :digest, :digest_name, :etag, :type
 
-    def initialize(env, input={}, built: false)
+    def initialize(env, input={})
       @environment = env
-      @built = built
       
       @source = input[:source]
       @sourcemap = input[:sourcemap]
@@ -25,10 +24,6 @@ class Condenser
     
     def content_type
       @content_types.last
-    end
-
-    def built?
-      @built
     end
 
     # The source map is written and served at the export's path plus ".map".
