@@ -105,9 +105,7 @@ class Condenser
     end
 
     def add_asset(asset, built)
-      exported = asset.exported?
-      export = asset.export
-      built << asset.filename if built && !exported && export.built?
+      export = asset.export { built&.add(asset.filename) }
 
       @data[asset.filename] = export.to_json
       outputs = export.write(@dir)
