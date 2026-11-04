@@ -117,7 +117,7 @@ class Condenser
     private
 
     # Logs one line at info for the assets added in the block, e.g.
-    # "Compiled 120 assets (158 files) in 12.3s". Files are the ones written,
+    # "Processed 120 assets (158 files written) in 12.3s". Files are the ones written,
     # not those that already existed.
     def summarize
       @summary = { assets: Set.new, files: 0 }
@@ -125,7 +125,7 @@ class Condenser
       result = yield
       elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
       assets, files = @summary[:assets].size, @summary[:files]
-      logger.info format("Compiled %d %s (%d %s) in %.1fs", assets, assets == 1 ? 'asset' : 'assets', files, files == 1 ? 'file' : 'files', elapsed)
+      logger.info format("Processed %d %s (%d %s written) in %.1fs", assets, assets == 1 ? 'asset' : 'assets', files, files == 1 ? 'file' : 'files', elapsed)
       result
     ensure
       @summary = nil

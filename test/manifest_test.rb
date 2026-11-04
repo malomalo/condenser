@@ -249,14 +249,14 @@ class ManifestTest < ActiveSupport::TestCase
     files = Dir.children(@dir).size - 1
     info = log.string.lines.grep_v(/\AD, /)
     assert_equal 1, info.size, log.string
-    assert_match(/\AI, .* INFO -- : Compiled 2 assets \(#{files} files\) in \d+\.\ds$/, info[0])
+    assert_match(/\AI, .* INFO -- : Processed 2 assets \(#{files} files written\) in \d+\.\ds$/, info[0])
     assert_match(/^D, .* DEBUG -- : Writing application-\w+\.js$/, log.string)
     assert_match(/^D, .* DEBUG -- : Minifying gallery\.css with /, log.string)
 
     log.truncate(0)
     log.rewind
     manifest.export('application.js')
-    assert_match(/\AI, .* INFO -- : Compiled 1 asset \(\d+ files?\) in \d+\.\ds$/, log.string.lines.grep_v(/\AD, /).join)
+    assert_match(/\AI, .* INFO -- : Processed 1 asset \(\d+ files? written\) in \d+\.\ds$/, log.string.lines.grep_v(/\AD, /).join)
   end
 
   test "compile multiple assets" do
