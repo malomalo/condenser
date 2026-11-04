@@ -32,7 +32,8 @@ class FileWriterTest < ActiveSupport::TestCase
     assert_equal '.gz', Condenser::ZlibWriter.extension
     assert_equal '.br', Condenser::BrotliWriter.extension
     assert_equal '.gz', Class.new(Condenser::ZlibWriter).extension
-    assert_equal '.xz', Class.new(Condenser::FileWriter) { extension :xz }.extension
+    assert_equal '.xz', Class.new(Condenser::FileWriter) { extension '.xz' }.extension
+    assert_equal '.tar.xz', Class.new(Condenser::FileWriter) { extension '.tar.xz' }.extension
   end
 
 end

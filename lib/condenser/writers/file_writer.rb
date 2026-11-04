@@ -7,15 +7,16 @@ require 'condenser/utils'
 # appended to the asset's path, and override #write to encode it:
 #
 #     class XzWriter < Condenser::FileWriter
-#       extension :xz
+#       extension '.xz'
 #     end
 class Condenser::FileWriter
 
-  # Sets the extension with an argument, e.g. `extension :gz`; without one,
-  # returns it (".gz"), or the superclass's, or nil.
+  # Sets the extension appended to the asset's path with an argument, e.g.
+  # `extension '.gz'` (or several, `extension '.tar.gz'`); without one,
+  # returns it, or the superclass's, or nil.
   def self.extension(extension = nil)
     if extension
-      @extension = ".#{extension.to_s.delete_prefix('.')}"
+      @extension = extension
     else
       @extension || (superclass.extension if superclass.respond_to?(:extension))
     end

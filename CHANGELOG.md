@@ -4,7 +4,7 @@
 
 ### Breaking changes / upgrade notes
 
-- A writer's `exist?` takes the output directory, and `exist?` and `call` take the asset first: `exist?(asset, output_directory)` and `call(asset, output_directory)`. `exist?` checks for the file in the output directory. It was given only the asset and checked its path relative to the working directory, so `Export#write` almost never skipped a file already written, or skipped one because the working directory had a file at that path. A custom writer has to take the new arguments; subclassing `Condenser::FileWriter` gives it `exist?`, `path` and `call`, with `extension :xz` setting the extension and a private `write(asset, file)` writing to the open file, which `ZlibWriter` and `BrotliWriter` now do.
+- A writer's `exist?` takes the output directory, and `exist?` and `call` take the asset first: `exist?(asset, output_directory)` and `call(asset, output_directory)`. `exist?` checks for the file in the output directory. It was given only the asset and checked its path relative to the working directory, so `Export#write` almost never skipped a file already written, or skipped one because the working directory had a file at that path. A custom writer has to take the new arguments; subclassing `Condenser::FileWriter` gives it `exist?`, `path` and `call`, with `extension '.xz'` setting the extension and a private `write(asset, file)` writing to the open file, which `ZlibWriter` and `BrotliWriter` now do.
 
 ### Added
 
