@@ -6,14 +6,13 @@ require 'fileutils'
 class Condenser
   class Manifest
     
-    attr_reader :filename, :dir, :environment, :logger
+    attr_reader :filename, :dir, :environment
     
     def initialize(*args)
       args.compact!
       
       if args.first.is_a?(Condenser)
         @environment = args.shift
-        @logger = @environment.logger
       else
         @environment = nil
         @logger = Logger.new($stdout, level: :info)
@@ -54,6 +53,12 @@ class Condenser
       end
     end
     
+    # The environment's logger, read on each use so a logger set on the
+    # environment afterwards (e.g. by the rake task) is used.
+    def logger
+      @environment ? @environment.logger : @logger
+    end
+
     def reset
       @data = {}
     end

@@ -209,6 +209,16 @@ class ManifestTest < ActiveSupport::TestCase
     assert_match(/\AI, .* INFO -- : Compiled 1 asset \(\d+ files?\) in \d+\.\ds$/, log.string.lines.grep_v(/\AD, /).join)
   end
 
+  test "the summary uses the environment's logger at the time it's logged" do
+    file 'application.js', "console.log(1);\n"
+    manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
+    log = StringIO.new
+    @env.logger = Logger.new(log, level: :info)
+
+    manifest.compile('application.js')
+    assert_match(/Compiled 1 asset/, log.string)
+  end
+
   test "compile multiple assets" do
     file 'application.js', <<-JS
       console.log(1);
