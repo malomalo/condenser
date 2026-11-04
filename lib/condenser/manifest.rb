@@ -6,54 +6,42 @@ require 'fileutils'
 class Condenser
   class Manifest
     
-    attr_reader :filename, :dir, :environment, :logger
+    attr_reader :filename, :dir, :environment
     
-    def initialize(*args)
-      args.compact!
-      
-      if args.first.is_a?(Condenser)
-        @environment = args.shift
-        @logger = @environment.logger
-      else
-        @environment = nil
-        @logger = Logger.new($stdout, level: :info)
+    # +filename+ defaults to manifest.json in +dir+. +logger+ is for a
+    # manifest without an environment; with one, it logs to the environment's.
+    def initialize(environment = nil, dir:, filename: nil, logger: nil)
+      if environment && !environment.is_a?(Condenser)
+        raise ArgumentError, "environment must be a Condenser, got #{environment.class}"
       end
-      
-      @dir, @filename = args[0], args[1]
-      
-      # Expand paths
-      @dir = File.expand_path(@dir) if @dir
-      @filename  = File.expand_path(@filename) if @filename
-      
-      # If filename is given as the second arg
-      if @dir && File.extname(@dir) != ""
-        @dir, @filename = nil, @dir
+      if environment && logger
+        raise ArgumentError, "a manifest with an environment logs to its logger"
       end
-      
-      # Default dir to the directory of the filename
-      @dir ||= File.dirname(@filename) if @filename
-      
-      # If directory is given w/o filename, pick a random manifest location
-      if @dir && @filename.nil?
-        @filename = File.join(@dir, 'manifest.json')
-      end
-      
-      unless @dir && @filename
-        raise ArgumentError, "manifest requires output filename"
-      end
+      raise ArgumentError, "manifest requires a dir" if dir.nil?
+
+      @environment = environment
+      @logger = logger || Logger.new($stdout, level: :info) unless environment
+      @dir = File.expand_path(dir)
+      @filename = File.expand_path(filename || File.join(@dir, 'manifest.json'))
       
       if File.exist?(@filename)
         begin
           @data = JSON.parse(File.read(@filename), symbolize_names: true).transform_keys(&:to_s)
         rescue JSON::ParserError => e
           @data = {}
-          logger.error "#{@filename} is invalid: #{e.class} #{e.message}"
+          self.logger.error "#{@filename} is invalid: #{e.class} #{e.message}"
         end
       else
         @data = {}
       end
     end
     
+    # The environment's logger, read on each use so a logger set on the
+    # environment afterwards (e.g. by the rake task) is used.
+    def logger
+      @environment ? @environment.logger : @logger
+    end
+
     def reset
       @data = {}
     end

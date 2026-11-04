@@ -307,7 +307,7 @@ class SourcemapTest < ActiveSupport::TestCase
     rolldown
     @env.sourcemap = :headers
     @env.register_writer(Condenser::ZlibWriter.new)
-    manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
+    manifest = Condenser::Manifest.new(@env, dir: @dir)
     manifest.compile('main.js')
     export = @env.find('main.js').export
 
@@ -327,7 +327,7 @@ class SourcemapTest < ActiveSupport::TestCase
 
   test 'precompiling without a map lists none' do
     rolldown
-    manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
+    manifest = Condenser::Manifest.new(@env, dir: @dir)
     manifest.compile('main.js')
 
     assert_nil JSON.parse(File.read(manifest.filename))['main.js'].fetch('sourcemap')
