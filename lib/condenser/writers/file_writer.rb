@@ -70,6 +70,7 @@ class Condenser::FileWriter
 
   private
 
+  # Writes the asset to +file+; leave it open, Utils.atomic_write closes it.
   def write(asset, file)
     file.write(asset.source)
   end

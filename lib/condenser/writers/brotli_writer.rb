@@ -32,8 +32,6 @@ class Condenser::BrotliWriter < Condenser::FileWriter
 
   private
 
-  # Streams to the file, like ZlibWriter. finish leaves the file open for
-  # atomic_write to close.
   def write(asset, file)
     brotli = Brotli::Writer.new(file,
       mode: mode_for_mime_type(asset.content_types.last),
