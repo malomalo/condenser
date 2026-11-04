@@ -8,7 +8,7 @@
 
 ### Fixed / improved
 
-- `RollupProcessor` loads `magic-string` and `estree-walker` from `@rollup/plugin-commonjs`, which depends on them, instead of the top of `node_modules`. Another package in the same npm path (e.g. Tailwind's, which use the ESM-only `magic-string` 1) could hoist an incompatible version there and break Rollup with `Cannot find module …/magic-string`.
+
 
 ## 2.0.0.rc2
 

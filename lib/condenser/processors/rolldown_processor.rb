@@ -4,7 +4,8 @@ require 'json'
 
 class Condenser::RolldownProcessor < Condenser::Processor
 
-  SCRIPT = File.expand_path('rolldown_processor.js', __dir__)
+  # .cjs, so it's CommonJS under a package.json with "type": "module".
+  SCRIPT = File.expand_path('rolldown_processor.cjs', __dir__)
   DYNAMIC_IMPORTS = %i[inline keep].freeze
   # Rolldown's module types, less the ones that emit a file (asset, copy,
   # css), since only the JavaScript bundle is kept.
