@@ -35,34 +35,7 @@ class Condenser
     end
     
     def add(*args)
-      if @environment.nil?
-        raise Error, "manifest requires environment for compilation"
-      end
-      
-      outputs = []
-      args.each do |arg|
-        @environment.resolve(arg).each do |asset|
-          outputs += add_asset(asset)
-        end
-      end
-      outputs
-    end
-    
-    def add_asset(asset)
-      exported = asset.exported?
-      export = asset.export
-
-      @data[asset.filename] = export.to_json
-      outputs = export.write(@dir)
-      if @summary
-        @summary[:assets] << asset.filename
-        @summary[:built] << asset.filename if !exported && export.built?
-        @summary[:files] += outputs.size
-      end
-      asset.linked_assets.each do |la|
-        outputs += add_asset(la)
-      end
-      outputs
+      add_assets(args, Set.new)
     end
     
     def [](key)
@@ -72,8 +45,11 @@ class Condenser
     
     def compile(*args)
       reset
-      outputs = summarize { add(*args.flatten) }
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      built = Set.new
+      outputs = add_assets(args.flatten, built)
       save
+      log_summary(@data.size, built.size, outputs.size, started)
       outputs
     end
     
@@ -85,7 +61,7 @@ class Condenser
     end
     
     def export(*args)
-      summarize { add(*args) }
+      add(*args)
       save
     end
     
@@ -118,21 +94,32 @@ class Condenser
 
     private
 
-    # Logs one line at info for the assets added in the block, e.g.
-    # "Processed 120 assets (15 built, 105 cached; 158 files written) in 12.3s".
-    # Built assets are the ones whose export was built in the block; cached
-    # ones came from the cache or were already exported. Files are the ones
-    # written, not those that already existed.
-    def summarize
-      @summary = { assets: Set.new, built: Set.new, files: 0 }
-      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      result = yield
+    def add_assets(args, built)
+      if @environment.nil?
+        raise Error, "manifest requires environment for compilation"
+      end
+
+      args.flat_map do |arg|
+        @environment.resolve(arg).flat_map { |asset| add_asset(asset, built) }
+      end
+    end
+
+    def add_asset(asset, built)
+      exported = asset.exported?
+      export = asset.export
+      built << asset.filename if !exported && export.built?
+
+      @data[asset.filename] = export.to_json
+      outputs = export.write(@dir)
+      asset.linked_assets.each do |la|
+        outputs += add_asset(la, built)
+      end
+      outputs
+    end
+
+    def log_summary(assets, built, files, started)
       elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
-      assets, built, files = @summary[:assets].size, @summary[:built].size, @summary[:files]
       logger.info format("Processed %d %s (%d built, %d cached; %d %s written) in %.1fs", assets, assets == 1 ? 'asset' : 'assets', built, assets - built, files, files == 1 ? 'file' : 'files', elapsed)
-      result
-    ensure
-      @summary = nil
     end
 
     # Remove files in +dir+ that aren't in +keep+, then any directories left
