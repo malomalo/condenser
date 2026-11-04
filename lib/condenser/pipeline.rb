@@ -169,7 +169,7 @@ class Condenser
     # leaves the compressing writers that subclass it.
     def unregister_writer(engine, for_mime_types: nil)
       Array(for_mime_types || @writers.keys).each do |mime_type|
-        @writers[mime_type]&.reject! { |w| w == engine || (engine.is_a?(Module) && w.instance_of?(engine)) }
+        @writers[mime_type]&.reject! { |w| w == engine || (engine.is_a?(Class) && w.instance_of?(engine)) }
       end
     end
     
