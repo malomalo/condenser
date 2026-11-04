@@ -51,6 +51,11 @@ class PipelineTest < ActiveSupport::TestCase
     assert_equal [file_writer], @env.writers_for_mime_type('application/javascript')
   end
 
+  test 'register_writer raises for a writer class' do
+    error = assert_raises(ArgumentError) { @env.register_writer(Condenser::ZlibWriter) }
+    assert_equal 'Condenser::ZlibWriter is a class, register Condenser::ZlibWriter.new', error.message
+  end
+
   test 'unregister_writer with FileWriter leaves the writers that subclass it' do
     zlib_writer = Condenser::ZlibWriter.new
     @env.register_writer Condenser::FileWriter.new
