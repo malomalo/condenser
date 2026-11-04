@@ -61,11 +61,16 @@ class ManifestTest < ActiveSupport::TestCase
     assert_match(/manifest\.json is invalid/, log.string)
   end
 
-  test "logger: with an environment raises" do
-    error = assert_raises(ArgumentError) do
-      Condenser::Manifest.new(@env, dir: @dir, logger: Logger.new(File::NULL))
-    end
-    assert_match(/logs to its logger/, error.message)
+  test "logger: with an environment is used instead of the environment's" do
+    logger = Logger.new(File::NULL)
+    manifest = Condenser::Manifest.new(@env, dir: @dir, logger: logger)
+    @env.logger = Logger.new(File::NULL)
+
+    assert_same logger, manifest.logger
+  end
+
+  test "logger defaults to the environment's logger" do
+    assert_same @env.logger, Condenser::Manifest.new(@env, dir: @dir).logger
   end
 
   test "logs to the environment's logger at the time it's used" do
@@ -77,6 +82,13 @@ class ManifestTest < ActiveSupport::TestCase
     assert_same @env.logger, manifest.logger
     manifest.compile('application.js')
     assert_match(/application\.js/, log.string)
+  end
+
+  test "logger defaults to $stdout without an environment" do
+    logger = Condenser::Manifest.new(dir: @dir).logger
+
+    assert_equal $stdout, logger.instance_variable_get(:@logdev).dev
+    assert_equal Logger::INFO, logger.level
   end
 
   test "must specify env to compile assets" do
