@@ -321,8 +321,8 @@ class SourcemapTest < ActiveSupport::TestCase
     assert_equal "#{export.path}.map", data['main.js']['sourcemap']
 
     outputs = export.write(File.join(@dir, 'again'))
-    assert_includes outputs, 'main.js.map'
-    assert_includes outputs, 'main.js.map.gz'
+    assert_includes outputs, "#{export.path}.map"
+    assert_includes outputs, "#{export.path}.map.gz"
   end
 
   test 'precompiling without a map lists none' do
