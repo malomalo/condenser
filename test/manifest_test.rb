@@ -76,6 +76,18 @@ class ManifestTest < ActiveSupport::TestCase
     assert_equal [path, "#{path}.gz"], manifest.compile('application.js')
   end
 
+  test "compile doesn't return files skipped because they're already written" do
+    file 'application.js', 'console.log(1);'
+    @env.register_writer Condenser::ZlibWriter.new
+    manifest = Condenser::Manifest.new(@env, @dir)
+    path = @env.find('application.js').export.path
+    FileUtils.mkdir_p(@dir)
+    File.write(File.join(@dir, "#{path}.gz"), 'existing')
+
+    assert_equal [path], manifest.compile('application.js')
+    assert_equal [], manifest.compile('application.js')
+  end
+
   test "compile asset dependencies includes the dependencies" do
     file 'foo.svg', <<-SVG
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">

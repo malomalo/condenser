@@ -51,6 +51,15 @@ class PipelineTest < ActiveSupport::TestCase
     assert_equal [file_writer], @env.writers_for_mime_type('application/javascript')
   end
 
+  test 'unregister_writer with for_mime_types: removes it for those types only' do
+    zlib_writer = Condenser::ZlibWriter.new
+    @env.register_writer zlib_writer
+
+    @env.unregister_writer(zlib_writer, for_mime_types: 'text/css')
+    assert_not_includes @env.writers_for_mime_type('text/css'), zlib_writer
+    assert_includes @env.writers_for_mime_type('application/javascript'), zlib_writer
+  end
+
   test 'with no writer for a mime type, nothing is written' do
     @env.unregister_writer(Condenser::FileWriter)
     assert_equal [], @env.writers_for_mime_type('application/javascript')
