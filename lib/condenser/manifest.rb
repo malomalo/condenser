@@ -8,8 +8,6 @@ class Condenser
     
     attr_reader :filename, :dir, :environment
     
-    # +filename+ defaults to manifest.json in +dir+. Without +logger+, logs to
-    # the environment's logger, or $stdout without an environment.
     def initialize(environment = nil, dir:, filename: nil, logger: nil)
       if environment && !environment.is_a?(Condenser)
         raise ArgumentError, "environment must be a Condenser, got #{environment.class}"
@@ -33,8 +31,6 @@ class Condenser
       end
     end
     
-    # The logger given to new, or else the environment's, read on each use so a
-    # logger set on the environment afterwards (e.g. by the rake task) is used.
     def logger
       @logger || @environment.logger
     end
