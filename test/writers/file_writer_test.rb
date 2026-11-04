@@ -27,4 +27,12 @@ class FileWriterTest < ActiveSupport::TestCase
     end
   end
 
+  test 'extension is set on the class and inherited' do
+    assert_nil Condenser::FileWriter.extension
+    assert_equal '.gz', Condenser::ZlibWriter.extension
+    assert_equal '.br', Condenser::BrotliWriter.extension
+    assert_equal '.gz', Class.new(Condenser::ZlibWriter).extension
+    assert_equal '.xz', Class.new(Condenser::FileWriter) { extension :xz }.extension
+  end
+
 end
