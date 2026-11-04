@@ -37,8 +37,6 @@ class CacheTest < ActiveSupport::TestCase
   end
   
   test 'with a base set and the same cache, the second attempt from another location should use the cache' do
-    @env.base = @path
-    
     file 'test.txt.erb', "1<%= 1 + 1 %>3\n"
     assert_file 'test.txt', 'text/plain', <<~CSS
     123
