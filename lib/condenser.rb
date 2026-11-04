@@ -48,8 +48,8 @@ class Condenser
     instance_eval(&block)
   end
   
-  attr_accessor :logger, :digestor, :base
-  attr_reader :sourcemap
+  attr_accessor :logger
+  attr_reader :digestor, :base, :sourcemap
 
   SOURCEMAPS = [false, true, :linked, :headers].freeze
   
@@ -61,18 +61,21 @@ class Condenser
   #         true; pass false for one-off builds like precompiling.
   # sourcemap: Whether to export source maps, and how to link them: false
   #            (the default), true, :linked (comment only) or :headers
-  #            (SourceMap header only). See #sourcemap=.
+  #            (SourceMap header only). Exporters that support it
+  #            (RolldownProcessor) export a source map when it's truthy. It's
+  #            part of the export cache key and etag.
+  # digestor, base and sourcemap can only be set here.
   def initialize(*path, logger: nil, digestor: nil, cache: nil, pipeline: nil, npm_path: nil, base: nil, listen: true, sourcemap: false, &block)
     @logger = logger || Logger.new($stdout, level: :info)
     @listen = listen
-    self.sourcemap = sourcemap
+    @sourcemap = validate_sourcemap(sourcemap)
     @path = []
     append_path(path)
     self.npm_path = npm_path
     @base = base
     @cache = cache || Cache::MemoryStore.new
     @build_cc = 0
-    self.digestor = digestor || Digest::SHA256
+    @digestor = digestor || Digest::SHA256
 
     if block
       configure(&block)
@@ -97,15 +100,13 @@ class Condenser
     instance_eval(&block)
   end
 
-  # Exporters that support it (RolldownProcessor) export a source map when
-  # this is truthy. true and :linked end the export with a sourceMappingURL
-  # comment; true and :headers have Condenser::Server send a SourceMap header.
-  # It's part of the export cache key and etag, so set it before building.
-  def sourcemap=(value)
+  private
+
+  def validate_sourcemap(value)
     unless SOURCEMAPS.include?(value)
       raise ArgumentError, "sourcemap must be false, true, :linked or :headers, got #{value.inspect}"
     end
-    @sourcemap = value
+    value
   end
 end
 
