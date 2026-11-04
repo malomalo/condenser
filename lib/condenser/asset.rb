@@ -630,7 +630,9 @@ class Condenser
       @environment.load_processors(@environment.exporters[content_type], @environment.minifier_for(content_type))
 
       @export = @environment.build do
+        built = false
         data = @environment.cache.fetch_if(Proc.new {"export/#{cache_key}/#{export_cache_version}/#{@environment.export_pipeline_digest(content_type)}"}, "export-deps/#{cache_key}") do
+          built = true
           process
           dirname, basename, extensions, mime_types = @environment.decompose_path(@filename)
           data = {
@@ -673,8 +675,12 @@ class Condenser
           data
         end
 
-        Export.new(@environment, data)
+        Export.new(@environment, data, built: built)
       end
+    end
+
+    def exported?
+      !@export.nil?
     end
     
     def to_s
