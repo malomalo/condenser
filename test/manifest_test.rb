@@ -246,17 +246,48 @@ class ManifestTest < ActiveSupport::TestCase
     manifest = Condenser::Manifest.new(@env, dir: @dir)
 
     manifest.compile('application.js', 'gallery.css')
-    files = Dir.children(@dir).size - 1
     info = log.string.lines.grep_v(/\AD, /)
     assert_equal 1, info.size, log.string
-    assert_match(/\AI, .* INFO -- : Processed 2 assets \(#{files} files written\) in \d+\.\ds$/, info[0])
+    assert_match(/\AI, .* INFO -- : Processed 2 assets \(2 files written\) in \d+\.\ds$/, info[0])
     assert_match(/^D, .* DEBUG -- : Writing application-\w+\.js$/, log.string)
     assert_match(/^D, .* DEBUG -- : Minifying gallery\.css with /, log.string)
 
     log.truncate(0)
     log.rewind
     manifest.export('application.js')
-    assert_match(/\AI, .* INFO -- : Processed 1 asset \(\d+ files? written\) in \d+\.\ds$/, log.string.lines.grep_v(/\AD, /).join)
+    assert_empty log.string.lines.grep_v(/\AD, /), log.string
+  end
+
+  test "compile counts linked assets in the summary line" do
+    file 'foo.svg', <<-SVG
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path d="M6 18L18 6M6 6l12 12" />
+      </svg>
+    SVG
+    file 'test.scss', <<-SCSS
+      body {
+        background: asset-url("foo.svg");
+      }
+    SCSS
+    log = StringIO.new
+    @env.logger = Logger.new(log, level: :info)
+    manifest = Condenser::Manifest.new(@env, dir: @dir)
+
+    manifest.compile('test.css')
+    assert_match(/\AI, .* INFO -- : Processed 2 assets \(2 files written\) in \d+\.\ds$/, log.string)
+  end
+
+  test "a second compile with nothing new logs no files written" do
+    file 'application.js', "console.log(1);\n"
+    log = StringIO.new
+    @env.logger = Logger.new(log, level: :info)
+    manifest = Condenser::Manifest.new(@env, dir: @dir)
+
+    manifest.compile('application.js')
+    log.truncate(0)
+    log.rewind
+    manifest.compile('application.js')
+    assert_match(/\AI, .* INFO -- : Processed 1 asset \(0 files written\) in \d+\.\ds$/, log.string)
   end
 
   test "compile multiple assets" do

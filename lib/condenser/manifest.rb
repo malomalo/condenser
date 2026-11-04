@@ -53,10 +53,6 @@ class Condenser
 
       @data[asset.filename] = export.to_json
       outputs = export.write(@dir)
-      if @summary
-        @summary[:assets] << asset.filename
-        @summary[:files] += outputs.size
-      end
       asset.linked_assets.each do |la|
         outputs += add_asset(la)
       end
@@ -70,8 +66,10 @@ class Condenser
     
     def compile(*args)
       reset
-      outputs = summarize { add(*args.flatten) }
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      outputs = add(*args.flatten)
       save
+      log_summary(@data.size, outputs.size, started)
       outputs
     end
     
@@ -83,7 +81,7 @@ class Condenser
     end
     
     def export(*args)
-      summarize { add(*args) }
+      add(*args)
       save
     end
     
@@ -116,19 +114,9 @@ class Condenser
 
     private
 
-    # Logs one line at info for the assets added in the block, e.g.
-    # "Processed 120 assets (158 files written) in 12.3s". Files are the ones written,
-    # not those that already existed.
-    def summarize
-      @summary = { assets: Set.new, files: 0 }
-      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      result = yield
+    def log_summary(assets, files, started)
       elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
-      assets, files = @summary[:assets].size, @summary[:files]
       logger.info format("Processed %d %s (%d %s written) in %.1fs", assets, assets == 1 ? 'asset' : 'assets', files, files == 1 ? 'file' : 'files', elapsed)
-      result
-    ensure
-      @summary = nil
     end
 
     # Remove files in +dir+ that aren't in +keep+, then any directories left
