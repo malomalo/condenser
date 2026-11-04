@@ -35,7 +35,7 @@ class Condenser
     end
     
     def add(*args)
-      add_assets(args, Set.new)
+      add_assets(args)
     end
     
     def [](key)
@@ -94,7 +94,7 @@ class Condenser
 
     private
 
-    def add_assets(args, built)
+    def add_assets(args, built = nil)
       if @environment.nil?
         raise Error, "manifest requires environment for compilation"
       end
@@ -107,7 +107,7 @@ class Condenser
     def add_asset(asset, built)
       exported = asset.exported?
       export = asset.export
-      built << asset.filename if !exported && export.built?
+      built << asset.filename if built && !exported && export.built?
 
       @data[asset.filename] = export.to_json
       outputs = export.write(@dir)
