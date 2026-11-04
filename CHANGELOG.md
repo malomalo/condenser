@@ -6,8 +6,15 @@
 
 - `BabelProcessor`'s default plugins are `@babel/plugin-transform-runtime` and `babel-plugin-polyfill-corejs3` (`method: 'usage-pure'`) instead of transform-runtime's `corejs: 3, useESModules: true`, which Babel 8 removed. Polyfills are imported from `core-js-pure` only for what preset-env's targets need, rather than for everything, and helpers from `@babel/runtime-corejs3`. Plugins and presets are resolved from the npm path by node instead of passed to Babel as paths.
 
+### Added
+
+- `RolldownProcessor`'s `keep_names:` option (Rolldown's `keepNames`, default `false`), which keeps the `name` of functions and classes when minifying or renaming one to avoid a collision, for code that reads `.name` at runtime. It's in the options, so assets are rebuilt once.
+
 ### Fixed / improved
 
+- The Tailwind and Rolldown worker scripts are `.cjs`, as are the scripts `NodeProcessor` writes to a temp file, so Node runs them as CommonJS when the gem is installed under a `package.json` with `"type": "module"` (e.g. `vendor/bundle` in an app). They failed with `require is not defined in ES module scope`.
+- `Condenser::Manifest#clean` keeps any file named after a current asset or source map plus extra extensions (e.g. `.xz`, `.zst`, `.map.gz`), so files from custom writers aren't removed. It kept only `.gz` and `.br` before.
+- `RollupProcessor` loads `magic-string` and `estree-walker` from `@rollup/plugin-commonjs`, which depends on them, instead of the top of `node_modules`. Another package in the same npm path (e.g. Tailwind's, which use the ESM-only `magic-string` 1) could hoist an incompatible version there and break Rollup with `Cannot find module …/magic-string`.
 - `JstTransformer` and `BabelProcessor` work with Babel 8, which npm now installs: they no longer pass `moduleId` (Babel 8 fails with "Unknown option: .moduleId"; it only named AMD/UMD/SystemJS modules, and the output is ES modules) and use `transformSync`. A missing `@babel/core` is installed at `^8`, the other `@babel/` packages at the major of the `@babel/core` installed, so an npm path with Babel 7 keeps working. `npm_install` takes a version range (e.g. `@babel/core@^8`), used only when the package is missing. `JstTransformer` no longer installs `@babel/preset-env`, which it didn't use.
 
 ## 2.0.0.rc2

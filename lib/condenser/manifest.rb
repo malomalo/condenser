@@ -112,9 +112,8 @@ class Condenser
       return if !Dir.exist?(dir)
 
       # Manifest paths are relative to the output directory; keep each one
-      # and its compressed versions.
-      keep = @data.values.flat_map { |v| [v[:path], v[:sourcemap]].compact }
-      keep = keep.flat_map { |path| [path, "#{path}.gz", "#{path}.br"] }.to_set
+      # and the files the writers name after it (e.g. "#{path}.gz").
+      keep = @data.values.flat_map { |v| [v[:path], v[:sourcemap]].compact }.to_set
       clean_dir(dir, keep)
       nil
     end
@@ -152,7 +151,7 @@ class Condenser
             logger.info "Removed #{child}"
             next
           end
-        elsif stat.file? && child != filename && !keep.include?(relative_path)
+        elsif stat.file? && child != filename && !kept?(relative_path, keep)
           File.delete(child)
           logger.info "Removed #{child}"
           next
@@ -160,6 +159,18 @@ class Condenser
         empty = false
       end
       empty
+    end
+
+    # Whether +path+ is in +keep+ or is a kept path with extra extensions.
+    # File.extname only looks at the basename, so this never strips into a
+    # directory name, and a dotfile like ".gz" has no extension.
+    def kept?(path, keep)
+      while !keep.include?(path)
+        ext = File.extname(path)
+        return false if ext.empty?
+        path = path.delete_suffix(ext)
+      end
+      true
     end
 
   end

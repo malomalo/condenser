@@ -136,8 +136,11 @@ class Condenser::RollupProcessor < Condenser::Processor
         const rollup = require("#{npm_module_path('rollup')}");
         const commonjs = require("#{npm_module_path('@rollup/plugin-commonjs')}");
         const nodeResolve = require("#{npm_module_path('@rollup/plugin-node-resolve')}").nodeResolve;
-        const asyncWalk = require("#{npm_module_path('estree-walker')}").asyncWalk;
-        const MagicString = require("#{npm_module_path('magic-string')}");
+        // From @rollup/plugin-commonjs, which depends on them, so another package
+        // hoisting an incompatible version to node_modules doesn't break this
+        const pluginPaths = { paths: ["#{npm_module_path('@rollup/plugin-commonjs')}"] };
+        const asyncWalk = require(require.resolve('estree-walker', pluginPaths)).asyncWalk;
+        const MagicString = require(require.resolve('magic-string', pluginPaths));
         const replace = require("#{npm_module_path('@rollup/plugin-replace')}");
       
         var rid = 0;
