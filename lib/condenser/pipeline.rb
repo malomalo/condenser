@@ -154,26 +154,22 @@ class Condenser
     end
     
     def register_writer(engine)
-      Array(engine.mime_types).each do |mime_type|
+      if engine.is_a?(Class)
+        raise ArgumentError, "#{engine.inspect} is a class, register #{engine.name}.new"
+      end
+      Array(engine.accepts).each do |mime_type|
         @writers[mime_type] ||= []
         @writers[mime_type] << engine
       end
     end
         
-    def unregister_writer(engine, for_mime_types: [])
-      mime_types = @writers.keys if mime_types.nil?
+    # Removes +engine+, a writer or a writer class, for +for_mime_types+, or
+    # every mime type if none are given.
+    # A class matches only its own instances, so unregistering FileWriter
+    # leaves the compressing writers that subclass it.
+    def unregister_writer(engine, for_mime_types: nil)
       Array(for_mime_types || @writers.keys).each do |mime_type|
-        @writers[mime_type].select! do |writer|
-          if engine.nil? || engine == writer[0] || writer[0].is_a?(engine)
-            if added_mime_types.nil? || added_mime_types == writer[1]
-              false
-            else
-              true
-            end
-          else
-            true
-          end
-        end
+        @writers[mime_type]&.reject! { |w| w == engine || (engine.is_a?(Class) && w.instance_of?(engine)) }
       end
     end
     

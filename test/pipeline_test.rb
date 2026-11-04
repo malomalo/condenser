@@ -4,7 +4,7 @@ class PipelineTest < ActiveSupport::TestCase
   
   class Writer
     
-    def mime_types
+    def accepts
       ['*/*']
     end
     
@@ -37,4 +37,52 @@ class PipelineTest < ActiveSupport::TestCase
     end
   end
   
+  test 'unregister_writer removes a writer class or instance for every mime type' do
+    file_writer = Condenser::FileWriter.new
+    zlib_writer = Condenser::ZlibWriter.new
+    @env.register_writer file_writer
+    @env.register_writer zlib_writer
+    @env.register_writer Condenser::BrotliWriter.new
+
+    @env.unregister_writer(Condenser::BrotliWriter)
+    assert_equal [file_writer, zlib_writer], @env.writers_for_mime_type('application/javascript')
+
+    @env.unregister_writer(zlib_writer)
+    assert_equal [file_writer], @env.writers_for_mime_type('application/javascript')
+  end
+
+  test 'unregister_writer with for_mime_types: removes it for those types only' do
+    zlib_writer = Condenser::ZlibWriter.new
+    @env.register_writer zlib_writer
+
+    @env.unregister_writer(zlib_writer, for_mime_types: 'text/css')
+    assert_not_includes @env.writers_for_mime_type('text/css'), zlib_writer
+    assert_includes @env.writers_for_mime_type('application/javascript'), zlib_writer
+  end
+
+  test 'with no writer for a mime type, nothing is written' do
+    @env.unregister_writer(Condenser::FileWriter)
+    assert_equal [], @env.writers_for_mime_type('application/javascript')
+
+    file 'main.js', "console.log(1);"
+    Dir.mktmpdir do |dir|
+      assert_equal [], @env.find_export('main.js').write(dir)
+      assert_empty Dir.children(dir)
+    end
+  end
+
+  test 'register_writer raises for a writer class' do
+    error = assert_raises(ArgumentError) { @env.register_writer(Condenser::ZlibWriter) }
+    assert_equal 'Condenser::ZlibWriter is a class, register Condenser::ZlibWriter.new', error.message
+  end
+
+  test 'unregister_writer with FileWriter leaves the writers that subclass it' do
+    zlib_writer = Condenser::ZlibWriter.new
+    @env.register_writer Condenser::FileWriter.new
+    @env.register_writer zlib_writer
+
+    @env.unregister_writer(Condenser::FileWriter)
+    assert_equal [zlib_writer], @env.writers_for_mime_type('application/javascript')
+  end
+
 end

@@ -69,6 +69,7 @@ class Condenser
           outputs += add_asset(asset)
         end
       end
+      outputs
     end
     
     def add_asset(asset)
