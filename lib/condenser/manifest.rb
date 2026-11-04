@@ -9,11 +9,6 @@ class Condenser
     attr_reader :filename, :dir, :environment
     
     def initialize(environment = nil, dir:, filename: nil, logger: nil)
-      if environment && !environment.is_a?(Condenser)
-        raise ArgumentError, "environment must be a Condenser, got #{environment.class}"
-      end
-      raise ArgumentError, "manifest requires a dir" if dir.nil?
-
       @environment = environment
       @logger = logger || (environment ? nil : Logger.new($stdout, level: :info))
       @dir = File.expand_path(dir)

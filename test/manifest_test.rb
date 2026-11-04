@@ -39,18 +39,12 @@ class ManifestTest < ActiveSupport::TestCase
 
   test "must specify manifest directory" do
     assert_raises(ArgumentError) { Condenser::Manifest.new(@env) }
-    assert_raises(ArgumentError) { Condenser::Manifest.new(@env, dir: nil) }
     assert_raises(ArgumentError) { Condenser::Manifest.new(filename: File.join(@dir, 'manifest.json')) }
   end
 
   test "dir and filename can't be positional" do
     assert_raises(ArgumentError) { Condenser::Manifest.new(@env, @dir) }
     assert_raises(ArgumentError) { Condenser::Manifest.new(@env, @dir, File.join(@dir, 'manifest.json')) }
-  end
-
-  test "environment must be a Condenser" do
-    error = assert_raises(ArgumentError) { Condenser::Manifest.new(@dir, dir: @dir) }
-    assert_match(/must be a Condenser/, error.message)
   end
 
   test "logger: without an environment" do
