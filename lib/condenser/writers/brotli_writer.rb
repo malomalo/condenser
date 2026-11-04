@@ -6,7 +6,7 @@ require 'condenser/writers/file_writer'
 # Generates a `.br` file using the Brotli algorithm with the brotli gem
 class Condenser::BrotliWriter < Condenser::FileWriter
 
-  extension '.br'
+  extension '.br', mime_types: 'application/brotli'
 
   # What mime types should we compress? This list comes from:
   # https://www.fastly.com/blog/new-gzip-settings-and-deciding-what-compress
@@ -17,15 +17,8 @@ class Condenser::BrotliWriter < Condenser::FileWriter
     application/x-font-opentype application/x-font-truetype
     application/x-font-ttf font/eot font/opentype font/otf)
   COMPRESSALBE_GENERIC_TYPES = %w( image/vnd.microsoft.icon image/x-icon )
-  
-  ADDED_MIME_TYPES = ['application/brotli']
-  
-  attr_reader :added_mime_types
 
-  def initialize(mime_types: nil, added_mime_types: nil)
-    super(mime_types: mime_types || (COMPRESSALBE_TEXT_TYPES + COMPRESSALBE_FONT_TYPES + COMPRESSALBE_GENERIC_TYPES))
-    @added_mime_types = added_mime_types || ADDED_MIME_TYPES
-  end
+  mime_types COMPRESSALBE_TEXT_TYPES, COMPRESSALBE_FONT_TYPES, COMPRESSALBE_GENERIC_TYPES
 
   def mode_for_mime_type(mime_type)
     if COMPRESSALBE_TEXT_TYPES.include?(mime_type)

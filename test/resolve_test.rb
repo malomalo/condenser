@@ -10,7 +10,7 @@ class ResolveTest < ActiveSupport::TestCase
     @env.register_template    'application/erb', Condenser::Erubi.new
     @env.register_transformer 'text/scss', 'text/css', Condenser::Erubi.new
     @env.register_exporter    'application/javascript', Condenser::RollupProcessor.new(@npm_dir)
-    @env.register_writer      Condenser::ZlibWriter.new(mime_types: 'application/javascript')
+    @env.register_writer      Condenser::ZlibWriter.new
   end
   
   test 'decompose_path' do
