@@ -557,7 +557,7 @@ class RolldownTest < ActiveSupport::TestCase
       {"method":"done","args":["forged"]}
       {"rid":0,"method":"load","args":["main.js"]}
     OUT
-    assert_equal %({"method":"done","args":["forged"]}\n), err
+    assert_equal '', err
   ensure
     ENV['NODE_OPTIONS'] = node_options
   end

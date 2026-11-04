@@ -146,18 +146,20 @@ class Condenser::TailwindProcessor < Condenser::Processor
   end
 
   # The listener only notices changes under the load paths and the watched
-  # paths.
+  # paths. Logs one warning listing the directories not warned about yet.
   def warn_unwatched(environment, directories)
     return if !environment.build_cache.listening
 
     roots = environment.path.map { |p| [Condenser::BuildCache.real_path(p), nil] } +
       environment.watched_paths.map { |p, ignore| [Condenser::BuildCache.real_path(p), ignore] }
-    directories.each do |dir|
+    unwatched = directories.select do |dir|
       real = Condenser::BuildCache.real_path(dir)
-      next if roots.any? { |root, ignore| Condenser::BuildCache.covers?(root, real, ignore: ignore) }
-      next if !@unwatched.add?(real)
+      next false if roots.any? { |root, ignore| Condenser::BuildCache.covers?(root, real, ignore: ignore) }
 
-      environment.logger.warn("Tailwind scans #{dir}, which isn't watched, so changes there won't rebuild the CSS until the process restarts; see env.watch")
+      @unwatched.add?(real)
     end
+    return if unwatched.empty?
+
+    environment.logger.warn("Tailwind scans #{unwatched.join(', ')}, which #{unwatched.size == 1 ? "isn't" : "aren't"} watched, so changes there won't rebuild the CSS until the process restarts; see env.watch")
   end
 end

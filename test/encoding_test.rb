@@ -196,7 +196,7 @@ class EncodingTest < ActiveSupport::TestCase
     file 'main.css', %{/* café ✓ */\nbody:after { content: "✓"; }\n}
 
     dir = File.join(@path, 'public')
-    manifest = Condenser::Manifest.new(@env, dir)
+    manifest = Condenser::Manifest.new(@env, dir: dir)
     manifest.compile('main.js', 'main.css')
     assert_includes File.read(File.join(dir, manifest['main.js'][:path])), 'café ✓'
 

@@ -196,6 +196,28 @@ class TailwindTest < ActiveSupport::TestCase
     assert_includes log.string, "Tailwind scans #{@other}, which isn't watched"
   end
 
+  test 'unwatched directories are logged in one warning, once' do
+    skip 'needs a listener' if !@env.build_cache.listening
+    @other = File.realpath(Dir.mktmpdir)
+    file 'a/card.html', '<div class="flex"></div>', base: @other
+    file 'b/card.html', '<div class="grid"></div>', base: @other
+    file 'application.css', <<~CSS
+      @import "tailwindcss" source(none);
+      @source "#{File.join(@other, 'a')}";
+      @source "#{File.join(@other, 'b')}";
+    CSS
+    log = StringIO.new
+    @env.logger = Logger.new(log, level: :info)
+
+    css
+    file 'application.css', File.read(File.join(@path, 'application.css')) + "a { color: red; }\n"
+    assert wait_until { css.include?('color: red') }
+    warnings = log.string.lines.grep(/Tailwind scans/)
+    assert_equal 1, warnings.size
+    assert_match(/\AW, /, warnings[0])
+    assert_includes warnings[0], "Tailwind scans #{File.join(@other, 'a')}, #{File.join(@other, 'b')}, which aren't watched"
+  end
+
   test 'a stylesheet with @reference compiles @apply without Tailwind\'s CSS and without scanning' do
     file 'views/index.html', '<div class="grid"></div>'
     file 'tailwind.css', <<~CSS
@@ -351,7 +373,7 @@ class TailwindTest < ActiveSupport::TestCase
     env.logger = Logger.new(log)
 
     app_css(env)
-    assert_includes log.string, "Tailwind scans #{@path}, which isn't watched"
+    assert_includes log.string, "Tailwind scans #{@path},"
   end
 
   test 'base: is not an option' do
@@ -445,7 +467,7 @@ class TailwindTest < ActiveSupport::TestCase
     assert wait_until { app_css(env).include?('.grid {') }
     file 'lib/components/card.html', '<div class="hidden"></div>'
     assert wait_until { app_css(env).include?('.hidden {') }
-    assert_not_includes log.string, "isn't watched"
+    assert_not_includes log.string, "Tailwind scans"
   end
 
   test 'sources: rebuild the CSS in a new process after an edit or a new file' do

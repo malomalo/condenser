@@ -761,6 +761,60 @@ application-12345.css.gz
 
 This behavior can be disabled, refer to your framework specific documentation.
 
+### Writers
+
+Writers write each exported asset to the output directory when assets are
+precompiled. The default pipeline registers:
+
+- `Condenser::FileWriter`, the asset itself, for every type
+- `Condenser::ZlibWriter`, a `.gz` copy of compressible types
+- `Condenser::BrotliWriter`, a `.br` copy, if the `brotli` gem is installed
+
+``` ruby
+condenser.unregister_writer(Condenser::BrotliWriter)
+condenser.register_writer(Condenser::BrotliWriter.new)
+
+# Only for some types
+condenser.unregister_writer(Condenser::ZlibWriter, for_mime_types: 'image/svg+xml')
+```
+
+A class only matches its own instances, so unregistering `Condenser::FileWriter`
+keeps the compressing writers, which subclass it.
+
+A writer subclasses `Condenser::FileWriter`, sets the extension it appends to
+the asset's path with the content type of what it adds, the asset mime types it
+accepts, and writes the asset to the open file. The file is opened and closed
+for it, written atomically, and skipped if it's already in the output directory:
+
+``` ruby
+class XzWriter < Condenser::FileWriter
+  extension '.xz', content_type: 'application/x-xz'
+  accepts 'application/javascript', 'text/css', 'image/svg+xml'
+
+  private
+
+  # Write to +file+ and leave it open; stream into it if the compressor can.
+  def write(asset, file)
+    file.write(xz_compress(asset.source))
+  end
+end
+
+condenser.register_writer(XzWriter.new)
+```
+
+Several extensions take a content type each, e.g.
+`extension '.tar.gz', content_type: ['application/x-tar', 'application/gzip']`.
+To change the types an existing writer accepts, subclass it:
+
+``` ruby
+class JavaScriptGzipWriter < Condenser::ZlibWriter
+  accepts 'application/javascript'
+end
+```
+
+`Condenser::Manifest#compile` (`assets:precompile`) returns the files written,
+relative to the output directory, e.g. `application-12345.js.gz`.
+
 ### Serving Assets
 
 In production you should generate your assets to a directory on disk and serve

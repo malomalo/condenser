@@ -133,7 +133,8 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
     FILE
 
     Dir.mktmpdir do |export_dir|
-      manifest = Condenser::Manifest.new(@env, File.join(export_dir, 'manifest.json'))
+      @env.register_writer Condenser::ZlibWriter.new
+      manifest = Condenser::Manifest.new(@env, dir: export_dir)
       main = @env['main.js']
       math = @env['math/math.js']
       mathb = @env['math/b.js']
@@ -226,7 +227,8 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
     FILE
 
     Dir.mktmpdir do |export_dir|
-      manifest = Condenser::Manifest.new(@env, File.join(export_dir, 'manifest.json'))
+      @env.register_writer Condenser::ZlibWriter.new
+      manifest = Condenser::Manifest.new(@env, dir: export_dir)
       main = @env['main.js']
       math = @env['math/math.js']
       mathb = @env['math/b.js']
@@ -316,7 +318,8 @@ class RolldownDynamicImportTest < ActiveSupport::TestCase
     FILE
 
     Dir.mktmpdir do |export_dir|
-      manifest = Condenser::Manifest.new(@env, File.join(export_dir, 'manifest.json'))
+      @env.register_writer Condenser::ZlibWriter.new
+      manifest = Condenser::Manifest.new(@env, dir: export_dir)
       main = @env['main.js']
       math = @env['math/math.js']
       cube = @env['math/cube.js']
