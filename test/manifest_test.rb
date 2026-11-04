@@ -72,7 +72,8 @@ class ManifestTest < ActiveSupport::TestCase
     @env.register_writer Condenser::ZlibWriter.new
     manifest = Condenser::Manifest.new(@env, @dir)
 
-    assert_equal %w(application.js application.js.gz), manifest.compile('application.js')
+    path = @env.find('application.js').export.path
+    assert_equal [path, "#{path}.gz"], manifest.compile('application.js')
   end
 
   test "compile asset dependencies includes the dependencies" do

@@ -65,7 +65,7 @@ class Condenser::FileWriter
       write(asset, file)
     end
 
-    ["#{asset.filename}#{self.class.extension}"]
+    [path(asset)]
   end
 
   private
