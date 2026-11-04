@@ -54,6 +54,7 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
     
     npm_install("@babel/core@^#{BABEL_MAJOR}")
     major = JSON.parse(File.read(npm_module_path('@babel/core/package.json')))['version'].to_i
+    self.class.check_node_version(self)
     npm_install(*packages.map { |p|
       version = p.start_with?('@babel/') ? "^#{major}" : NPM_VERSIONS[p]
       version ? "#{p}@#{version}" : p
@@ -75,6 +76,18 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
     }.merge(options)
   end
   
+  def self.check_node_version(node)
+    return if JSON.parse(File.read(node.npm_module_path('@babel/core/package.json')))['version'].to_i < 8
+    version = Gem::Version.new(node_version(node))
+    if !(Gem::Requirement.new('~> 22.18').satisfied_by?(version) || version >= Gem::Version.new('24.11'))
+      raise Condenser::Error, "Babel 8 needs Node ^22.18.0 || >=24.11.0, but #{node.binary} is #{version}"
+    end
+  end
+
+  def self.node_version(node)
+    @node_version ||= Open3.capture2(node.binary, '--version')[0].strip.delete_prefix('v')
+  end
+
   def call(environment, input)
     opts = {
       # 'moduleRoot' => nil,
