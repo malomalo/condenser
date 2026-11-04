@@ -8,55 +8,26 @@ class Condenser
     
     attr_reader :filename, :dir, :environment
     
-    def initialize(*args)
-      args.compact!
-      
-      if args.first.is_a?(Condenser)
-        @environment = args.shift
-      else
-        @environment = nil
-        @logger = Logger.new($stdout, level: :info)
-      end
-      
-      @dir, @filename = args[0], args[1]
-      
-      # Expand paths
-      @dir = File.expand_path(@dir) if @dir
-      @filename  = File.expand_path(@filename) if @filename
-      
-      # If filename is given as the second arg
-      if @dir && File.extname(@dir) != ""
-        @dir, @filename = nil, @dir
-      end
-      
-      # Default dir to the directory of the filename
-      @dir ||= File.dirname(@filename) if @filename
-      
-      # If directory is given w/o filename, pick a random manifest location
-      if @dir && @filename.nil?
-        @filename = File.join(@dir, 'manifest.json')
-      end
-      
-      unless @dir && @filename
-        raise ArgumentError, "manifest requires output filename"
-      end
+    def initialize(environment = nil, dir:, filename: nil, logger: nil)
+      @environment = environment
+      @logger = logger || (environment ? nil : Logger.new($stdout, level: :info))
+      @dir = File.expand_path(dir)
+      @filename = File.expand_path(filename || File.join(@dir, 'manifest.json'))
       
       if File.exist?(@filename)
         begin
           @data = JSON.parse(File.read(@filename), symbolize_names: true).transform_keys(&:to_s)
         rescue JSON::ParserError => e
           @data = {}
-          logger.error "#{@filename} is invalid: #{e.class} #{e.message}"
+          self.logger.error "#{@filename} is invalid: #{e.class} #{e.message}"
         end
       else
         @data = {}
       end
     end
     
-    # The environment's logger, read on each use so a logger set on the
-    # environment afterwards (e.g. by the rake task) is used.
     def logger
-      @environment ? @environment.logger : @logger
+      @logger || @environment.logger
     end
 
     def reset
