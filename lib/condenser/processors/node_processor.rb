@@ -193,8 +193,6 @@ class Condenser
       FileUtils.mkdir_p(npm_path)
       File.open(File.join(npm_path, '.condenser-npm.lock'), File::RDWR | File::CREAT) do |lock|
         lock.flock(File::LOCK_EX)
-        # A package can have a version range (e.g. "@babel/core@^8"); one
-        # that's already installed is kept whatever its version.
         packages.reject! { |package| Dir.exist?(npm_module_path(package.sub(/(?<=.)@.*\z/, ''))) }
         return if packages.empty?
 
