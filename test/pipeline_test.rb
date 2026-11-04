@@ -51,6 +51,17 @@ class PipelineTest < ActiveSupport::TestCase
     assert_equal [file_writer], @env.writers_for_mime_type('application/javascript')
   end
 
+  test 'with no writer for a mime type, nothing is written' do
+    @env.unregister_writer(Condenser::FileWriter)
+    assert_equal [], @env.writers_for_mime_type('application/javascript')
+
+    file 'main.js', "console.log(1);"
+    Dir.mktmpdir do |dir|
+      assert_equal [], @env.find_export('main.js').write(dir)
+      assert_empty Dir.children(dir)
+    end
+  end
+
   test 'register_writer raises for a writer class' do
     error = assert_raises(ArgumentError) { @env.register_writer(Condenser::ZlibWriter) }
     assert_equal 'Condenser::ZlibWriter is a class, register Condenser::ZlibWriter.new', error.message
