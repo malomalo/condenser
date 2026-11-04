@@ -21,5 +21,25 @@ class ZlibWriterTest < ActiveSupport::TestCase
       end
     end
   end
+
+  test 'skips by its own extension, independently of the other writers' do
+    @env.register_writer Condenser::FileWriter.new
+    file 'index.js', "console.log('hello world!');"
+    export = @env.find_export('index.js')
+
+    Dir.mktmpdir do |dir|
+      File.write(File.join(dir, "#{export.path}.gz"), 'existing')
+      assert_equal [export.path], export.write(dir)
+      assert_equal 'existing', File.read(File.join(dir, "#{export.path}.gz"))
+      assert_equal export.source, File.read(File.join(dir, export.path))
+    end
+
+    Dir.mktmpdir do |dir|
+      File.write(File.join(dir, export.path), 'existing')
+      assert_equal ["#{export.path}.gz"], export.write(dir)
+      assert_equal 'existing', File.read(File.join(dir, export.path))
+      Zlib::GzipReader.open(File.join(dir, "#{export.path}.gz")) { |gz| assert_equal export.source, gz.read }
+    end
+  end
   
 end

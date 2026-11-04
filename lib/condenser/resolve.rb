@@ -314,7 +314,7 @@ class Condenser
     end
 
     def writers_for_mime_type(mime_type)
-      @writers.select { |m, e| match_mime_type?(mime_type, m) }.values.reduce(&:+)
+      @writers.select { |m, e| match_mime_type?(mime_type, m) }.values.reduce([], &:+)
     end
     
     def match_mime_types?(value, matcher)

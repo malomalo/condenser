@@ -23,7 +23,7 @@ class Condenser::PurgeCSSProcessor < Condenser::NodeProcessor
   end
   
   def call(environment, input)
-    result = exec_runtime(<<-JS)
+    result = exec_runtime(<<-JS, logger: environment.logger)
       const { PurgeCSS } = require("#{File.join(npm_module_path('purgecss'))}")
       const options = #{@options.to_json}
       options.css = [{

@@ -29,7 +29,7 @@ class Condenser::TerserMinifier < Condenser::NodeProcessor
     # url Terser adds no sourceMappingURL comment; Asset#export does.
     opts[:sourceMap] = { content: input[:sourcemap] } if input[:sourcemap]
 
-    result = exec_runtime(<<-JS)
+    result = exec_runtime(<<-JS, logger: environment.logger)
       const Terser = require("#{npm_module_path('terser')}");
       const source = #{JSON.generate(input[:filename] => input[:source])}
       const options = #{JSON.generate(opts)};

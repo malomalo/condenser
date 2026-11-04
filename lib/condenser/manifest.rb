@@ -6,80 +6,36 @@ require 'fileutils'
 class Condenser
   class Manifest
     
-    attr_reader :filename, :dir, :environment, :logger
+    attr_reader :filename, :dir, :environment
     
-    def initialize(*args)
-      args.compact!
-      
-      if args.first.is_a?(Condenser)
-        @environment = args.shift
-        @logger = @environment.logger
-      else
-        @environment = nil
-        @logger = Logger.new($stdout, level: :info)
-      end
-      
-      @dir, @filename = args[0], args[1]
-      
-      # Expand paths
-      @dir = File.expand_path(@dir) if @dir
-      @filename  = File.expand_path(@filename) if @filename
-      
-      # If filename is given as the second arg
-      if @dir && File.extname(@dir) != ""
-        @dir, @filename = nil, @dir
-      end
-      
-      # Default dir to the directory of the filename
-      @dir ||= File.dirname(@filename) if @filename
-      
-      # If directory is given w/o filename, pick a random manifest location
-      if @dir && @filename.nil?
-        @filename = File.join(@dir, 'manifest.json')
-      end
-      
-      unless @dir && @filename
-        raise ArgumentError, "manifest requires output filename"
-      end
+    def initialize(environment = nil, dir:, filename: nil, logger: nil)
+      @environment = environment
+      @logger = logger || (environment ? nil : Logger.new($stdout, level: :info))
+      @dir = File.expand_path(dir)
+      @filename = File.expand_path(filename || File.join(@dir, 'manifest.json'))
       
       if File.exist?(@filename)
         begin
           @data = JSON.parse(File.read(@filename), symbolize_names: true).transform_keys(&:to_s)
         rescue JSON::ParserError => e
           @data = {}
-          logger.error "#{@filename} is invalid: #{e.class} #{e.message}"
+          self.logger.error "#{@filename} is invalid: #{e.class} #{e.message}"
         end
       else
         @data = {}
       end
     end
     
+    def logger
+      @logger || @environment.logger
+    end
+
     def reset
       @data = {}
     end
     
     def add(*args)
-      if @environment.nil?
-        raise Error, "manifest requires environment for compilation"
-      end
-      
-      outputs = []
-      args.each do |arg|
-        @environment.resolve(arg).each do |asset|
-          outputs += add_asset(asset)
-        end
-      end
-    end
-    
-    def add_asset(asset)
-      export = asset.export
-
-      @data[asset.filename] = export.to_json
-      outputs = export.write(@dir)
-      asset.linked_assets.each do |la|
-        outputs += add_asset(la)
-      end
-      outputs
+      add_assets(args)
     end
     
     def [](key)
@@ -89,8 +45,11 @@ class Condenser
     
     def compile(*args)
       reset
-      outputs = add(*args.flatten)
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      built = Set.new
+      outputs = add_assets(args.flatten, built)
       save
+      log_summary(@data.size, built.size, outputs.size, started)
       outputs
     end
     
@@ -134,6 +93,32 @@ class Condenser
     end
 
     private
+
+    def add_assets(args, built = nil)
+      if @environment.nil?
+        raise Error, "manifest requires environment for compilation"
+      end
+
+      args.flat_map do |arg|
+        @environment.resolve(arg).flat_map { |asset| add_asset(asset, built) }
+      end
+    end
+
+    def add_asset(asset, built)
+      export = asset.export { built&.add(asset.filename) }
+
+      @data[asset.filename] = export.to_json
+      outputs = export.write(@dir)
+      asset.linked_assets.each do |la|
+        outputs += add_asset(la, built)
+      end
+      outputs
+    end
+
+    def log_summary(assets, built, files, started)
+      elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+      logger.info format("Processed %d %s (%d built, %d cached; %d %s written) in %.1fs", assets, assets == 1 ? 'asset' : 'assets', built, assets - built, files, files == 1 ? 'file' : 'files', elapsed)
+    end
 
     # Remove files in +dir+ that aren't in +keep+, then any directories left
     # empty. Never removes the manifest. Returns true if +dir+ is now empty.

@@ -13,30 +13,80 @@ class ManifestTest < ActiveSupport::TestCase
   end
 
   test "specify full manifest filename" do
-    directory = Dir::tmpdir
-    filename  = File.join(directory, 'manifest.json')
+    filename = File.join(@dir, 'manifests', 'assets.json')
 
-    manifest = Condenser::Manifest.new(@env, filename)
+    manifest = Condenser::Manifest.new(@env, dir: @dir, filename: filename)
 
-    assert_equal directory, manifest.dir
-    assert_equal filename,  manifest.filename
+    assert_equal @dir, manifest.dir
+    assert_equal filename, manifest.filename
   end
 
   test "specify manifest directory yields manifest.json" do
-    manifest = Condenser::Manifest.new(@env, @dir)
+    manifest = Condenser::Manifest.new(@env, dir: @dir)
 
     assert_equal @dir, manifest.dir
-    assert_match('manifest.json', File.basename(manifest.filename))
+    assert_equal File.join(@dir, 'manifest.json'), manifest.filename
   end
 
-  test "must specify manifest directory or filename" do
-    assert_raises ArgumentError do
-      Condenser::Manifest.new(@env)
+  test "dir and filename are expanded" do
+    Dir.chdir(@dir) do
+      manifest = Condenser::Manifest.new(@env, dir: 'public', filename: 'tmp/manifest.json')
+
+      assert_equal File.join(Dir.pwd, 'public'), manifest.dir
+      assert_equal File.join(Dir.pwd, 'tmp/manifest.json'), manifest.filename
     end
   end
 
+  test "must specify manifest directory" do
+    assert_raises(ArgumentError) { Condenser::Manifest.new(@env) }
+    assert_raises(ArgumentError) { Condenser::Manifest.new(filename: File.join(@dir, 'manifest.json')) }
+  end
+
+  test "dir and filename can't be positional" do
+    assert_raises(ArgumentError) { Condenser::Manifest.new(@env, @dir) }
+    assert_raises(ArgumentError) { Condenser::Manifest.new(@env, @dir, File.join(@dir, 'manifest.json')) }
+  end
+
+  test "logger: without an environment" do
+    log = StringIO.new
+    File.write(File.join(@dir, 'manifest.json'), '{')
+    manifest = Condenser::Manifest.new(dir: @dir, logger: Logger.new(log))
+
+    assert_match(/manifest\.json is invalid/, log.string)
+  end
+
+  test "logger: with an environment is used instead of the environment's" do
+    logger = Logger.new(File::NULL)
+    manifest = Condenser::Manifest.new(@env, dir: @dir, logger: logger)
+    @env.logger = Logger.new(File::NULL)
+
+    assert_same logger, manifest.logger
+  end
+
+  test "logger defaults to the environment's logger" do
+    assert_same @env.logger, Condenser::Manifest.new(@env, dir: @dir).logger
+  end
+
+  test "logs to the environment's logger at the time it's used" do
+    file 'application.js', "console.log(1);\n"
+    manifest = Condenser::Manifest.new(@env, dir: @dir)
+    log = StringIO.new
+    @env.logger = Logger.new(log, level: :debug)
+
+    assert_same @env.logger, manifest.logger
+    manifest.compile('application.js')
+    assert_match(/application\.js/, log.string)
+  end
+
+  test "logger defaults to $stdout without an environment" do
+    logger = Condenser::Manifest.new(dir: @dir).logger
+
+    assert_equal $stdout, logger.instance_variable_get(:@logdev).dev
+    assert_equal Logger::INFO, logger.level
+  end
+
   test "must specify env to compile assets" do
-    manifest = Condenser::Manifest.new(@dir)
+    manifest = Condenser::Manifest.new(dir: @dir)
 
     assert_raises Condenser::Error do
       manifest.compile('application.js')
@@ -47,7 +97,8 @@ class ManifestTest < ActiveSupport::TestCase
     file 'application.js', <<-JS
       console.log(1);
     JS
-    manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
+    @env.register_writer Condenser::ZlibWriter.new
+    manifest = Condenser::Manifest.new(@env, dir: @dir)
 
     asset = @env['application.js']
     assert !File.exist?("#{@dir}/#{asset.path}")
@@ -66,6 +117,27 @@ class ManifestTest < ActiveSupport::TestCase
     assert_equal 15,          data['application.js']['size']
   end
 
+  test "compile returns the files written" do
+    file 'application.js', 'console.log(1);'
+    @env.register_writer Condenser::ZlibWriter.new
+    manifest = Condenser::Manifest.new(@env, dir: @dir)
+
+    path = @env.find('application.js').export.path
+    assert_equal [path, "#{path}.gz"], manifest.compile('application.js')
+  end
+
+  test "compile doesn't return files skipped because they're already written" do
+    file 'application.js', 'console.log(1);'
+    @env.register_writer Condenser::ZlibWriter.new
+    manifest = Condenser::Manifest.new(@env, dir: @dir)
+    path = @env.find('application.js').export.path
+    FileUtils.mkdir_p(@dir)
+    File.write(File.join(@dir, "#{path}.gz"), 'existing')
+
+    assert_equal [path], manifest.compile('application.js')
+    assert_equal [], manifest.compile('application.js')
+  end
+
   test "compile asset dependencies includes the dependencies" do
     file 'foo.svg', <<-SVG
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -79,7 +151,7 @@ class ManifestTest < ActiveSupport::TestCase
       }
     SCSS
     
-    manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
+    manifest = Condenser::Manifest.new(@env, dir: @dir)
 
     main_digest_path = @env['test.css'].path
     dep_digest_path = @env['foo.svg'].path
@@ -140,7 +212,7 @@ class ManifestTest < ActiveSupport::TestCase
     FileUtils.remove_entry(root, true)
 
     assert !File.exist?(root)
-    manifest = Condenser::Manifest.new(@env, dir, path)
+    manifest = Condenser::Manifest.new(@env, dir: dir, filename: path)
 
     manifest.compile('application.js')
     assert File.directory?(manifest.dir)
@@ -166,6 +238,80 @@ class ManifestTest < ActiveSupport::TestCase
   #   assert_equal digest_path, data['assets']['gallery.js']
   # end
 
+  test "compile logs one summary line at info and the per-file lines at debug" do
+    file 'application.js', "console.log(1);\n"
+    file 'gallery.css', "body { color: red; }\n"
+    log = StringIO.new
+    @env.logger = Logger.new(log, level: :debug)
+    manifest = Condenser::Manifest.new(@env, dir: @dir)
+
+    manifest.compile('application.js', 'gallery.css')
+    files = Dir.children(@dir).size - 1
+    info = log.string.lines.grep_v(/\AD, /)
+    assert_equal 1, info.size, log.string
+    assert_match(/\AI, .* INFO -- : Processed 2 assets \(2 built, 0 cached; #{files} files written\) in \d+\.\ds$/, info[0])
+    assert_match(/^D, .* DEBUG -- : Writing application-\w+\.js$/, log.string)
+    assert_match(/^D, .* DEBUG -- : Minifying gallery\.css with /, log.string)
+
+    log.truncate(0)
+    log.rewind
+    manifest.export('application.js')
+    assert_empty log.string.lines.grep_v(/\AD, /)
+  end
+
+  def summary_env(cache)
+    env = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: @npm_dir, base: @path, listen: false, cache: Condenser::Cache::FileStore.new(cache))
+    env.unregister_writer(Condenser::ZlibWriter)
+    env.unregister_writer(Condenser::BrotliWriter)
+    env.context_class.class_eval do
+      def asset_path(path, options = {})
+        "/assets/#{environment.find!(path, options).path}"
+      end
+    end
+    env
+  end
+
+  def compile_summary(cache, env: nil)
+    log = StringIO.new
+    env ||= summary_env(cache)
+    env.logger = Logger.new(log)
+    Condenser::Manifest.new(env, dir: @dir).compile('application.js', 'other.js', 'gallery.css')
+    log.string.lines.grep(/INFO -- : Processed /).join[/Processed .*\)/]
+  end
+
+  def summary_files
+    file 'application.js', "import { h } from './helper';\nconsole.log(h);\n"
+    file 'helper.js', "export const h = 1;\n"
+    file 'other.js', "console.log(2);\n"
+    file 'gallery.scss', "body { background: url(asset-path(\"logo.png\")); }\n"
+    file 'logo.png', "png1"
+  end
+
+  test "compile summary counts built and cached assets" do
+    summary_files
+    cache = File.join(@path, 'cache')
+    env = summary_env(cache)
+
+    assert_equal "Processed 4 assets (4 built, 0 cached; 4 files written)", compile_summary(cache, env: env)
+    assert_equal "Processed 4 assets (0 built, 4 cached; 0 files written)", compile_summary(cache, env: env)
+    assert_equal "Processed 4 assets (0 built, 4 cached; 0 files written)", compile_summary(cache)
+  end
+
+  test "compile summary counts the assets rebuilt after a change" do
+    summary_files
+    cache = File.join(@path, 'cache')
+    assert_equal "Processed 4 assets (4 built, 0 cached; 4 files written)", compile_summary(cache)
+
+    file 'other.js', "console.log(3);\n"
+    assert_equal "Processed 4 assets (1 built, 3 cached; 1 file written)", compile_summary(cache)
+
+    file 'helper.js', "export const h = 2;\n"
+    assert_equal "Processed 4 assets (1 built, 3 cached; 1 file written)", compile_summary(cache)
+
+    file 'logo.png', "png2"
+    assert_equal "Processed 4 assets (2 built, 2 cached; 2 files written)", compile_summary(cache)
+  end
+
   test "compile multiple assets" do
     file 'application.js', <<-JS
       console.log(1);
@@ -175,7 +321,7 @@ class ManifestTest < ActiveSupport::TestCase
       * { color: green }
     CSS
     
-    manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
+    manifest = Condenser::Manifest.new(@env, dir: @dir)
 
     app_digest_path = @env.find_export('application.js').path
     gallery_digest_path = @env.find_export('gallery.css').path
@@ -281,7 +427,7 @@ class ManifestTest < ActiveSupport::TestCase
   test "recompile asset" do
     file 'application.js', "console.log(1);"
 
-    manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
+    manifest = Condenser::Manifest.new(@env, dir: @dir)
 
     digest_path = @env['application.js'].path
     assert !File.exist?("#{@dir}/#{digest_path}"), Dir["#{@dir}/*"].inspect
@@ -317,7 +463,7 @@ class ManifestTest < ActiveSupport::TestCase
 
     assert !File.exist?("#{@dir}/manifest.json")
 
-    manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
+    manifest = Condenser::Manifest.new(@env, dir: @dir)
     manifest.compile('application.js')
 
     assert File.exist?("#{@dir}/manifest.json")
@@ -334,7 +480,7 @@ class ManifestTest < ActiveSupport::TestCase
     File.write("#{@dir}/manifest.json", '{}')
     assert_equal "{}", File.read("#{@dir}/manifest.json")
 
-    manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
+    manifest = Condenser::Manifest.new(@env, dir: @dir)
     manifest.compile('application.js')
 
     assert File.exist?("#{@dir}/manifest.json")
@@ -351,7 +497,10 @@ class ManifestTest < ActiveSupport::TestCase
     File.write("#{@dir}/manifest.json", "not valid json;")
     assert_equal "not valid json;", File.read("#{@dir}/manifest.json")
 
-    manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
+    log = StringIO.new
+    @env.logger = Logger.new(log)
+    manifest = Condenser::Manifest.new(@env, dir: @dir)
+    assert_match(/manifest\.json is invalid/, log.string)
     manifest.compile('application.js')
 
     assert File.exist?("#{@dir}/manifest.json")
@@ -362,7 +511,7 @@ class ManifestTest < ActiveSupport::TestCase
   test "nil environment raises compilation error" do
     assert !File.exist?("#{@dir}/manifest.json")
 
-    manifest = Condenser::Manifest.new(nil, File.join(@dir, 'manifest.json'))
+    manifest = Condenser::Manifest.new(nil, dir: @dir)
     assert_raises Condenser::Error do
       manifest.compile('application.js')
     end
@@ -371,7 +520,7 @@ class ManifestTest < ActiveSupport::TestCase
   test "no environment raises compilation error" do
     assert !File.exist?("#{@dir}/manifest.json")
 
-    manifest = Condenser::Manifest.new(File.join(@dir, 'manifest.json'))
+    manifest = Condenser::Manifest.new(dir: @dir)
     assert_raises Condenser::Error do
       manifest.compile('application.js')
     end
@@ -414,7 +563,8 @@ class ManifestTest < ActiveSupport::TestCase
     file 'logo.svg', 'x'
     file 'favicon.ico', 'x'
 
-    manifest = Condenser::Manifest.new(@env, @dir)
+    @env.register_writer Condenser::ZlibWriter.new
+    manifest = Condenser::Manifest.new(@env, dir: @dir)
     %W{ gallery.css application.js logo.svg favicon.ico }.each do |file_name|
       original_path = @env[file_name].path
       manifest.compile(file_name)
@@ -455,7 +605,7 @@ class ManifestTest < ActiveSupport::TestCase
   test "do not compress binary assets" do
     file 'blank.gif', Random.new.bytes(128)
 
-    manifest = Condenser::Manifest.new(@env, @path)
+    manifest = Condenser::Manifest.new(@env, dir: @path)
     %W{ blank.gif }.each do |file_name|
       original_path = @env[file_name].path
       manifest.compile(file_name)
@@ -546,7 +696,7 @@ class ManifestTest < ActiveSupport::TestCase
       console.log(1);
     JS
     
-    manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
+    manifest = Condenser::Manifest.new(@env, dir: @dir)
     manifest.compile('application.js')
     assert File.directory?(manifest.dir)
     assert File.file?(manifest.filename)
@@ -576,7 +726,7 @@ class ManifestTest < ActiveSupport::TestCase
   def write_manifest(data, filename = File.join(@dir, 'manifest.json'))
     FileUtils.mkdir_p(File.dirname(filename))
     File.write(filename, JSON.generate(data))
-    Condenser::Manifest.new(@dir, filename)
+    Condenser::Manifest.new(dir: @dir, filename: filename)
   end
 
   def output_files
@@ -710,7 +860,7 @@ class ManifestTest < ActiveSupport::TestCase
 
   test "clean after recompiling removes the previous version" do
     file 'application.js', "console.log(1);"
-    manifest = Condenser::Manifest.new(@env, File.join(@dir, 'manifest.json'))
+    manifest = Condenser::Manifest.new(@env, dir: @dir)
     manifest.compile('application.js')
     old_path = @env['application.js'].path
 
@@ -720,7 +870,7 @@ class ManifestTest < ActiveSupport::TestCase
     assert_not_equal old_path, new_path
     manifest.compile('application.js')
 
-    Condenser::Manifest.new(@dir).clean
+    Condenser::Manifest.new(dir: @dir).clean
 
     assert_includes output_files, new_path
     assert_includes output_files, 'manifest.json'
