@@ -6,6 +6,16 @@
 
 - `digestor`, `base` and `sourcemap` are set only through `Condenser.new(digestor:, base:, sourcemap:)` and are read-only afterwards: `digestor=`, `base=` and `sourcemap=` are removed (calling them raises `NoMethodError`). Changing them after creation didn't invalidate exports or etags already built.
 
+### Added
+
+- `RolldownProcessor`'s `keep_names:` option (Rolldown's `keepNames`, default `false`), which keeps the `name` of functions and classes when minifying or renaming one to avoid a collision, for code that reads `.name` at runtime. It's in the options, so assets are rebuilt once.
+
+### Fixed / improved
+
+- The Tailwind and Rolldown worker scripts are `.cjs`, as are the scripts `NodeProcessor` writes to a temp file, so Node runs them as CommonJS when the gem is installed under a `package.json` with `"type": "module"` (e.g. `vendor/bundle` in an app). They failed with `require is not defined in ES module scope`.
+- `Condenser::Manifest#clean` keeps any file named after a current asset or source map plus extra extensions (e.g. `.xz`, `.zst`, `.map.gz`), so files from custom writers aren't removed. It kept only `.gz` and `.br` before.
+- `RollupProcessor` loads `magic-string` and `estree-walker` from `@rollup/plugin-commonjs`, which depends on them, instead of the top of `node_modules`. Another package in the same npm path (e.g. Tailwind's, which use the ESM-only `magic-string` 1) could hoist an incompatible version there and break Rollup with `Cannot find module …/magic-string`.
+
 ## 2.0.0.rc2
 
 Changes since 2.0.0.rc1.
