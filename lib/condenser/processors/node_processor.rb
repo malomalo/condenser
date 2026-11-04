@@ -15,7 +15,9 @@ class Condenser
       self.npm_path = npm_dir
     end
     
-    def exec_runtime(script)
+    # A successful run's stderr is logged at debug to +logger+. A failed
+    # run's is in the error.
+    def exec_runtime(script, logger:)
       Tempfile.open(['script', '.cjs']) do |scriptfile|
         scriptfile.write(script)
         scriptfile.flush
@@ -23,7 +25,9 @@ class Condenser
         stdout, stderr, status = Open3.capture3(binary, scriptfile.path)
         
         if status.success?
-          puts stderr if !stderr.strip.empty?
+          if !stderr.strip.empty?
+            logger.debug { "#{self.class.name}: #{stderr.strip}" }
+          end
           JSON.parse(stdout)
         else
           raise exec_runtime_error(stdout + stderr)

@@ -238,6 +238,80 @@ class ManifestTest < ActiveSupport::TestCase
   #   assert_equal digest_path, data['assets']['gallery.js']
   # end
 
+  test "compile logs one summary line at info and the per-file lines at debug" do
+    file 'application.js', "console.log(1);\n"
+    file 'gallery.css', "body { color: red; }\n"
+    log = StringIO.new
+    @env.logger = Logger.new(log, level: :debug)
+    manifest = Condenser::Manifest.new(@env, dir: @dir)
+
+    manifest.compile('application.js', 'gallery.css')
+    files = Dir.children(@dir).size - 1
+    info = log.string.lines.grep_v(/\AD, /)
+    assert_equal 1, info.size, log.string
+    assert_match(/\AI, .* INFO -- : Processed 2 assets \(2 built, 0 cached; #{files} files written\) in \d+\.\ds$/, info[0])
+    assert_match(/^D, .* DEBUG -- : Writing application-\w+\.js$/, log.string)
+    assert_match(/^D, .* DEBUG -- : Minifying gallery\.css with /, log.string)
+
+    log.truncate(0)
+    log.rewind
+    manifest.export('application.js')
+    assert_empty log.string.lines.grep_v(/\AD, /)
+  end
+
+  def summary_env(cache)
+    env = Condenser.new(@path, logger: Logger.new('/dev/null'), npm_path: @npm_dir, base: @path, listen: false, cache: Condenser::Cache::FileStore.new(cache))
+    env.unregister_writer(Condenser::ZlibWriter)
+    env.unregister_writer(Condenser::BrotliWriter)
+    env.context_class.class_eval do
+      def asset_path(path, options = {})
+        "/assets/#{environment.find!(path, options).path}"
+      end
+    end
+    env
+  end
+
+  def compile_summary(cache, env: nil)
+    log = StringIO.new
+    env ||= summary_env(cache)
+    env.logger = Logger.new(log)
+    Condenser::Manifest.new(env, dir: @dir).compile('application.js', 'other.js', 'gallery.css')
+    log.string.lines.grep(/INFO -- : Processed /).join[/Processed .*\)/]
+  end
+
+  def summary_files
+    file 'application.js', "import { h } from './helper';\nconsole.log(h);\n"
+    file 'helper.js', "export const h = 1;\n"
+    file 'other.js', "console.log(2);\n"
+    file 'gallery.scss', "body { background: url(asset-path(\"logo.png\")); }\n"
+    file 'logo.png', "png1"
+  end
+
+  test "compile summary counts built and cached assets" do
+    summary_files
+    cache = File.join(@path, 'cache')
+    env = summary_env(cache)
+
+    assert_equal "Processed 4 assets (4 built, 0 cached; 4 files written)", compile_summary(cache, env: env)
+    assert_equal "Processed 4 assets (0 built, 4 cached; 0 files written)", compile_summary(cache, env: env)
+    assert_equal "Processed 4 assets (0 built, 4 cached; 0 files written)", compile_summary(cache)
+  end
+
+  test "compile summary counts the assets rebuilt after a change" do
+    summary_files
+    cache = File.join(@path, 'cache')
+    assert_equal "Processed 4 assets (4 built, 0 cached; 4 files written)", compile_summary(cache)
+
+    file 'other.js', "console.log(3);\n"
+    assert_equal "Processed 4 assets (1 built, 3 cached; 1 file written)", compile_summary(cache)
+
+    file 'helper.js', "export const h = 2;\n"
+    assert_equal "Processed 4 assets (1 built, 3 cached; 1 file written)", compile_summary(cache)
+
+    file 'logo.png', "png2"
+    assert_equal "Processed 4 assets (2 built, 2 cached; 2 files written)", compile_summary(cache)
+  end
+
   test "compile multiple assets" do
     file 'application.js', <<-JS
       console.log(1);

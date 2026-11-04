@@ -14,6 +14,8 @@ class CondenserNodeWorkerTest < ActiveSupport::TestCase
   # Asks Ruby each of config.ask in turn and is done with what it answered.
   # config.stale sends a request, a warning and a result for the previous
   # build first, and config.partial dies halfway through writing a line.
+  # config.stderr is written to stderr, and config.crash too before exiting.
+  # config.grandchild starts a process that keeps stderr open for 10s.
   SCRIPT = <<~JS
     const net = require('net');
     const readline = require('readline');
@@ -36,6 +38,13 @@ class CondenserNodeWorkerTest < ActiveSupport::TestCase
     }
 
     async function run(build, config) {
+      if (config.stderr) require('fs').writeSync(2, config.stderr + "\\n");
+      let grandchild;
+      if (config.grandchild) grandchild = require('child_process').spawn('sleep', ['10'], { stdio: ['ignore', 'ignore', 'inherit'], detached: true }).pid;
+      if (config.crash) {
+        require('fs').writeSync(2, config.crash + "\\n");
+        process.exit(2);
+      }
       if (config.partial) {
         require('fs').writeSync(3, '{"method":"do');
         process.exit(1);
@@ -48,7 +57,7 @@ class CondenserNodeWorkerTest < ActiveSupport::TestCase
       if (config.warn) send({ method: 'warn', build, args: [config.warn] });
       const answers = [];
       for (const [method, ...args] of config.ask || []) answers.push(await request(build, method, args));
-      return { pid: process.pid, argument: process.argv[2], execArgv: process.execArgv, answers };
+      return { pid: process.pid, argument: process.argv[2], execArgv: process.execArgv, answers, grandchild };
     }
 
     let queue = Promise.resolve();
@@ -131,6 +140,36 @@ class CondenserNodeWorkerTest < ActiveSupport::TestCase
   test 'warnings for the build are logged' do
     result({ warn: 'a warning' })
     assert_includes @log.string, 'a warning'
+  end
+
+  test "node's stderr is logged at debug" do
+    @logger.level = :debug
+    result({ stderr: '(node:1) [DEP0205] DeprecationWarning: a deprecation' })
+    @worker.stop
+    assert_match(/^D, .* DEBUG -- : test: \(node:1\) \[DEP0205\] DeprecationWarning: a deprecation$/, @log.string)
+
+    @log.truncate(0)
+    @logger.level = :info
+    result({ stderr: 'more noise' })
+    @worker.stop
+    assert_empty @log.string
+  end
+
+  test "stop doesn't leave the stderr reader waiting on a process that keeps stderr open" do
+    grandchild = result({ grandchild: true })['grandchild']
+    reader = @worker.instance_variable_get(:@stderr_reader)
+
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    @worker.stop
+    assert_operator Process.clock_gettime(Process::CLOCK_MONOTONIC) - started, :<, 5
+    assert reader.join(1), 'the stderr reader is still running'
+  ensure
+    Process.kill('KILL', grandchild) if grandchild && alive?(grandchild)
+  end
+
+  test 'a worker that exits during a build raises WorkerDied with its stderr' do
+    error = assert_raises(Condenser::NodeWorker::WorkerDied) { build({ stderr: 'first', crash: 'Error: out of memory' }) }
+    assert_match(/\Atest exited with pid \d+ exit 2:\nfirst\nError: out of memory\z/, error.message)
   end
 
   test 'a worker killed during a build raises WorkerDied and the next build starts another' do

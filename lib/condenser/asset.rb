@@ -468,16 +468,16 @@ class Condenser
 
             case role
             when :preprocessor
-              @environment.logger.info { "Pre Processing #{self.filename} with #{processor.name}" }
+              @environment.logger.debug { "Pre Processing #{self.filename} with #{processor.name}" }
               processor.call(@environment, data)
             when :transformer
               data[:content_type].pop if !transformed
               transformed = true
-              @environment.logger.info { "Transforming #{self.filename} from #{from_mime_type} to #{to_mime_type} with #{processor.name}" }
+              @environment.logger.debug { "Transforming #{self.filename} from #{from_mime_type} to #{to_mime_type} with #{processor.name}" }
               processor.call(@environment, data)
               data[:content_type] << to_mime_type
             when :postprocessor
-              @environment.logger.info { "Post Processing #{self.filename} with #{processor.name}" }
+              @environment.logger.debug { "Post Processing #{self.filename} with #{processor.name}" }
               processor.call(@environment, data)
             end
           end
@@ -625,12 +625,13 @@ class Condenser
     end
     private :depends_on_directives, :dependency_name, :resolve_dependency_path
 
-    def export
+    def export(&on_build)
       return @export if @export
       @environment.load_processors(@environment.exporters[content_type], @environment.minifier_for(content_type))
 
       @export = @environment.build do
         data = @environment.cache.fetch_if(Proc.new {"export/#{cache_key}/#{export_cache_version}/#{@environment.export_pipeline_digest(content_type)}"}, "export-deps/#{cache_key}") do
+          on_build&.call
           process
           dirname, basename, extensions, mime_types = @environment.decompose_path(@filename)
           data = {
@@ -651,13 +652,13 @@ class Condenser
         
           if @environment.exporters.has_key?(content_type)
             @environment.exporters[content_type].each do |exporter|
-              @environment.logger.info { "Exporting #{self.filename} with #{exporter.name}" }
+              @environment.logger.debug { "Exporting #{self.filename} with #{exporter.name}" }
               exporter.call(@environment, data)
             end
           end
 
           if minifier = @environment.minifier_for(content_type)
-            @environment.logger.info { "Minifing #{self.filename} with #{minifier.name}" }
+            @environment.logger.debug { "Minifying #{self.filename} with #{minifier.name}" }
             minifier.call(@environment, data)
           end
 
@@ -676,7 +677,7 @@ class Condenser
         Export.new(@environment, data)
       end
     end
-    
+
     def to_s
       process
       @source

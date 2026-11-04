@@ -97,7 +97,7 @@ class Condenser
           @environment.logger.debug "Skipping #{ writer.path(asset) }, already exists"
           nil
         else
-          @environment.logger.info "Writing #{ writer.path(asset) }"
+          @environment.logger.debug "Writing #{ writer.path(asset) }"
           writer.call(asset, output_directory)
         end
       end
