@@ -32,23 +32,25 @@ class FileWriterTest < ActiveSupport::TestCase
     assert_equal '.gz', Condenser::ZlibWriter.extension
     assert_equal '.br', Condenser::BrotliWriter.extension
     assert_equal '.gz', Class.new(Condenser::ZlibWriter).extension
-    assert_equal '.xz', Class.new(Condenser::FileWriter) { extension '.xz' }.extension
-    assert_equal '.tar.xz', Class.new(Condenser::FileWriter) { extension '.tar.xz' }.extension
+    assert_equal '.xz', Class.new(Condenser::FileWriter) { extension '.xz', content_type: 'application/x-xz' }.extension
+    assert_equal '.tar.xz', Class.new(Condenser::FileWriter) { extension '.tar.xz', content_type: ['application/x-tar', 'application/x-xz'] }.extension
+    error = assert_raises(ArgumentError) { Class.new(Condenser::ZlibWriter) { extension '.gzip' } }
+    assert_equal 'extension ".gzip" needs a content_type:', error.message
   end
 
-  test 'output and asset mime types are set on the class and inherited' do
-    assert_equal [], Condenser::FileWriter.output_mime_types
-    assert_equal ['application/gzip'], Condenser::ZlibWriter.output_mime_types
-    assert_equal ['application/brotli'], Condenser::BrotliWriter.output_mime_types
-    tar_xz = Class.new(Condenser::FileWriter) { extension '.tar.xz', mime_types: ['application/x-tar', 'application/x-xz'] }
-    assert_equal ['application/x-tar', 'application/x-xz'], tar_xz.output_mime_types
+  test 'content type and asset mime types are set on the class and inherited' do
+    assert_nil Condenser::FileWriter.content_type
+    assert_equal 'application/gzip', Condenser::ZlibWriter.content_type
+    assert_equal 'application/brotli', Condenser::BrotliWriter.content_type
+    tar_xz = Class.new(Condenser::FileWriter) { extension '.tar.xz', content_type: ['application/x-tar', 'application/x-xz'] }
+    assert_equal ['application/x-tar', 'application/x-xz'], tar_xz.content_type
 
     assert_equal ['*/*'], Condenser::FileWriter.new.mime_types
     assert_includes Condenser::ZlibWriter.new.mime_types, 'text/css'
     js_gzip = Class.new(Condenser::ZlibWriter) { mime_types 'application/javascript' }
     assert_equal ['application/javascript'], js_gzip.new.mime_types
     assert_equal '.gz', js_gzip.extension
-    assert_equal ['application/gzip'], js_gzip.output_mime_types
+    assert_equal 'application/gzip', js_gzip.content_type
   end
 
 end

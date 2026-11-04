@@ -7,7 +7,7 @@ require 'condenser/writers/file_writer'
 # Ruby's standard library.
 class Condenser::ZlibWriter < Condenser::FileWriter
 
-  extension '.gz', mime_types: 'application/gzip'
+  extension '.gz', content_type: 'application/gzip'
 
   # What mime types should we compress? This list comes from:
   # https://www.fastly.com/blog/new-gzip-settings-and-deciding-what-compress

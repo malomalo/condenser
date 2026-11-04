@@ -6,7 +6,7 @@ require 'condenser/writers/file_writer'
 # Generates a `.br` file using the Brotli algorithm with the brotli gem
 class Condenser::BrotliWriter < Condenser::FileWriter
 
-  extension '.br', mime_types: 'application/brotli'
+  extension '.br', content_type: 'application/brotli'
 
   # What mime types should we compress? This list comes from:
   # https://www.fastly.com/blog/new-gzip-settings-and-deciding-what-compress
