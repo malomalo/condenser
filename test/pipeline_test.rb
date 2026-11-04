@@ -4,7 +4,7 @@ class PipelineTest < ActiveSupport::TestCase
   
   class Writer
     
-    def mime_types
+    def accepts
       ['*/*']
     end
     

@@ -45,10 +45,10 @@ class FileWriterTest < ActiveSupport::TestCase
     tar_xz = Class.new(Condenser::FileWriter) { extension '.tar.xz', content_type: ['application/x-tar', 'application/x-xz'] }
     assert_equal ['application/x-tar', 'application/x-xz'], tar_xz.content_type
 
-    assert_equal ['*/*'], Condenser::FileWriter.new.mime_types
-    assert_includes Condenser::ZlibWriter.new.mime_types, 'text/css'
-    js_gzip = Class.new(Condenser::ZlibWriter) { mime_types 'application/javascript' }
-    assert_equal ['application/javascript'], js_gzip.new.mime_types
+    assert_equal ['*/*'], Condenser::FileWriter.new.accepts
+    assert_includes Condenser::ZlibWriter.new.accepts, 'text/css'
+    js_gzip = Class.new(Condenser::ZlibWriter) { accepts 'application/javascript' }
+    assert_equal ['application/javascript'], js_gzip.new.accepts
     assert_equal '.gz', js_gzip.extension
     assert_equal 'application/gzip', js_gzip.content_type
   end

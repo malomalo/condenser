@@ -9,7 +9,7 @@ require 'condenser/utils'
 #
 #     class XzWriter < Condenser::FileWriter
 #       extension '.xz', content_type: 'application/x-xz'
-#       mime_types 'application/javascript', 'text/css'
+#       accepts 'application/javascript', 'text/css'
 #     end
 class Condenser::FileWriter
 
@@ -35,18 +35,19 @@ class Condenser::FileWriter
   end
 
   # Sets the asset mime types the writer writes with arguments, e.g.
-  # `mime_types 'text/css', 'application/javascript'`; without them, returns
+  # `accepts 'text/css', 'application/javascript'`; without them, returns
   # them, or the superclass's, or every type.
-  def self.mime_types(*mime_types)
+  def self.accepts(*mime_types)
     if mime_types.empty?
-      @mime_types || (superclass.respond_to?(:mime_types) ? superclass.mime_types : ['*/*'])
+      @accepts || (superclass.respond_to?(:accepts) ? superclass.accepts : ['*/*'])
     else
-      @mime_types = mime_types.flatten
+      @accepts = mime_types.flatten
     end
   end
 
-  def mime_types
-    self.class.mime_types
+  # The asset mime types register_writer registers the writer for.
+  def accepts
+    self.class.accepts
   end
 
   def path(asset)

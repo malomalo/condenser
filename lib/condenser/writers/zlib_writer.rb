@@ -17,7 +17,7 @@ class Condenser::ZlibWriter < Condenser::FileWriter
     application/x-font-truetype application/x-font-ttf application/xml font/eot
     font/opentype font/otf image/svg+xml image/vnd.microsoft.icon image/x-icon )
 
-  mime_types COMPRESSALBE_TYPES
+  accepts COMPRESSALBE_TYPES
 
   private
 

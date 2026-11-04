@@ -157,7 +157,7 @@ class Condenser
       if engine.is_a?(Class)
         raise ArgumentError, "#{engine.inspect} is a class, register #{engine.name}.new"
       end
-      Array(engine.mime_types).each do |mime_type|
+      Array(engine.accepts).each do |mime_type|
         @writers[mime_type] ||= []
         @writers[mime_type] << engine
       end

@@ -18,7 +18,7 @@ class Condenser::BrotliWriter < Condenser::FileWriter
     application/x-font-ttf font/eot font/opentype font/otf)
   COMPRESSALBE_GENERIC_TYPES = %w( image/vnd.microsoft.icon image/x-icon )
 
-  mime_types COMPRESSALBE_TEXT_TYPES, COMPRESSALBE_FONT_TYPES, COMPRESSALBE_GENERIC_TYPES
+  accepts COMPRESSALBE_TEXT_TYPES, COMPRESSALBE_FONT_TYPES, COMPRESSALBE_GENERIC_TYPES
 
   def mode_for_mime_type(mime_type)
     if COMPRESSALBE_TEXT_TYPES.include?(mime_type)
