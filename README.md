@@ -531,6 +531,12 @@ var square = function square(n) {
 console.log(square);
 ```
 
+Babel runs in [Node.js](https://nodejs.org/), for `BabelProcessor` and for
+`JstTransformer` (`.jst` files), which is in the default pipeline. A missing
+`@babel/core` is installed at Babel 8, which needs Node `^22.18.0 || >=24.11.0`;
+on an older Node they raise a `Condenser::Error` before Babel is loaded. An
+npm path that has Babel 7 keeps using it.
+
 ### Bundling with Rolldown
 
 `Condenser.new`'s default pipeline bundles JavaScript with a

@@ -5,12 +5,20 @@ require 'json'
 class Condenser::BabelProcessor < Condenser::NodeProcessor
   
   attr_accessor :options
-  
+
+  BABEL_MAJOR = 8
+  NPM_VERSIONS = {
+    'babel-plugin-polyfill-corejs3' => '^1',
+    'core-js-pure'                  => '^3'
+  }
+
   def initialize(dir = nil, **options)
     super(dir)
     
+    default_plugins = !options[:plugins]
     options[:plugins] ||= [
-      ["@babel/plugin-transform-runtime", { corejs: 3, useESModules: true }]
+      "@babel/plugin-transform-runtime",
+      ["babel-plugin-polyfill-corejs3", { method: 'usage-pure' }]
     ]
     options[:presets] ||= [
       ['@babel/preset-env', {
@@ -21,7 +29,6 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
     options[:highlightCode] = false if !options.has_key?(:highlightCode)
 
     packages = options.slice(:plugins, :presets).values.reduce(&:+).map { |p| p.is_a?(Array) ? p[0] : p}
-    packages.unshift('@babel/core')
     if packages.include?('@babel/plugin-transform-runtime')
       runtime = options[:plugins].find { |i| i.is_a?(Array) ? i[0] == '@babel/plugin-transform-runtime' : i == '@babel/plugin-transform-runtime' }
       packages << if runtime.is_a?(Array) && runtime[1][:corejs]
@@ -30,31 +37,34 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
         else
           "@babel/runtime-corejs#{runtime[1][:corejs]}"
         end
+      elsif packages.include?('babel-plugin-polyfill-corejs3')
+        '@babel/runtime-corejs3'
       else
         '@babel/runtime'
       end
     end
+    packages << 'core-js-pure' if packages.include?('babel-plugin-polyfill-corejs3')
     
-    npm_install(*packages)
-    
-    options[:plugins].map! do |plugin|
-      if plugin.is_a?(Array)
-        plugin[0] = npm_module_path(plugin[0])
-        plugin
-      else
-        npm_module_path(plugin)
-      end
-    end
-    
-    options[:presets].map! do |plugin|
-      if plugin.is_a?(Array)
-        plugin[0] = npm_module_path(plugin[0])
-        plugin
-      else
-        npm_module_path(plugin)
-      end
+    npm_install("@babel/core@^#{BABEL_MAJOR}")
+    major = JSON.parse(File.read(npm_module_path('@babel/core/package.json')))['version'].to_i
+    check_engines('@babel/core')
+    npm_install(*packages.map { |p|
+      version = p.start_with?('@babel/') ? "^#{major}" : NPM_VERSIONS[p]
+      version ? "#{p}@#{version}" : p
+    })
+    mismatched = packages.grep(/\A@babel\//).map { |p| [p, JSON.parse(File.read(npm_module_path("#{p}/package.json")))['version']] }.reject { |_, v| v.to_i == major }
+    if !mismatched.empty?
+      raise Condenser::Error, "The @babel/ packages in #{npm_path} must have the major of @babel/core (#{major}): #{mismatched.map { |p, v| "#{p} is #{v}" }.join(', ')}"
     end
 
+    if default_plugins
+      polyfill = options[:plugins][1][1]
+      polyfill[:version] = JSON.parse(File.read(npm_module_path('core-js-pure/package.json')))['version']
+      env = options[:presets].find { |p| p.is_a?(Array) && p[0] == '@babel/preset-env' }
+      targets = env&.dig(1, :targets) || env&.dig(1, 'targets')
+      polyfill[:targets] = targets if targets
+    end
+    
     @options = {
       ast:        false,
       compact:    false,
@@ -66,7 +76,6 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
     opts = {
       # 'moduleRoot' => nil,
       'filename' => input[:filename],
-      'moduleId' => input[:filename].sub(/(\..+)+/, ''),
       'cwd' => '/assets/',
       'filenameRelative' => input[:filename],
       'sourceFileName' => input[:filename]
@@ -83,17 +92,17 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
       end
     end
     
-    opts['preset']&.each do |preset|
-      preset[0] = preset[0].gsub(/"@?babel[\/-][^"]+"/) { |m| "require(#{m})"}
-    end
-    opts['plugins']&.each do |preset|
-      preset[0] = preset[0].gsub(/"@?babel[\/-][^"]+"/) { |m| "require(#{m})"}
-    end
-
     result = exec_runtime(<<-JS, logger: environment.logger)
       const babel = require("#{File.join(npm_module_path('@babel/core'))}");
       const source = #{JSON.generate(input[:source])};
       const options = #{JSON.generate(opts)};
+
+      // Resolved from the npm path by node, since some packages (e.g.
+      // babel-plugin-polyfill-corejs3) only have an "exports" entry point.
+      const paths = [#{JSON.generate(npm_path)}];
+      const resolve = (p) => Array.isArray(p) ? [require.resolve(p[0], { paths }), ...p.slice(1)] : require.resolve(p, { paths });
+      options['plugins'] = options['plugins'].map(resolve);
+      options['presets'] = options['presets'].map(resolve);
       
       let imports = [];
       let defaultExport = false;
@@ -121,7 +130,7 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
       
       
       try {
-        const result = babel.transform(source, options);
+        const result = babel.transformSync(source, options);
         result.imports = imports;
         result.exports = hasExports;
         result.defaultExport = defaultExport;

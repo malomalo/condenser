@@ -236,4 +236,31 @@ class JSTTransformerTest < ActiveSupport::TestCase
     JS
   end
 
+  test 'jst transformation with the Babel it installs into an empty npm path' do
+    npm = File.realpath(Dir.mktmpdir)
+    @env.npm_path = npm
+    file 'test.jst', <<~JS
+      export default function (locals) { return name; }
+    JS
+
+    assert_file 'test.js', 'application/javascript', <<~JS
+      export default function (locals) {
+        return locals.name;
+      }
+    JS
+    assert_equal '8', JSON.parse(File.read(File.join(npm, 'node_modules/@babel/core/package.json')))['version'].split('.')[0]
+  ensure
+    FileUtils.remove_entry(npm, true) if npm
+  end
+
+  test 'jst transformation with Babel 8 on a Node it does not support raises' do
+    Condenser::NodeProcessor.any_instance.stubs(:node_version).returns(Gem::Version.new('20.19.0'))
+    file 'test.jst', <<~JS
+      export default function (locals) { return name; }
+    JS
+
+    error = assert_raises(Condenser::Error) { @env.find('test.js').process }
+    assert_equal "@babel/core needs Node ^22.18.0 || >=24.11.0, but #{Condenser::NodeProcessor.new.binary} is 20.19.0", error.message
+  end
+
 end

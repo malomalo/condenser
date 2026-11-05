@@ -193,20 +193,56 @@ class Condenser
       FileUtils.mkdir_p(npm_path)
       File.open(File.join(npm_path, '.condenser-npm.lock'), File::RDWR | File::CREAT) do |lock|
         lock.flock(File::LOCK_EX)
-        packages.reject! { |package| Dir.exist?(npm_module_path(package)) }
+        package_json = File.join(npm_path, 'package.json')
+        npm('install') if File.exist?(package_json) && !Dir.exist?(npm_module_path)
+
+        packages.reject! { |package| Dir.exist?(npm_module_path(package.sub(/(?<=.)@.*\z/, ''))) }
         return if packages.empty?
 
         # Without a package.json npm installs into the nearest parent
         # directory that has one.
-        package_json = File.join(npm_path, 'package.json')
         File.write(package_json, "{}\n") if !File.exist?(package_json)
-        system("npm", "install", "--silent", *packages, chdir: npm_path)
+        npm('install', *packages)
       end
+    end
+
+    def npm(*args)
+      output, status = Open3.capture2e('npm', *args, chdir: npm_path)
+      raise Condenser::Error, "npm #{args.join(' ')} failed in #{npm_path}:\n#{output}" if !status.success?
     end
     
     def npm_module_path(package=nil)
       File.join(*[npm_path, 'node_modules', package].compact)
     end
-    
+
+    def node_version
+      @node_version ||= Gem::Version.new(Open3.capture2(binary, '--version')[0].strip.delete_prefix('v'))
+    end
+
+    def check_engines(package)
+      range = JSON.parse(File.read(npm_module_path("#{package}/package.json"))).dig('engines', 'node')
+      return if range.nil? || node_satisfies?(range)
+      raise Condenser::Error, "#{package} needs Node #{range}, but #{binary} is #{node_version}"
+    end
+
+    private
+
+    def node_satisfies?(range)
+      range.split('||').any? do |set|
+        requirements = set.split.flat_map { |comparator| gem_requirements(comparator, range) }
+        Gem::Requirement.new(*requirements).satisfied_by?(node_version)
+      end
+    end
+
+    def gem_requirements(comparator, range)
+      op, version = comparator.match(/\A(\^|~|>=|<=|>|<|=)?v?(\d+(?:\.\d+){0,2})\z/)&.captures
+      raise Condenser::Error, "can't read the Node range #{range.inspect}" if version.nil?
+      case op
+      when '^' then [">= #{version}", "< #{Gem::Version.new(version).segments[0] + 1}"]
+      when '~' then ["~> #{version.count('.') == 0 ? "#{version}.0" : (version.split('.') + ['0']).first(3).join('.')}"]
+      else ["#{op || '='} #{version}"]
+      end
+    end
+
   end
 end

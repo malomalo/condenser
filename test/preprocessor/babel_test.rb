@@ -33,6 +33,13 @@ class CondenserBabelTest < ActiveSupport::TestCase
     JS
   end
 
+  test "preset-env's targets with a string key are passed to the polyfill plugin" do
+    processor = Condenser::BabelProcessor.new(@npm_dir,
+      presets: [ ['@babel/preset-env', { 'modules' => false, 'targets' => { 'browsers' => 'firefox > 41' } }] ]
+    )
+    assert_equal({ 'browsers' => 'firefox > 41' }, processor.options[:plugins][1][1][:targets])
+  end
+
   test "dependency tracking for a export from" do
     file 'c.js', <<~JS
     function c() { return 'ok'; }
@@ -77,15 +84,35 @@ class CondenserBabelTest < ActiveSupport::TestCase
     assert_equal '/assets/error.js', e.path
   end
 
+  test '@babel/ packages with a different major than @babel/core raise' do
+    npm = File.realpath(Dir.mktmpdir)
+    {
+      '@babel/core' => '8.0.0',
+      '@babel/preset-env' => '7.28.0',
+      '@babel/plugin-transform-runtime' => '8.0.0',
+      '@babel/runtime-corejs3' => '7.28.0',
+      'babel-plugin-polyfill-corejs3' => '1.0.0',
+      'core-js-pure' => '3.0.0'
+    }.each do |name, version|
+      FileUtils.mkdir_p(File.join(npm, 'node_modules', name))
+      File.write(File.join(npm, 'node_modules', name, 'package.json'), JSON.generate({ name: name, version: version }))
+    end
+
+    error = assert_raises(Condenser::Error) { Condenser::BabelProcessor.new(npm) }
+    assert_equal "The @babel/ packages in #{npm} must have the major of @babel/core (8): @babel/preset-env is 7.28.0, @babel/runtime-corejs3 is 7.28.0", error.message
+  ensure
+    FileUtils.remove_entry(npm, true) if npm
+  end
+
   test 'not duplicating polyfills' do
     file 'a.js', <<-JS
       export default function () {
-        console.log(Object.assign({}, {a: 1}))
+        console.log(Object.hasOwn({a: 1}, "a"))
       };
     JS
     file 'b.js', <<-JS
       export default function () {
-        console.log(Object.assign({}, {b: 1}))
+        console.log(Object.hasOwn({b: 1}, "b"))
       };
     JS
     file 'c.js', <<~JS
@@ -98,16 +125,16 @@ class CondenserBabelTest < ActiveSupport::TestCase
 
     source = assert_exported_file('c.js', 'application/javascript').source
 
-    # core-js's Object.assign polyfill is bundled once and shared by a and b
+    # core-js's Object.hasOwn polyfill is bundled once and shared by a and b
     assert_equal 1, source.scan("(store.versions || (store.versions = [])).push").size
-    assert_equal 1, source.scan(/^var import_assign = /).size
+    assert_equal 1, source.scan(/^var import_has_own = /).size
     assert source.rstrip.end_with?(<<~JS.rstrip)
       function a_default() {
-      \tconsole.log((0, import_assign.default)({}, { a: 1 }));
+      \tconsole.log((0, import_has_own.default)({ a: 1 }, "a"));
       }
       // b.js
       function b_default() {
-      \tconsole.log((0, import_assign.default)({}, { b: 1 }));
+      \tconsole.log((0, import_has_own.default)({ b: 1 }, "b"));
       }
       // c.js
       a_default();
@@ -139,6 +166,39 @@ class CondenserBabelTest < ActiveSupport::TestCase
 
   end
 
+  test 'Babel 8 on a Node it does not support raises' do
+    %w[20.19.0 22.17.1 23.11.0 24.10.0].each do |version|
+      Condenser::NodeProcessor.any_instance.stubs(:node_version).returns(Gem::Version.new(version))
+      error = assert_raises(Condenser::Error) { Condenser::BabelProcessor.new(@npm_dir) }
+      assert_equal "@babel/core needs Node ^22.18.0 || >=24.11.0, but #{Condenser::NodeProcessor.new.binary} is #{version}", error.message
+    end
+
+    %w[22.18.0 24.11.0 26.0.0].each do |version|
+      Condenser::NodeProcessor.any_instance.stubs(:node_version).returns(Gem::Version.new(version))
+      assert Condenser::BabelProcessor.new(@npm_dir)
+    end
+  end
+
+  test "Babel 7 doesn't check the Node version" do
+    npm = File.realpath(Dir.mktmpdir)
+    {
+      '@babel/core' => '7.28.0',
+      '@babel/preset-env' => '7.28.0',
+      '@babel/plugin-transform-runtime' => '7.28.0',
+      '@babel/runtime-corejs3' => '7.28.0',
+      'babel-plugin-polyfill-corejs3' => '0.13.0',
+      'core-js-pure' => '3.45.0'
+    }.each do |name, version|
+      FileUtils.mkdir_p(File.join(npm, 'node_modules', name))
+      File.write(File.join(npm, 'node_modules', name, 'package.json'), JSON.generate({ name: name, version: version }))
+    end
+    Condenser::NodeProcessor.any_instance.expects(:node_version).never
+
+    assert Condenser::BabelProcessor.new(npm)
+  ensure
+    FileUtils.remove_entry(npm, true) if npm
+  end
+
   test 'depends_on a ! path, a file relative to base that is not an asset' do
     root = File.realpath(Dir.mktmpdir)
     @env = Condenser.new(@path, logger: @env.logger, npm_path: @npm_dir, base: root, listen: false)
@@ -162,4 +222,54 @@ class CondenserBabelTest < ActiveSupport::TestCase
   ensure
     FileUtils.remove_entry(root, true)
   end
+
+  test 'the default plugins with the packages it installs into an empty npm path' do
+    npm = File.realpath(Dir.mktmpdir)
+    @env.unregister_preprocessor('application/javascript', Condenser::BabelProcessor)
+    @env.register_preprocessor 'application/javascript', Condenser::BabelProcessor.new(npm,
+      presets: [ ['@babel/preset-env', { modules: false, targets: { browsers: 'firefox > 41' } }] ]
+    )
+    file 'name.js', <<~JS
+      export default async function (x) { return [...x].findLast((y) => y?.z); }
+    JS
+
+    source = @env.find('name.js').source
+    assert_match %r{^import _asyncToGenerator from "@babel/runtime-corejs3/helpers/asyncToGenerator";$}, source
+    assert_match %r{^import _findLastInstanceProperty from "core-js-pure/stable/instance/find-last.js";$}, source
+    assert Dir.exist?(File.join(npm, 'node_modules/@babel/runtime-corejs3/helpers'))
+    assert Dir.exist?(File.join(npm, 'node_modules/core-js-pure/stable/instance'))
+    assert_equal '8', JSON.parse(File.read(File.join(npm, 'node_modules/@babel/core/package.json')))['version'].split('.')[0]
+  ensure
+    FileUtils.remove_entry(npm, true) if npm
+  end
+
+  test 'an npm path with a package.json from Babel 7 and no node_modules installs Babel 7' do
+    npm = File.realpath(Dir.mktmpdir)
+    File.write(File.join(npm, 'package.json'), JSON.generate({ dependencies: {
+      '@babel/core' => '^7.29.0',
+      '@babel/preset-env' => '^7.29.0',
+      '@babel/plugin-transform-runtime' => '^7.29.0',
+      '@babel/runtime-corejs3' => '^7.29.0'
+    } }))
+    @env.unregister_preprocessor('application/javascript', Condenser::BabelProcessor)
+    @env.register_preprocessor 'application/javascript', Condenser::BabelProcessor.new(npm,
+      presets: [ ['@babel/preset-env', { modules: false, targets: { browsers: 'firefox > 41' } }] ]
+    )
+    file 'name.js', <<~JS
+      export default function (x) { return x?.y; }
+    JS
+
+    assert_file 'name.js', 'application/javascript', <<~JS
+      export default function (x) {
+        return x === null || x === void 0 ? void 0 : x.y;
+      }
+    JS
+    %w[@babel/core @babel/preset-env @babel/plugin-transform-runtime @babel/runtime-corejs3].each do |name|
+      assert_equal '7', JSON.parse(File.read(File.join(npm, 'node_modules', name, 'package.json')))['version'].split('.')[0]
+    end
+  ensure
+    FileUtils.remove_entry(npm, true) if npm
+  end
+
 end
+
