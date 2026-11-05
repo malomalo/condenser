@@ -29,7 +29,6 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
     options[:highlightCode] = false if !options.has_key?(:highlightCode)
 
     packages = options.slice(:plugins, :presets).values.reduce(&:+).map { |p| p.is_a?(Array) ? p[0] : p}
-    packages.unshift('@babel/core')
     if packages.include?('@babel/plugin-transform-runtime')
       runtime = options[:plugins].find { |i| i.is_a?(Array) ? i[0] == '@babel/plugin-transform-runtime' : i == '@babel/plugin-transform-runtime' }
       packages << if runtime.is_a?(Array) && runtime[1][:corejs]
