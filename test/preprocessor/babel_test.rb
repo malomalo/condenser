@@ -33,6 +33,13 @@ class CondenserBabelTest < ActiveSupport::TestCase
     JS
   end
 
+  test "preset-env's targets with a string key are passed to the polyfill plugin" do
+    processor = Condenser::BabelProcessor.new(@npm_dir,
+      presets: [ ['@babel/preset-env', { 'modules' => false, 'targets' => { 'browsers' => 'firefox > 41' } }] ]
+    )
+    assert_equal({ 'browsers' => 'firefox > 41' }, processor.options[:plugins][1][1][:targets])
+  end
+
   test "dependency tracking for a export from" do
     file 'c.js', <<~JS
     function c() { return 'ok'; }

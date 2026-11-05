@@ -61,7 +61,8 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
       polyfill = options[:plugins][1][1]
       polyfill[:version] = JSON.parse(File.read(npm_module_path('core-js-pure/package.json')))['version']
       env = options[:presets].find { |p| p.is_a?(Array) && p[0] == '@babel/preset-env' }
-      polyfill[:targets] = env[1][:targets] if env&.dig(1, :targets)
+      targets = env&.dig(1, :targets) || env&.dig(1, 'targets')
+      polyfill[:targets] = targets if targets
     end
     
     @options = {
