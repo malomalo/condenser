@@ -6,9 +6,6 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
   
   attr_accessor :options
 
-  # The versions installed when a package is missing, so a new major (e.g.
-  # Babel 8, which removed options) doesn't break a fresh install. The other
-  # @babel/ packages are installed at the major of the @babel/core installed.
   BABEL_MAJOR = 8
   NPM_VERSIONS = {
     'babel-plugin-polyfill-corejs3' => '^1',
@@ -18,8 +15,6 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
   def initialize(dir = nil, **options)
     super(dir)
     
-    # Babel 8 removed transform-runtime's corejs option; core-js polyfills
-    # come from babel-plugin-polyfill-corejs3, imported from core-js-pure.
     default_plugins = !options[:plugins]
     options[:plugins] ||= [
       "@babel/plugin-transform-runtime",
@@ -34,7 +29,6 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
     options[:highlightCode] = false if !options.has_key?(:highlightCode)
 
     packages = options.slice(:plugins, :presets).values.reduce(&:+).map { |p| p.is_a?(Array) ? p[0] : p}
-    packages.unshift('@babel/core')
     if packages.include?('@babel/plugin-transform-runtime')
       runtime = options[:plugins].find { |i| i.is_a?(Array) ? i[0] == '@babel/plugin-transform-runtime' : i == '@babel/plugin-transform-runtime' }
       packages << if runtime.is_a?(Array) && runtime[1][:corejs]
@@ -44,7 +38,6 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
           "@babel/runtime-corejs#{runtime[1][:corejs]}"
         end
       elsif packages.include?('babel-plugin-polyfill-corejs3')
-        # It has transform-runtime import helpers from @babel/runtime-corejs3.
         '@babel/runtime-corejs3'
       else
         '@babel/runtime'
@@ -59,9 +52,11 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
       version = p.start_with?('@babel/') ? "^#{major}" : NPM_VERSIONS[p]
       version ? "#{p}@#{version}" : p
     })
+    mismatched = packages.grep(/\A@babel\//).map { |p| [p, JSON.parse(File.read(npm_module_path("#{p}/package.json")))['version']] }.reject { |_, v| v.to_i == major }
+    if !mismatched.empty?
+      raise Condenser::Error, "The @babel/ packages in #{npm_path} must have the major of @babel/core (#{major}): #{mismatched.map { |p, v| "#{p} is #{v}" }.join(', ')}"
+    end
 
-    # Polyfill what the installed core-js-pure has (the default is core-js
-    # 3.0's) for preset-env's targets (the default is Babel's).
     if default_plugins
       polyfill = options[:plugins][1][1]
       polyfill[:version] = JSON.parse(File.read(npm_module_path('core-js-pure/package.json')))['version']

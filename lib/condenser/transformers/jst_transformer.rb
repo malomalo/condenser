@@ -3,7 +3,6 @@
 class Condenser::JstTransformer < Condenser::NodeProcessor
   
   # Babel is installed into the npm_path, or the environment's if it's nil.
-  # Only @babel/core is used; the transform is the plugins below.
   def setup(environment)
     node = ::Condenser::NodeProcessor.new(npm_path || environment.npm_path)
     node.npm_install("@babel/core@^#{Condenser::BabelProcessor::BABEL_MAJOR}")
