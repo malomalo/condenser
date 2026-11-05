@@ -222,20 +222,18 @@ class Condenser
 
     def node_satisfies?(range)
       range.split('||').any? do |set|
-        set.split.all? do |comparator|
-          op, version = comparator.match(/\A(\^|~|>=|<=|>|<|=)?v?(\d+(?:\.\d+){0,2})\z/)&.captures
-          raise Condenser::Error, "can't read the Node range #{range.inspect}" if version.nil?
-          version = Gem::Version.new(version)
-          case op
-          when '^' then node_version >= version && node_version < Gem::Version.new("#{version.segments[0] + 1}")
-          when '~' then node_version >= version && node_version < Gem::Version.new("#{version.segments[0]}.#{version.segments.fetch(1, 0) + 1}")
-          when '>=' then node_version >= version
-          when '>' then node_version > version
-          when '<=' then node_version <= version
-          when '<' then node_version < version
-          else node_version == version
-          end
-        end
+        requirements = set.split.flat_map { |comparator| gem_requirements(comparator, range) }
+        Gem::Requirement.new(*requirements).satisfied_by?(node_version)
+      end
+    end
+
+    def gem_requirements(comparator, range)
+      op, version = comparator.match(/\A(\^|~|>=|<=|>|<|=)?v?(\d+(?:\.\d+){0,2})\z/)&.captures
+      raise Condenser::Error, "can't read the Node range #{range.inspect}" if version.nil?
+      case op
+      when '^' then [">= #{version}", "< #{Gem::Version.new(version).segments[0] + 1}"]
+      when '~' then ["~> #{version.count('.') == 0 ? "#{version}.0" : (version.split('.') + ['0']).first(3).join('.')}"]
+      else ["#{op || '='} #{version}"]
       end
     end
 
