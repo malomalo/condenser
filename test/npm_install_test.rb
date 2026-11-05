@@ -74,4 +74,14 @@ class NpmInstallTest < ActiveSupport::TestCase
     FileUtils.remove_entry(parent, true) if parent
   end
 
+  test 'a failed install raises with what npm printed' do
+    npm = File.realpath(Dir.mktmpdir)
+
+    error = assert_raises(Condenser::Error) { Condenser::NodeProcessor.new(npm).npm_install('picocolors@^99') }
+    assert_match "npm install picocolors@^99 failed in #{npm}", error.message
+    assert_match 'No matching version found for picocolors@^99', error.message
+  ensure
+    FileUtils.remove_entry(npm, true) if npm
+  end
+
 end

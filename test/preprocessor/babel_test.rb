@@ -203,5 +203,33 @@ class CondenserBabelTest < ActiveSupport::TestCase
     FileUtils.remove_entry(npm, true) if npm
   end
 
+  test 'an npm path with a package.json from Babel 7 and no node_modules installs Babel 7' do
+    npm = File.realpath(Dir.mktmpdir)
+    File.write(File.join(npm, 'package.json'), JSON.generate({ dependencies: {
+      '@babel/core' => '^7.29.0',
+      '@babel/preset-env' => '^7.29.0',
+      '@babel/plugin-transform-runtime' => '^7.29.0',
+      '@babel/runtime-corejs3' => '^7.29.0'
+    } }))
+    @env.unregister_preprocessor('application/javascript', Condenser::BabelProcessor)
+    @env.register_preprocessor 'application/javascript', Condenser::BabelProcessor.new(npm,
+      presets: [ ['@babel/preset-env', { modules: false, targets: { browsers: 'firefox > 41' } }] ]
+    )
+    file 'name.js', <<~JS
+      export default function (x) { return x?.y; }
+    JS
+
+    assert_file 'name.js', 'application/javascript', <<~JS
+      export default function (x) {
+        return x === null || x === void 0 ? void 0 : x.y;
+      }
+    JS
+    %w[@babel/core @babel/preset-env @babel/plugin-transform-runtime @babel/runtime-corejs3].each do |name|
+      assert_equal '7', JSON.parse(File.read(File.join(npm, 'node_modules', name, 'package.json')))['version'].split('.')[0]
+    end
+  ensure
+    FileUtils.remove_entry(npm, true) if npm
+  end
+
 end
 

@@ -193,15 +193,22 @@ class Condenser
       FileUtils.mkdir_p(npm_path)
       File.open(File.join(npm_path, '.condenser-npm.lock'), File::RDWR | File::CREAT) do |lock|
         lock.flock(File::LOCK_EX)
+        package_json = File.join(npm_path, 'package.json')
+        npm('install') if File.exist?(package_json) && !Dir.exist?(npm_module_path)
+
         packages.reject! { |package| Dir.exist?(npm_module_path(package.sub(/(?<=.)@.*\z/, ''))) }
         return if packages.empty?
 
         # Without a package.json npm installs into the nearest parent
         # directory that has one.
-        package_json = File.join(npm_path, 'package.json')
         File.write(package_json, "{}\n") if !File.exist?(package_json)
-        system("npm", "install", "--silent", *packages, chdir: npm_path)
+        npm('install', *packages)
       end
+    end
+
+    def npm(*args)
+      output, status = Open3.capture2e('npm', *args, chdir: npm_path)
+      raise Condenser::Error, "npm #{args.join(' ')} failed in #{npm_path}:\n#{output}" if !status.success?
     end
     
     def npm_module_path(package=nil)
