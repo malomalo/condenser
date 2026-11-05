@@ -159,6 +159,39 @@ class CondenserBabelTest < ActiveSupport::TestCase
 
   end
 
+  test 'Babel 8 on a Node it does not support raises' do
+    %w[20.19.0 22.17.1 23.11.0 24.10.0].each do |version|
+      Condenser::NodeProcessor.any_instance.stubs(:node_version).returns(Gem::Version.new(version))
+      error = assert_raises(Condenser::Error) { Condenser::BabelProcessor.new(@npm_dir) }
+      assert_equal "@babel/core needs Node ^22.18.0 || >=24.11.0, but #{Condenser::NodeProcessor.new.binary} is #{version}", error.message
+    end
+
+    %w[22.18.0 24.11.0 26.0.0].each do |version|
+      Condenser::NodeProcessor.any_instance.stubs(:node_version).returns(Gem::Version.new(version))
+      assert Condenser::BabelProcessor.new(@npm_dir)
+    end
+  end
+
+  test "Babel 7 doesn't check the Node version" do
+    npm = File.realpath(Dir.mktmpdir)
+    {
+      '@babel/core' => '7.28.0',
+      '@babel/preset-env' => '7.28.0',
+      '@babel/plugin-transform-runtime' => '7.28.0',
+      '@babel/runtime-corejs3' => '7.28.0',
+      'babel-plugin-polyfill-corejs3' => '0.13.0',
+      'core-js-pure' => '3.45.0'
+    }.each do |name, version|
+      FileUtils.mkdir_p(File.join(npm, 'node_modules', name))
+      File.write(File.join(npm, 'node_modules', name, 'package.json'), JSON.generate({ name: name, version: version }))
+    end
+    Condenser::NodeProcessor.any_instance.expects(:node_version).never
+
+    assert Condenser::BabelProcessor.new(npm)
+  ensure
+    FileUtils.remove_entry(npm, true) if npm
+  end
+
   test 'depends_on a ! path, a file relative to base that is not an asset' do
     root = File.realpath(Dir.mktmpdir)
     @env = Condenser.new(@path, logger: @env.logger, npm_path: @npm_dir, base: root, listen: false)

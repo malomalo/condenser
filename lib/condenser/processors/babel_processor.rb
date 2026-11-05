@@ -47,6 +47,7 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
     
     npm_install("@babel/core@^#{BABEL_MAJOR}")
     major = JSON.parse(File.read(npm_module_path('@babel/core/package.json')))['version'].to_i
+    check_engines('@babel/core')
     npm_install(*packages.map { |p|
       version = p.start_with?('@babel/') ? "^#{major}" : NPM_VERSIONS[p]
       version ? "#{p}@#{version}" : p
