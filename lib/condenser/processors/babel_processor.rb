@@ -6,9 +6,6 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
   
   attr_accessor :options
 
-  # The versions installed when a package is missing, so a new major (e.g.
-  # Babel 8, which removed options) doesn't break a fresh install. The other
-  # @babel/ packages are installed at the major of the @babel/core installed.
   BABEL_MAJOR = 8
   NPM_VERSIONS = {
     'babel-plugin-polyfill-corejs3' => '^1',
@@ -18,8 +15,6 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
   def initialize(dir = nil, **options)
     super(dir)
     
-    # Babel 8 removed transform-runtime's corejs option; core-js polyfills
-    # come from babel-plugin-polyfill-corejs3, imported from core-js-pure.
     default_plugins = !options[:plugins]
     options[:plugins] ||= [
       "@babel/plugin-transform-runtime",
@@ -44,7 +39,6 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
           "@babel/runtime-corejs#{runtime[1][:corejs]}"
         end
       elsif packages.include?('babel-plugin-polyfill-corejs3')
-        # It has transform-runtime import helpers from @babel/runtime-corejs3.
         '@babel/runtime-corejs3'
       else
         '@babel/runtime'
@@ -59,8 +53,6 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
       version ? "#{p}@#{version}" : p
     })
 
-    # Polyfill what the installed core-js-pure has (the default is core-js
-    # 3.0's) for preset-env's targets (the default is Babel's).
     if default_plugins
       polyfill = options[:plugins][1][1]
       polyfill[:version] = JSON.parse(File.read(npm_module_path('core-js-pure/package.json')))['version']
