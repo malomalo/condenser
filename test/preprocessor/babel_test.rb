@@ -77,6 +77,26 @@ class CondenserBabelTest < ActiveSupport::TestCase
     assert_equal '/assets/error.js', e.path
   end
 
+  test '@babel/ packages with a different major than @babel/core raise' do
+    npm = File.realpath(Dir.mktmpdir)
+    {
+      '@babel/core' => '8.0.0',
+      '@babel/preset-env' => '7.28.0',
+      '@babel/plugin-transform-runtime' => '8.0.0',
+      '@babel/runtime-corejs3' => '7.28.0',
+      'babel-plugin-polyfill-corejs3' => '1.0.0',
+      'core-js-pure' => '3.0.0'
+    }.each do |name, version|
+      FileUtils.mkdir_p(File.join(npm, 'node_modules', name))
+      File.write(File.join(npm, 'node_modules', name, 'package.json'), JSON.generate({ name: name, version: version }))
+    end
+
+    error = assert_raises(Condenser::Error) { Condenser::BabelProcessor.new(npm) }
+    assert_equal "The @babel/ packages in #{npm} must have the major of @babel/core (8): @babel/preset-env is 7.28.0, @babel/runtime-corejs3 is 7.28.0", error.message
+  ensure
+    FileUtils.remove_entry(npm, true) if npm
+  end
+
   test 'not duplicating polyfills' do
     file 'a.js', <<-JS
       export default function () {

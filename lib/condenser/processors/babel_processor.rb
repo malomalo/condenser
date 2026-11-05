@@ -51,6 +51,10 @@ class Condenser::BabelProcessor < Condenser::NodeProcessor
       version = p.start_with?('@babel/') ? "^#{major}" : NPM_VERSIONS[p]
       version ? "#{p}@#{version}" : p
     })
+    mismatched = packages.grep(/\A@babel\//).map { |p| [p, JSON.parse(File.read(npm_module_path("#{p}/package.json")))['version']] }.reject { |_, v| v.to_i == major }
+    if !mismatched.empty?
+      raise Condenser::Error, "The @babel/ packages in #{npm_path} must have the major of @babel/core (#{major}): #{mismatched.map { |p, v| "#{p} is #{v}" }.join(', ')}"
+    end
 
     if default_plugins
       polyfill = options[:plugins][1][1]
