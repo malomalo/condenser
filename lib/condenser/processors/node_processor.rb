@@ -207,6 +207,37 @@ class Condenser
     def npm_module_path(package=nil)
       File.join(*[npm_path, 'node_modules', package].compact)
     end
-    
+
+    def node_version
+      @node_version ||= Gem::Version.new(Open3.capture2(binary, '--version')[0].strip.delete_prefix('v'))
+    end
+
+    def check_engines(package)
+      range = JSON.parse(File.read(npm_module_path("#{package}/package.json"))).dig('engines', 'node')
+      return if range.nil? || node_satisfies?(range)
+      raise Condenser::Error, "#{package} needs Node #{range}, but #{binary} is #{node_version}"
+    end
+
+    private
+
+    def node_satisfies?(range)
+      range.split('||').any? do |set|
+        set.split.all? do |comparator|
+          op, version = comparator.match(/\A(\^|~|>=|<=|>|<|=)?v?(\d+(?:\.\d+){0,2})\z/)&.captures
+          raise Condenser::Error, "can't read the Node range #{range.inspect}" if version.nil?
+          version = Gem::Version.new(version)
+          case op
+          when '^' then node_version >= version && node_version < Gem::Version.new("#{version.segments[0] + 1}")
+          when '~' then node_version >= version && node_version < Gem::Version.new("#{version.segments[0]}.#{version.segments.fetch(1, 0) + 1}")
+          when '>=' then node_version >= version
+          when '>' then node_version > version
+          when '<=' then node_version <= version
+          when '<' then node_version < version
+          else node_version == version
+          end
+        end
+      end
+    end
+
   end
 end

@@ -254,13 +254,13 @@ class JSTTransformerTest < ActiveSupport::TestCase
   end
 
   test 'jst transformation with Babel 8 on a Node it does not support raises' do
-    Condenser::BabelProcessor.stubs(:node_version).returns('20.19.0')
+    Condenser::NodeProcessor.any_instance.stubs(:node_version).returns(Gem::Version.new('20.19.0'))
     file 'test.jst', <<~JS
       export default function (locals) { return name; }
     JS
 
     error = assert_raises(Condenser::Error) { @env.find('test.js').process }
-    assert_equal "Babel 8 needs Node ^22.18.0 || >=24.11.0, but #{Condenser::NodeProcessor.new.binary} is 20.19.0", error.message
+    assert_equal "@babel/core needs Node ^22.18.0 || >=24.11.0, but #{Condenser::NodeProcessor.new.binary} is 20.19.0", error.message
   end
 
 end

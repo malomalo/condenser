@@ -161,13 +161,13 @@ class CondenserBabelTest < ActiveSupport::TestCase
 
   test 'Babel 8 on a Node it does not support raises' do
     %w[20.19.0 22.17.1 23.11.0 24.10.0].each do |version|
-      Condenser::BabelProcessor.stubs(:node_version).returns(version)
+      Condenser::NodeProcessor.any_instance.stubs(:node_version).returns(Gem::Version.new(version))
       error = assert_raises(Condenser::Error) { Condenser::BabelProcessor.new(@npm_dir) }
-      assert_equal "Babel 8 needs Node ^22.18.0 || >=24.11.0, but #{Condenser::NodeProcessor.new.binary} is #{version}", error.message
+      assert_equal "@babel/core needs Node ^22.18.0 || >=24.11.0, but #{Condenser::NodeProcessor.new.binary} is #{version}", error.message
     end
 
     %w[22.18.0 24.11.0 26.0.0].each do |version|
-      Condenser::BabelProcessor.stubs(:node_version).returns(version)
+      Condenser::NodeProcessor.any_instance.stubs(:node_version).returns(Gem::Version.new(version))
       assert Condenser::BabelProcessor.new(@npm_dir)
     end
   end
@@ -185,7 +185,7 @@ class CondenserBabelTest < ActiveSupport::TestCase
       FileUtils.mkdir_p(File.join(npm, 'node_modules', name))
       File.write(File.join(npm, 'node_modules', name, 'package.json'), JSON.generate({ name: name, version: version }))
     end
-    Condenser::BabelProcessor.expects(:node_version).never
+    Condenser::NodeProcessor.any_instance.expects(:node_version).never
 
     assert Condenser::BabelProcessor.new(npm)
   ensure

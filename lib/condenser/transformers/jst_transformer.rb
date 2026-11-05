@@ -6,7 +6,7 @@ class Condenser::JstTransformer < Condenser::NodeProcessor
   def setup(environment)
     node = ::Condenser::NodeProcessor.new(npm_path || environment.npm_path)
     node.npm_install("@babel/core@^#{Condenser::BabelProcessor::BABEL_MAJOR}")
-    Condenser::BabelProcessor.check_node_version(node)
+    node.check_engines('@babel/core')
   end
 
   def call(environment, input)
