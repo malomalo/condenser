@@ -61,9 +61,9 @@ class Condenser
   #         true; pass false for one-off builds like precompiling.
   # sourcemap: Whether to export source maps, and how to link them: false
   #            (the default), true, :linked (comment only) or :headers
-  #            (SourceMap header only). Exporters that support it
-  #            (RolldownProcessor) export a source map when it's truthy. It's
-  #            part of the export cache key and etag.
+  #            (SourceMap header only). Processors that support it
+  #            (RolldownProcessor, SassTransformer) make a source map when
+  #            it's truthy. It's part of the cache keys and etags.
   # digestor, base and sourcemap can only be set here.
   def initialize(*path, logger: nil, digestor: nil, cache: nil, pipeline: nil, npm_path: nil, base: nil, listen: true, sourcemap: false, &block)
     @logger = logger || Logger.new($stdout, level: :info)

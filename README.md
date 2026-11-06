@@ -267,10 +267,14 @@ processor class, raises an `ArgumentError`. An instance can be registered in
 several environments and called from several threads at once, so keep
 per-call state out of instance variables.
 
-An exporter can set `input[:sourcemap]` to a source map's JSON (see
-[Source maps](#source-maps)). A minifier that changes `input[:source]` updates
-`input[:sourcemap]` to match, as `TerserMinifier` does, or sets it to `nil`;
-Condenser exports whatever map the minifier leaves.
+A processor can set `input[:sourcemap]` to a source map's JSON (see
+[Source maps](#source-maps)), as `SassTransformer` and `RolldownProcessor` do
+when the environment's `sourcemap` is on. A processor that changes
+`input[:source]` after that updates `input[:sourcemap]` to match, as
+`TerserMinifier` does, or sets it to `nil`, as `CSSMediaCombinerProcessor`,
+`PurgeCSSProcessor`, `LightningCSSExporter` and the CSS minifiers do; Condenser
+exports whatever map the last processor leaves. A missing map is fine, a map
+that doesn't match the output isn't.
 
 ### Depending on files that aren't assets
 
@@ -583,23 +587,24 @@ environment is created:
 condenser = Condenser.new('app/assets', sourcemap: true)
 ```
 
-| `sourcemap` | Map exported | `//# sourceMappingURL` comment | `SourceMap` header (`Condenser::Server`) |
+| `sourcemap` | Map exported | `sourceMappingURL` comment | `SourceMap` header (`Condenser::Server`) |
 |---|---|---|---|
 | `false` (default) | no | no | no |
 | `true` | yes | yes | yes |
 | `:linked` | yes | yes | no |
 | `:headers` | yes | no | yes |
 
-Anything else raises an `ArgumentError`. `RolldownProcessor` exports a map
-whenever the setting is on. The setting is part of the export cache key and
-etag, so switching between values rebuilds the bundle.
+Anything else raises an `ArgumentError`. `RolldownProcessor` and
+`SassTransformer` make a map whenever the setting is on. The setting is part of
+the cache keys and etags, so switching between values rebuilds the assets once.
 
-The map is at the bundle's path plus `.map` (`application-<etag>.js.map`), and
-the etag doesn't depend on the bundle's output, so the comment doesn't change
-it. Precompiling writes the map next to the bundle with the writers registered
-for `application/json` (with the default writers, also `.map.gz` and
-`.map.br`), and lists it as the bundle's `sourcemap` in the manifest (`null` for an
-asset without one).
+The map is at the asset's path plus `.map` (`application-<etag>.js.map`,
+`application-<etag>.css.map`), and the etag doesn't depend on the output, so
+the comment (`//# sourceMappingURL=` in JavaScript, `/*# sourceMappingURL= */`
+in CSS) doesn't change it. Precompiling writes the map next to the asset with
+the writers registered for `application/json` (with the default writers, also
+`.map.gz` and `.map.br`), and lists it as the asset's `sourcemap` in the
+manifest (`null` for an asset without one).
 `Condenser::Server` serves it for every value but `false`.
 
 Precompiled bundles are usually served by nginx or a CDN, not
@@ -617,6 +622,22 @@ generated JavaScript). Rolldown's `minify: true` is covered by the map, and so
 is a registered `TerserMinifier`, which maps its output back through Rolldown's
 map. Another JavaScript minifier has to update or clear the map itself (see
 [Writing a processor](#writing-a-processor)).
+
+A stylesheet compiled from Sass gets Dart Sass's map, with the `@use`d and
+`@import`ed stylesheets as logical paths (`partials/colors.scss`,
+`node_modules/<package>/_index.scss`) and `sourcesContent`. The map is made
+when the stylesheet is processed, so it's cached with it, and exported if
+nothing after that rewrites the CSS. The processors that do rewrite it clear
+it, since their output no longer matches: `CSSMediaCombinerProcessor`,
+`PurgeCSSProcessor`, `TailwindProcessor`, `LightningCSSExporter`,
+`LightningCSSMinifier` and `SassMinifier`. The `lightningcss` gem has no source
+map support, so with the default `text/css` minifier an exported stylesheet has
+no map (and no comment or header) until the gem gets it. For maps in
+development, unregister the minifier there:
+
+```ruby
+condenser.unregister_minifier 'text/css'
+```
 
 ### Importing JSON
 

@@ -60,6 +60,8 @@ class Condenser::PurgeCSSProcessor < Condenser::NodeProcessor
       end
     else
       input[:source] = result["success"]["css"]
+      # The rules removed shift the rest, so the input's map is cleared
+      input[:sourcemap] = nil
     end
   end
 end

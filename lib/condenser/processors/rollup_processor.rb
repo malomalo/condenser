@@ -284,7 +284,9 @@ class Condenser::RollupProcessor < Condenser::Processor
       input[:source] = File.read(File.join(@output_dir, 'entry.js'))
       input[:source].delete_suffix!("//# sourceMappingURL=result.js.map\n")
       input[:type] = 'module'
-      # asset.map = File.read(File.join(output_dir, 'result.js.map'))
+      # Rollup's map isn't exported (sourcemap: false), and the input's
+      # wouldn't match the bundle
+      input[:sourcemap] = nil
       input
     ensure
       begin

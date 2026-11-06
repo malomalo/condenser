@@ -54,19 +54,22 @@ class Condenser
     
     # A digest of just the given part of the pipeline, as [role, mime type,
     # processor] entries (see Asset#pipeline_processors), so an asset's cache
-    # only depends on the processors that process it.
+    # only depends on the processors that process it, and of the sourcemap
+    # setting, since processors make a map (SassTransformer) when it's on.
     def pipeline_digest_for(entries)
-      versioned_digest(JSON.generate(entries.map { |role, mime_type, processor|
+      versioned_digest(JSON.generate([entries.map { |role, mime_type, processor|
         [role, mime_type, pipline_to_json(processor)]
-      }))
+      }, { sourcemap: sourcemap }]))
     end
 
     # A digest of what exporting +mime_type+ uses, its exporters, minifier and
-    # the sourcemap setting, or nil if it has neither exporters nor minifier.
+    # the sourcemap setting, or nil if it has neither exporters nor minifier
+    # and source maps are off. With them on, an export without exporters or
+    # a minifier still gets the map's comment, so the setting is in its etag.
     def export_pipeline_digest(mime_type)
       exporters = @exporters[mime_type] || []
       minifier = @minifiers[mime_type]
-      return if exporters.empty? && minifier.nil?
+      return if exporters.empty? && minifier.nil? && !sourcemap
 
       versioned_digest(JSON.generate(pipline_to_json([exporters, minifier, { sourcemap: sourcemap }])))
     end
