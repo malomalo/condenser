@@ -92,15 +92,17 @@ class Condenser::Sass::Importer
     end
   end
 
+  # The `source_map_url` names the stylesheet in a source map's `sources`;
+  # without it Dart Sass inlines the contents as a `data:` URL.
   def load(canonical_url)
     if source = @sources[canonical_url]
-      { contents: source, syntax: :scss }
+      { contents: source, syntax: :scss, source_map_url: canonical_url }
     elsif (file = @npm_files[canonical_url])
-      { contents: File.read(file), syntax: FILE_SYNTAXES.fetch(File.extname(file)) }
+      { contents: File.read(file), syntax: FILE_SYNTAXES.fetch(File.extname(file)), source_map_url: canonical_url }
     else
       asset = @assets[canonical_url]
       syntax = SYNTAXES.fetch(asset.content_type, :scss)
-      { contents: rewrite_relative_imports(asset.source, asset.filename, syntax), syntax: syntax }
+      { contents: rewrite_relative_imports(asset.source, asset.filename, syntax), syntax: syntax, source_map_url: canonical_url }
     end
   end
 

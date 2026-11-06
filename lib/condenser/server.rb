@@ -59,8 +59,8 @@ class Condenser
         path = path.sub("-#{fingerprint}", '')
       end
 
-      # A JavaScript export's source map is at its URL plus ".map".
-      if sourcemap = path.end_with?('.js.map')
+      # A JavaScript or CSS export's source map is at its URL plus ".map".
+      if sourcemap = path.end_with?('.js.map', '.css.map')
         path = path.delete_suffix('.map')
       end
 

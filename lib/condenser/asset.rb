@@ -644,7 +644,9 @@ class Condenser
             filename: @filename.dup,
             content_types: @content_types,
 
-            sourcemap: nil,
+            # The map processing made (e.g. SassTransformer's), for the
+            # exporters and minifier to update or clear
+            sourcemap: (@sourcemap if @environment.sourcemap),
             linked_assets: [],
             process_dependencies: [],
             export_dependencies: []
@@ -666,7 +668,8 @@ class Condenser
           # depend on the output, so the comment doesn't change the name.
           if data[:sourcemap] && [true, :linked].include?(@environment.sourcemap)
             map_name = File.basename(data[:filename]).sub(/\.(\w+)$/) { |ext| "-#{data[:etag]}#{ext}" }
-            data[:source] = data[:source] + "#{"\n" unless data[:source].end_with?("\n")}//# sourceMappingURL=#{map_name}.map\n"
+            comment = content_type == 'text/css' ? "/*# sourceMappingURL=#{map_name}.map */" : "//# sourceMappingURL=#{map_name}.map"
+            data[:source] = data[:source] + "#{"\n" unless data[:source].end_with?("\n")}#{comment}\n"
           end
         
           data[:digest] = @environment.digestor.digest(data[:source])

@@ -68,6 +68,8 @@ class Condenser::TailwindProcessor < Condenser::Processor
 
     result = build(environment, input)
     input[:source] = result['css']
+    # Tailwind's output doesn't match a map of the input
+    input[:sourcemap] = nil
     record_dependencies(environment, input, result)
     input
   end

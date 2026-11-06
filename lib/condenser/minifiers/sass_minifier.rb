@@ -36,6 +36,9 @@ class Condenser::SassMinifier < Condenser::Processor
     }.merge(@sass_options))
 
     input[:source] = result.css
+    # Dart Sass can't map through an input map, so the input's wouldn't
+    # match the minified CSS.
+    input[:sourcemap] = nil
   rescue ::Sass::CompileError => e
     raise Condenser::Sass.compile_error(e, input[:filename])
   end

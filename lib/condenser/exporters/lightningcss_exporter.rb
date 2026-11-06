@@ -67,7 +67,9 @@ class Condenser::LightningCSSExporter < Condenser::Processor
   end
 
   # Transforms the input's source, logging warnings with their location and
-  # raising a Condenser::SyntaxError for invalid CSS.
+  # raising a Condenser::SyntaxError for invalid CSS. The map is cleared: the
+  # lightningcss gem has no source map support, so the input's map wouldn't
+  # match the output.
   def call(environment, input)
     result = ::LightningCSS.transform(input[:source], filename: input[:filename], **@transform_options)
 
@@ -76,6 +78,7 @@ class Condenser::LightningCSSExporter < Condenser::Processor
     end
 
     input[:source] = result.code
+    input[:sourcemap] = nil
   rescue ::LightningCSS::ParseError => e
     raise syntax_error(e, input[:filename])
   end

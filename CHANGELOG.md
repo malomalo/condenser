@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- CSS source maps. With `Condenser.new(sourcemap: true | :linked | :headers)`, `SassTransformer` compiles with Dart Sass's source map, whose `sources` are the stylesheets' logical paths (`app.scss`, `partials/colors.scss`, `node_modules/<package>/_index.scss`, through the importer's `source_map_url`) with `sourcesContent`. The map is made when the stylesheet is processed, so it's cached with it, and `Asset#export` starts from it; `true` and `:linked` end the CSS with a `/*# sourceMappingURL= */` comment, and `Condenser::Server` serves `<name>-<etag>.css.map` and sends the `SourceMap` header for `true` and `:headers`, as for JavaScript. Precompiling writes the `.css.map` and lists it as `sourcemap` in the manifest. `sass_config` can't set `source_map` or `source_map_include_sources`.
+- Processors that rewrite CSS clear `input[:sourcemap]`, since their output no longer matches it: `CSSMediaCombinerProcessor`, `PurgeCSSProcessor`, `TailwindProcessor`, `LightningCSSExporter`, `LightningCSSMinifier`, `SassMinifier` and `RollupProcessor`. The `lightningcss` gem has no source map support, so with the default `text/css` minifier an exported stylesheet has no map; unregister the minifier in development to get one.
+
+### Fixed / improved
+
+- The `sourcemap` setting is part of every asset's cache key, so a stylesheet processed without a map is reprocessed with one when the setting changes (cache keys change once on upgrade), and of the etag of an asset without exporters or a minifier when it's on, since the `sourceMappingURL` comment changes the output. With `sourcemap: false` (the default) etags are unchanged.
+
 ## 2.0.0.rc3
 
 Changes since 2.0.0.rc2.

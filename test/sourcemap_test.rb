@@ -5,8 +5,7 @@ require 'rack/lint'
 
 class SourcemapTest < ActiveSupport::TestCase
   include Rack::Test::Methods
-
-  BASE64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  include SourcemapHelpers
 
   # Rewrites the bundle without updating the map, so it clears it.
   class RewritingMinifier < Condenser::Processor
@@ -67,46 +66,6 @@ class SourcemapTest < ActiveSupport::TestCase
   def app
     server = Condenser::Server.new(@env)
     Rack::Lint.new(Rack::Builder.new { map("/assets") { run server } })
-  end
-
-  # Decodes the "mappings" into lines of [column, source, line, column]
-  # segments, all 0-based.
-  def decode_mappings(mappings)
-    source = line = column = 0
-    mappings.split(';', -1).map do |generated|
-      generated_column = 0
-      generated.split(',').map do |segment|
-        values = []
-        value = shift = 0
-        segment.each_char do |char|
-          digit = BASE64.index(char)
-          value += (digit & 31) << shift
-          if digit & 32 == 0
-            values << (value.odd? ? -(value >> 1) : value >> 1)
-            value = shift = 0
-          else
-            shift += 5
-          end
-        end
-        generated_column += values[0]
-        next [generated_column] if values.size < 4
-        source += values[1]
-        line += values[2]
-        column += values[3]
-        [generated_column, source, line, column]
-      end
-    end
-  end
-
-  # The [source, line, column] (0-based) that +needle+ in +code+ maps back to.
-  def original_position(code, map, needle)
-    index = code.index(needle)
-    assert index, "#{needle.inspect} isn't in the bundle"
-    line = code[0...index].count("\n")
-    column = index - (code.rindex("\n", index - 1)&.+(1) || 0)
-    segment = decode_mappings(map['mappings'])[line].select { |s| s[0] <= column }.last
-    assert segment && segment.size >= 4, "#{needle.inspect} isn't mapped"
-    [map['sources'][segment[1]], segment[2], segment[3]]
   end
 
   test 'sourcemap is false by default' do

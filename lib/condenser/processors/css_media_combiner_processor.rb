@@ -17,9 +17,11 @@ class Condenser::CSSMediaCombinerProcessor < Condenser::Processor
     output
   end
   
-  # The parser's state is kept on a copy, so an instance can be shared.
+  # The parser's state is kept on a copy, so an instance can be shared. The
+  # rules move, so the input's source map is cleared.
   def call(environment, input)
     dup.combine(environment, input)
+    input[:sourcemap] = nil
   end
 
   def combine(environment, input)

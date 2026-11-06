@@ -22,7 +22,9 @@ class Condenser::SassTransformer < Condenser::Processor
     importers: 'use the `importer:` option',
     functions: 'use the `functions:` option or a block',
     logger: 'use the `logger:` option',
-    load_paths: "add the paths to the environment's path, so imports are tracked as dependencies"
+    load_paths: "add the paths to the environment's path, so imports are tracked as dependencies",
+    source_map: "condenser sets it from the environment's sourcemap setting",
+    source_map_include_sources: "condenser sets it from the environment's sourcemap setting"
   }.freeze
 
   # Internal: Defines default sass syntax to use. Exposed so the ScssProcessor
@@ -86,10 +88,13 @@ class Condenser::SassTransformer < Condenser::Processor
       importer: importer,
       importers: [importer],
       functions: sass_functions(functions),
-      logger: @logger || Condenser::Sass::Logger.new(environment.logger)
+      logger: @logger || Condenser::Sass::Logger.new(environment.logger),
+      source_map: !!environment.sourcemap,
+      source_map_include_sources: !!environment.sourcemap
     }.merge(@sass_config))
 
     input[:source] = result.css
+    input[:sourcemap] = sourcemap(result.source_map) if environment.sourcemap
     input[:linked_assets].merge(context.links)
     input[:process_dependencies].merge(context.dependencies)
     input[:file_dependencies].merge(context.file_dependencies)
@@ -99,6 +104,15 @@ class Condenser::SassTransformer < Condenser::Processor
   end
 
   private
+
+  # The map's JSON with its `sources`, which Dart Sass gives as the
+  # importer's `condenser:` URLs, as logical paths (`app.scss`,
+  # `node_modules/<package>/_index.scss`), like the error messages'.
+  def sourcemap(source_map)
+    map = JSON.parse(source_map)
+    map['sources'].map! { |url| Condenser::Sass.display_urls(url) }
+    JSON.generate(map)
+  end
 
   # A digest of the custom functions' names and the files they're defined
   # in, or nil if there are none. Condenser's own functions are left out.
